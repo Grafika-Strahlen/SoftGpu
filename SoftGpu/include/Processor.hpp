@@ -22,9 +22,14 @@ public:
         m_SMs[3].Clock();
     }
 
-    void TestLoadProgram(const u32 sm, const u32 dispatchPort, void* const program)
+    void TestLoadProgram(const u32 sm, const u32 dispatchPort, const u8 replicationMask, void* const program)
     {
-        m_SMs[sm].TestLoadProgram(dispatchPort, static_cast<u64>(reinterpret_cast<uintptr_t>(program)));
+        m_SMs[sm].TestLoadProgram(dispatchPort, replicationMask, static_cast<u64>(reinterpret_cast<uintptr_t>(program)));
+    }
+
+    void TestLoadRegister(const u32 sm, const u32 dispatchPort, const u32 replicationIndex, const u8 registerIndex, const u32 registerValue)
+    {
+        m_SMs[sm].TestLoadRegister(dispatchPort, replicationIndex, registerIndex, registerValue);
     }
 
     [[nodiscard]] u32 Read(const u32 coreIndex, const u64 address) noexcept

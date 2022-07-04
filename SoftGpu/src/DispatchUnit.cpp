@@ -4,12 +4,15 @@
 
 #include <cstring>
 
+void DispatchUnit::ResetCycle() noexcept
+{
+    m_IsStalled = false;
+    m_ClockIndex = 0;
+}
+
 void DispatchUnit::Clock() noexcept
 {
-    if(m_ClockIndex == 0)
-    {
-        m_IsStalled = false;
-    }
+    ++m_ClockIndex;
 
     if(!m_InstructionPointer)
     {
@@ -24,7 +27,6 @@ void DispatchUnit::Clock() noexcept
 
     if(m_NeedToDecode)
     {
-
         u64 localInstructionPointer = m_InstructionPointer;
 
         u32 wordIndex = localInstructionPointer & 0x3;
@@ -164,13 +166,6 @@ void DispatchUnit::Clock() noexcept
             m_NeedToDecode = true;
         }
     }
-
-    ++m_ClockIndex;
-
-    if(m_ClockIndex == 3)
-    {
-        m_ClockIndex = 0;
-    }
 }
 
 void DispatchUnit::NextInstruction(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) const noexcept
@@ -241,13 +236,13 @@ u64 DispatchUnit::ReadU64(u64& localInstructionPointer, u32& wordIndex, u8 instr
 
 void DispatchUnit::LockRegisterRead(const u32 registerIndex, const u32 replicationIndex) noexcept
 {
-    if(m_RegisterContestationMap[replicationIndex][registerIndex] == 0)
+    if(m_RegisterContestationMap[registerIndex][replicationIndex] == 0)
     {
-        m_RegisterContestationMap[replicationIndex][registerIndex] = 2;
+        m_RegisterContestationMap[registerIndex][replicationIndex] = 2;
     }
     else
     {
-        ++m_RegisterContestationMap[replicationIndex][registerIndex];
+        ++m_RegisterContestationMap[registerIndex][replicationIndex];
     }
 }
 
@@ -379,14 +374,19 @@ void DispatchUnit::DispatchLdSt(const u32 replicationIndex) noexcept
     {
         ldStUnit = 3;
     }
-    
-    if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.LoadStore.BaseRegister] == 1 || m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.LoadStore.BaseRegister + 1u] == 1)
+    else
     {
         m_IsStalled = true;
         return;
     }
     
-    if(m_DecodedInstructionData.LoadStore.IndexExponent != 7u && m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.LoadStore.IndexRegister] == 1)
+    if(m_RegisterContestationMap[m_DecodedInstructionData.LoadStore.BaseRegister][replicationIndex] == 1 || m_RegisterContestationMap[m_DecodedInstructionData.LoadStore.BaseRegister + 1u][replicationIndex] == 1)
+    {
+        m_IsStalled = true;
+        return;
+    }
+    
+    if(m_DecodedInstructionData.LoadStore.IndexExponent != 7u && m_RegisterContestationMap[m_DecodedInstructionData.LoadStore.IndexRegister][replicationIndex] == 1)
     {
         m_IsStalled = true;
         return;
@@ -394,12 +394,12 @@ void DispatchUnit::DispatchLdSt(const u32 replicationIndex) noexcept
     
     for(u32 i = 0; i < m_DecodedInstructionData.LoadStore.RegisterCount + 1u; ++i)
     {
-        if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.LoadStore.TargetRegister + i] == 1)
+        if(m_RegisterContestationMap[m_DecodedInstructionData.LoadStore.TargetRegister + i][replicationIndex] == 1)
         {
             m_IsStalled = true;
             return;
         }
-        else if(m_DecodedInstructionData.LoadStore.ReadWrite == 0u && m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.LoadStore.TargetRegister + i] != 0)
+        else if(m_DecodedInstructionData.LoadStore.ReadWrite == 0u && m_RegisterContestationMap[m_DecodedInstructionData.LoadStore.TargetRegister + i][replicationIndex] != 0)
         {
             m_IsStalled = true;
             return;
@@ -422,7 +422,7 @@ void DispatchUnit::DispatchLdSt(const u32 replicationIndex) noexcept
         }
         else
         {
-            m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.LoadStore.TargetRegister] = 1;
+            m_RegisterContestationMap[m_DecodedInstructionData.LoadStore.TargetRegister][replicationIndex] = 1;
         }
     }
 
@@ -444,7 +444,7 @@ void DispatchUnit::DispatchLdSt(const u32 replicationIndex) noexcept
 
 void DispatchUnit::DispatchLoadImmediate(const u32 replicationIndex) noexcept
 {
-    if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.LoadImmediate.Register] != 0)
+    if(m_RegisterContestationMap[m_DecodedInstructionData.LoadImmediate.Register][replicationIndex] != 0)
     {
         m_IsStalled = true;
         return;
@@ -458,7 +458,7 @@ void DispatchUnit::DispatchLoadZero(const u32 replicationIndex) noexcept
 {
     for(uSys i = 0; i < m_DecodedInstructionData.LoadZero.RegisterCount + 1u; ++i)
     {
-        if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.LoadZero.StartRegister + i] != 0)
+        if(m_RegisterContestationMap[m_DecodedInstructionData.LoadZero.StartRegister + i][replicationIndex] != 0)
         {
             m_IsStalled = true;
             return;
@@ -487,37 +487,37 @@ void DispatchUnit::DispatchFpuBinOp(const u32 replicationIndex) noexcept
     {
         registerOffset *= 2;
 
-        if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.FpuBinOp.RegisterA + registerOffset] == 1)
+        if(m_RegisterContestationMap[m_DecodedInstructionData.FpuBinOp.RegisterA + registerOffset][replicationIndex] == 1)
         {
             m_IsStalled = true;
             return;
         }
 
-        if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.FpuBinOp.RegisterA + registerOffset + 1] == 1)
+        if(m_RegisterContestationMap[m_DecodedInstructionData.FpuBinOp.RegisterA + registerOffset + 1][replicationIndex] == 1)
         {
             m_IsStalled = true;
             return;
         }
 
-        if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.FpuBinOp.RegisterB + registerOffset] == 1)
+        if(m_RegisterContestationMap[m_DecodedInstructionData.FpuBinOp.RegisterB + registerOffset][replicationIndex] == 1)
         {
             m_IsStalled = true;
             return;
         }
 
-        if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.FpuBinOp.RegisterB + registerOffset + 1] == 1)
+        if(m_RegisterContestationMap[m_DecodedInstructionData.FpuBinOp.RegisterB + registerOffset + 1][replicationIndex] == 1)
         {
             m_IsStalled = true;
             return;
         }
 
-        if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.FpuBinOp.StorageRegister + registerOffset] != 0)
+        if(m_RegisterContestationMap[m_DecodedInstructionData.FpuBinOp.StorageRegister + registerOffset][replicationIndex] != 0)
         {
             m_IsStalled = true;
             return;
         }
 
-        if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.FpuBinOp.StorageRegister + registerOffset + 1] != 0)
+        if(m_RegisterContestationMap[m_DecodedInstructionData.FpuBinOp.StorageRegister + registerOffset + 1][replicationIndex] != 0)
         {
             m_IsStalled = true;
             return;
@@ -525,19 +525,19 @@ void DispatchUnit::DispatchFpuBinOp(const u32 replicationIndex) noexcept
     }
     else
     {
-        if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.FpuBinOp.RegisterA + registerOffset] == 1)
+        if(m_RegisterContestationMap[m_DecodedInstructionData.FpuBinOp.RegisterA + registerOffset][replicationIndex] == 1)
         {
             m_IsStalled = true;
             return;
         }
 
-        if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.FpuBinOp.RegisterB + registerOffset] == 1)
+        if(m_RegisterContestationMap[m_DecodedInstructionData.FpuBinOp.RegisterB + registerOffset][replicationIndex] == 1)
         {
             m_IsStalled = true;
             return;
         }
 
-        if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.FpuBinOp.StorageRegister + registerOffset] != 0)
+        if(m_RegisterContestationMap[m_DecodedInstructionData.FpuBinOp.StorageRegister + registerOffset][replicationIndex] != 0)
         {
             m_IsStalled = true;
             return;

@@ -106,6 +106,8 @@ public:
 
     [[nodiscard]] u32 BaseRegister(const u32 index) const noexcept { return m_BaseRegisters[index]; }
 
+    void ResetCycle() noexcept;
+
     void Clock() noexcept;
 
     void ReportUnitReady(u32 unitIndex) noexcept
@@ -113,6 +115,7 @@ public:
         if(unitIndex < 8)
         {
             m_FpAvailabilityMap |= 1 << unitIndex;
+            return;
         }
         else
         {
@@ -123,6 +126,7 @@ public:
         if(unitIndex < 8)
         {
             m_IntFpAvailabilityMap |= 1 << unitIndex;
+            return;
         }
         else
         {
@@ -132,6 +136,7 @@ public:
         if(unitIndex < 4)
         {
             m_SfuAvailabilityMap |= 1 << unitIndex;
+            return;
         }
         else
         {
@@ -141,6 +146,7 @@ public:
         if(unitIndex < 4)
         {
             m_LdStAvailabilityMap |= 1 << unitIndex;
+            return;
         }
         else
         {
@@ -150,6 +156,7 @@ public:
         if(unitIndex < 2)
         {
             m_TextureSamplerAvailabilityMap |= 1 << unitIndex;
+            return;
         }
         else
         {
@@ -269,7 +276,7 @@ private:
     // If the value is zero the register is unused.
     // If the value is one it is locked for writes.
     // Otherwise the register is locked for reads. Any number of simultaneous reads are allowed.
-    u8 m_RegisterContestationMap[256][4];
+    u8 m_RegisterContestationMap[4][256];
 };
 
 

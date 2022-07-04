@@ -12,6 +12,8 @@ class ICore
     DEFAULT_DESTRUCT_VI(ICore);
     DELETE_CM(ICore);
 public:
+    virtual void Clock() noexcept = 0;
+
     [[nodiscard]] virtual u32 GetRegister(u32 dispatchPort, u32 replicationIndex, u32 targetRegister) const noexcept = 0;
     virtual void SetRegister(u32 dispatchPort, u32 replicationIndex, u32 targetRegister, u32 value) noexcept = 0;
 
@@ -31,6 +33,11 @@ public:
         , m_UnitIndex(unitIndex)
         , m_Fpu(this)
     { }
+
+    void Clock() noexcept override
+    {
+        m_Fpu.Clock();
+    }
 
     [[nodiscard]] u32 GetRegister(u32 dispatchPort, u32 replicationIndex, u32 targetRegister) const noexcept override;
     void SetRegister(u32 dispatchPort, u32 replicationIndex, u32 targetRegister, u32 value) noexcept override;
@@ -65,6 +72,11 @@ public:
         , m_UnitIndex(unitIndex)
         , m_Fpu(this)
     { }
+
+    void Clock() noexcept override
+    {
+        m_Fpu.Clock();
+    }
 
     [[nodiscard]] u32 GetRegister(u32 dispatchPort, u32 replicationIndex, u32 targetRegister) const noexcept override;
     void SetRegister(u32 dispatchPort, u32 replicationIndex, u32 targetRegister, u32 value) noexcept override;

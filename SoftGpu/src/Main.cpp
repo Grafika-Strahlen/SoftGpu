@@ -6,6 +6,7 @@ static Processor processor;
 static void TestMove() noexcept;
 static void TestAdd1F() noexcept;
 static void TestAdd2F() noexcept;
+static void TestAdd2FReplicated() noexcept;
 
 int main(int argCount, char* args[])
 {
@@ -13,7 +14,8 @@ int main(int argCount, char* args[])
 
     // TestMove();
     // TestAdd1F();
-    TestAdd2F();
+    // TestAdd2F();
+    TestAdd2FReplicated();
 
     return 0;
 }
@@ -46,7 +48,7 @@ static void TestMove() noexcept
     ConPrinter::Print("Value to copy: {}\n", initialValue);
     ConPrinter::Print("Value at storage location: {}\n", storageLocation);
 
-    processor.TestLoadProgram(0, 0, program);
+    processor.TestLoadProgram(0, 0, 0x1, program);
 
     for(int i = 0; i < 20; ++i)
     {
@@ -91,7 +93,7 @@ static void TestAdd1F() noexcept
 
     ConPrinter::Print("{} + {} = {}\n", valueA, valueB, storageValue);
 
-    processor.TestLoadProgram(0, 0, program);
+    processor.TestLoadProgram(0, 0, 0x1, program);
 
     for(int i = 0; i < 20; ++i)
     {
@@ -137,7 +139,7 @@ static void TestAdd2F() noexcept
 
     ConPrinter::Print("[{}, {}] + [{}, {}] = [{}, {}]\n", valueA[0], valueA[1], valueB[0], valueB[1], storageValue[0], storageValue[1]);
 
-    processor.TestLoadProgram(0, 0, program);
+    processor.TestLoadProgram(0, 0, 0x1, program);
 
     for(int i = 0; i < 20; ++i)
     {
@@ -145,5 +147,84 @@ static void TestAdd2F() noexcept
     }
 
     ConPrinter::Print("[{}, {}] + [{}, {}] = [{}, {}]\n", valueA[0], valueA[1], valueB[0], valueB[1], storageValue[0], storageValue[1]);
+}
+
+static void TestAdd2FReplicated() noexcept
+{
+    struct InputData
+    {
+        f32 ValueA[2];
+        f32 ValueB[2];
+    };
+
+    struct OutputData
+    {
+        f32 ValueResult[2];
+    };
+
+    InputData inData[2];
+    OutputData outData[2];
+
+    inData[0].ValueA[0] = 1.5f;
+    inData[0].ValueA[1] = 1.0f;
+    inData[0].ValueB[0] = 2.5f;
+    inData[0].ValueB[1] = -2.5f;
+
+    inData[1].ValueA[0] = 3.0f;
+    inData[1].ValueA[1] = -1.0f;
+    inData[1].ValueB[0] = 2.5f;
+    inData[1].ValueB[1] = -2.5f;
+
+    outData[0].ValueResult[0] = ::std::numeric_limits<f32>::quiet_NaN();
+    outData[0].ValueResult[1] = ::std::numeric_limits<f32>::quiet_NaN();
+    outData[1].ValueResult[0] = ::std::numeric_limits<f32>::quiet_NaN();
+    outData[1].ValueResult[1] = ::std::numeric_limits<f32>::quiet_NaN();
+    
+    const uintptr_t inData0Ptr = reinterpret_cast<uintptr_t>(&inData[0]) >> 2;
+    u32 inData0Words[2];
+    (void) ::std::memcpy(inData0Words, &inData0Ptr, sizeof(inData0Ptr));
+
+    const uintptr_t inData1Ptr = reinterpret_cast<uintptr_t>(&inData[1]) >> 2;
+    u32 inData1Words[2];
+    (void) ::std::memcpy(inData1Words, &inData1Ptr, sizeof(inData1Ptr));
+    
+    const uintptr_t outData0Ptr = reinterpret_cast<uintptr_t>(&outData[0]) >> 2;
+    u32 outData0Words[2];
+    (void) ::std::memcpy(outData0Words, &outData0Ptr, sizeof(outData0Ptr));
+
+    const uintptr_t outData1Ptr = reinterpret_cast<uintptr_t>(&outData[1]) >> 2;
+    u32 outData1Words[2];
+    (void) ::std::memcpy(outData1Words, &outData1Ptr, sizeof(outData1Ptr));
+
+    u8 program[] =
+    {
+        static_cast<u8>(EInstruction::LoadStore), 0b00111011, 0, 6, 0, 0, // Load inData.ValueA and inData.ValueB
+        static_cast<u8>(EInstruction::AddVec2F), 6, 8, 10,
+        static_cast<u8>(EInstruction::LoadStore), 0b01111001, 2, 10, 0, 0, // Store inData.ValueA + inData.ValueB in outData.ValueResult
+        static_cast<u8>(EInstruction::FlushCache),
+        static_cast<u8>(EInstruction::Hlt)
+    };
+
+    ConPrinter::Print("[{}, {}] + [{}, {}] = [{}, {}]\n", inData[0].ValueA[0], inData[0].ValueA[1], inData[0].ValueB[0], inData[0].ValueB[1], outData[0].ValueResult[0], outData[0].ValueResult[1]);
+    ConPrinter::Print("[{}, {}] + [{}, {}] = [{}, {}]\n", inData[1].ValueA[0], inData[1].ValueA[1], inData[1].ValueB[0], inData[1].ValueB[1], outData[1].ValueResult[0], outData[1].ValueResult[1]);
+
+    processor.TestLoadProgram(0, 0, 0x3, program);
+
+    processor.TestLoadRegister(0, 0, 0, 0, inData0Words[0]);
+    processor.TestLoadRegister(0, 0, 0, 1, inData0Words[1]);
+    processor.TestLoadRegister(0, 0, 1, 0, inData1Words[0]);
+    processor.TestLoadRegister(0, 0, 1, 1, inData1Words[1]);
+    processor.TestLoadRegister(0, 0, 0, 2, outData0Words[0]);
+    processor.TestLoadRegister(0, 0, 0, 3, outData0Words[1]);
+    processor.TestLoadRegister(0, 0, 1, 2, outData1Words[0]);
+    processor.TestLoadRegister(0, 0, 1, 3, outData1Words[1]);
+
+    for(int i = 0; i < 20; ++i)
+    {
+        processor.Clock();
+    }
+
+    ConPrinter::Print("[{}, {}] + [{}, {}] = [{}, {}]\n", inData[0].ValueA[0], inData[0].ValueA[1], inData[0].ValueB[0], inData[0].ValueB[1], outData[0].ValueResult[0], outData[0].ValueResult[1]);
+    ConPrinter::Print("[{}, {}] + [{}, {}] = [{}, {}]\n", inData[1].ValueA[0], inData[1].ValueA[1], inData[1].ValueB[0], inData[1].ValueB[1], outData[1].ValueResult[0], outData[1].ValueResult[1]);
 }
 

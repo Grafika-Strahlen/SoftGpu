@@ -13,7 +13,7 @@ void FpCore::SetRegister(const u32 dispatchPort, const u32 replicationIndex, con
 
 void FpCore::ReportReady() const noexcept
 {
-    m_SM->ReportCoreReady(m_UnitIndex);
+    m_SM->ReportFpCoreReady(m_UnitIndex);
 }
 
 void FpCore::ReleaseRegisterContestation(const u32 dispatchPort, u32 replicationIndex, const u32 registerIndex) const noexcept
@@ -33,7 +33,7 @@ void IntFpCore::SetRegister(const u32 dispatchPort, const u32 replicationIndex, 
 
 void IntFpCore::ReportReady() const noexcept
 {
-    m_SM->ReportCoreReady(m_UnitIndex);
+    m_SM->ReportIntFpCoreReady(m_UnitIndex);
 }
 
 void IntFpCore::ReleaseRegisterContestation(const u32 dispatchPort, u32 replicationIndex, const u32 registerIndex) const noexcept

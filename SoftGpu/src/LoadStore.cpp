@@ -1,6 +1,24 @@
 #include "LoadStore.hpp"
 #include "StreamingMultiprocessor.hpp"
 
+void LoadStore::Clock() noexcept
+{
+    if(m_ExecutionStage == 0)
+    {
+        return;
+    }
+    else if(m_ExecutionStage == 1)
+    {
+        for(u32 i = 0; i < m_RegisterCount + 1u; ++i)
+        {
+            m_SM->ReleaseRegisterContestation(m_DispatchPort, m_ReplicationIndex, m_StartRegister + i);
+        }
+        m_SM->ReportLdStReady(m_UnitIndex);
+    }
+
+    --m_ExecutionStage;
+}
+
 void LoadStore::Execute(const LoadStoreInstruction instructionInfo) noexcept
 {
     // Compute the 64 bit base address
@@ -16,6 +34,7 @@ void LoadStore::Execute(const LoadStoreInstruction instructionInfo) noexcept
     if(instructionInfo.IndexExponent != 7u)
     {
         const u32 indexValue = m_SM->GetRegister(instructionInfo.DispatchUnit, instructionInfo.ReplicationIndex, instructionInfo.IndexRegister);
+        m_SM->ReleaseRegisterContestation(instructionInfo.DispatchUnit, instructionInfo.ReplicationIndex, instructionInfo.IndexRegister);
         address += static_cast<u64>(indexValue) * (1u << static_cast<u32>(instructionInfo.IndexExponent));
     }
 
@@ -42,6 +61,12 @@ void LoadStore::Execute(const LoadStoreInstruction instructionInfo) noexcept
             m_SM->Prefetch(maxAddress);
         }
     }
+
+    m_DispatchPort = instructionInfo.DispatchUnit;
+    m_ReplicationIndex = instructionInfo.ReplicationIndex;
+    m_RegisterCount = instructionInfo.RegisterCount;
+    m_StartRegister = instructionInfo.TargetRegister;
+    m_ExecutionStage = 5;
 
     // If 1 then write.
     if(instructionInfo.ReadWrite)

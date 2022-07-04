@@ -24,6 +24,20 @@ public:
 
     void Clock() noexcept
     {
+        m_LdSt[0].Clock();
+        m_LdSt[1].Clock();
+        m_LdSt[2].Clock();
+        m_LdSt[3].Clock();
+
+        for(u32 i = 0; i < 8; ++i)
+        {
+            m_FpCores[i].Clock();
+            m_IntFpCores[i].Clock();
+        }
+
+        m_DispatchUnits[0].ResetCycle();
+        m_DispatchUnits[1].ResetCycle();
+
         m_DispatchUnits[0].Clock();
         m_DispatchUnits[1].Clock();
 
@@ -34,10 +48,15 @@ public:
         m_DispatchUnits[1].Clock();
     }
 
-    void TestLoadProgram(const u32 dispatchPort, const u64 program)
+    void TestLoadProgram(const u32 dispatchPort, const u8 replicationMask, const u64 program)
     {
-        const u32 baseRegisters[4] = { dispatchPort * 256, 0, 0, 0 };
-        m_DispatchUnits[dispatchPort].LoadIP(0x1, baseRegisters, program);
+        const u32 baseRegisters[4] = { (dispatchPort * 4 + 0) * 256, (dispatchPort * 4 + 1) * 256, (dispatchPort * 4 + 2) * 256, (dispatchPort * 4 + 3) * 256 };
+        m_DispatchUnits[dispatchPort].LoadIP(replicationMask, baseRegisters, program);
+    }
+
+    void TestLoadRegister(const u32 dispatchPort, const u32 replicationIndex, const u8 registerIndex, const u32 registerValue)
+    {
+        m_RegisterFile.SetRegister((dispatchPort * 4 + replicationIndex) * 256, registerIndex, registerValue);
     }
 
     [[nodiscard]] u32 Read(u64 address) noexcept;
@@ -54,10 +73,22 @@ public:
         m_RegisterFile.SetRegister(m_DispatchUnits[dispatchPort].BaseRegister(replicationIndex), targetRegister, value);
     }
 
-    void ReportCoreReady(const u32 unitIndex) noexcept
+    void ReportFpCoreReady(const u32 unitIndex) noexcept
     {
-        m_DispatchUnits[0].ReportUnitReady(unitIndex);
-        m_DispatchUnits[1].ReportUnitReady(unitIndex);
+        m_DispatchUnits[0].ReportUnitReady(unitIndex + FP_AVAIL_OFFSET);
+        m_DispatchUnits[1].ReportUnitReady(unitIndex + FP_AVAIL_OFFSET);
+    }
+
+    void ReportIntFpCoreReady(const u32 unitIndex) noexcept
+    {
+        m_DispatchUnits[0].ReportUnitReady(unitIndex + INT_FP_AVAIL_OFFSET);
+        m_DispatchUnits[1].ReportUnitReady(unitIndex + INT_FP_AVAIL_OFFSET);
+    }
+
+    void ReportLdStReady(const u32 unitIndex) noexcept
+    {
+        m_DispatchUnits[0].ReportUnitReady(unitIndex + LDST_AVAIL_OFFSET);
+        m_DispatchUnits[1].ReportUnitReady(unitIndex + LDST_AVAIL_OFFSET);
     }
 
     void ReleaseRegisterContestation(const u32 dispatchPort, const u32 replicationIndex, const u32 registerIndex)

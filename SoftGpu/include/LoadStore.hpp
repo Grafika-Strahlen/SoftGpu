@@ -29,10 +29,24 @@ public:
     LoadStore(StreamingMultiprocessor* const sm, const u32 unitIndex) noexcept
         : m_SM(sm)
         , m_UnitIndex(unitIndex)
+        , m_ExecutionStage(0)
+        , m_DispatchPort{ }
+        , m_ReplicationIndex{ }
+        , m_RegisterCount{ }
+        , m_Pad{ }
+        , m_StartRegister{ }
     { }
+
+    void Clock() noexcept;
 
     void Execute(LoadStoreInstruction instructionInfo) noexcept;
 private:
     StreamingMultiprocessor* m_SM;
     u32 m_UnitIndex;
+    u32 m_ExecutionStage;
+    u8 m_DispatchPort : 1;
+    u8 m_ReplicationIndex : 2;
+    u8 m_RegisterCount : 3;
+    u8 m_Pad : 2;
+    u8 m_StartRegister;
 };
