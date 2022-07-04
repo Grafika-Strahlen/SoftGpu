@@ -30,6 +30,9 @@
     <ClCompile Include="src\Core.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\DispatchUnit.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\RegisterFile.hpp">
@@ -55,6 +58,9 @@
     </ClInclude>
     <ClInclude Include="include\Cache.inl">
       <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\DispatchUnit.hpp">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

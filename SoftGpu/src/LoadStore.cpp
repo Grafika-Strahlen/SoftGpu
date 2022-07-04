@@ -4,15 +4,18 @@
 void LoadStore::Execute(const LoadStoreInstruction instructionInfo) noexcept
 {
     // Compute the 64 bit base address
-    const u32 baseAddressLow = m_SM->GetRegister(instructionInfo.DispatchUnit, instructionInfo.BaseRegister);
-    const u32 baseAddressHigh = m_SM->GetRegister(instructionInfo.DispatchUnit, instructionInfo.BaseRegister + 1u);
+    const u32 baseAddressLow = m_SM->GetRegister(instructionInfo.DispatchUnit, instructionInfo.ReplicationIndex, instructionInfo.BaseRegister);
+    const u32 baseAddressHigh = m_SM->GetRegister(instructionInfo.DispatchUnit, instructionInfo.ReplicationIndex, instructionInfo.BaseRegister + 1u);
+
+    m_SM->ReleaseRegisterContestation(instructionInfo.DispatchUnit, instructionInfo.ReplicationIndex, instructionInfo.BaseRegister);
+    m_SM->ReleaseRegisterContestation(instructionInfo.DispatchUnit, instructionInfo.ReplicationIndex, instructionInfo.BaseRegister + 1u);
 
     u64 address = (static_cast<u64>(baseAddressHigh) << 32) | baseAddressLow;
 
     // If the exponent is not 111 then account for the indexing register.
     if(instructionInfo.IndexExponent != 7u)
     {
-        const u32 indexValue = m_SM->GetRegister(instructionInfo.DispatchUnit, instructionInfo.IndexRegister);
+        const u32 indexValue = m_SM->GetRegister(instructionInfo.DispatchUnit, instructionInfo.ReplicationIndex, instructionInfo.IndexRegister);
         address += static_cast<u64>(indexValue) * (1u << static_cast<u32>(instructionInfo.IndexExponent));
     }
 
@@ -29,7 +32,7 @@ void LoadStore::Execute(const LoadStoreInstruction instructionInfo) noexcept
         // With 8 registers we can at most be in two cache lines.
         // If the last register is in another cache line we'll prefetch it. This has no effect in software, but would have a substantial effect in hardware.
 
-        const u64 maxAddress = address + instructionInfo.RegisterCount + 1u;
+        const u64 maxAddress = address + instructionInfo.RegisterCount;
 
         // The lower 3 bits are just the index into the cache line.
         const u64 addressSetIndex = address >> 3;
@@ -46,7 +49,7 @@ void LoadStore::Execute(const LoadStoreInstruction instructionInfo) noexcept
         // Iterate through each register that is being written.
         for(u32 i = 0; i < instructionInfo.RegisterCount + 1u; ++i)
         {
-            const u32 value = m_SM->GetRegister(instructionInfo.DispatchUnit, instructionInfo.TargetRegister + i);
+            const u32 value = m_SM->GetRegister(instructionInfo.DispatchUnit, instructionInfo.ReplicationIndex, instructionInfo.TargetRegister + i);
             m_SM->Write(address + i, value);
         }
     }
@@ -56,7 +59,7 @@ void LoadStore::Execute(const LoadStoreInstruction instructionInfo) noexcept
         for(u32 i = 0; i < instructionInfo.RegisterCount + 1u; ++i)
         {
             const u32 value = m_SM->Read(address + i);
-            m_SM->SetRegister(instructionInfo.DispatchUnit, instructionInfo.TargetRegister + i, value);
+            m_SM->SetRegister(instructionInfo.DispatchUnit, instructionInfo.ReplicationIndex, instructionInfo.TargetRegister + i, value);
         }
     }
 }

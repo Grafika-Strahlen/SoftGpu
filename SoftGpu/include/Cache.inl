@@ -5,9 +5,11 @@
 #include <cstring>
 
 template<uSys IndexBits, uSys SetLineCount>
-u32 Cache<IndexBits, SetLineCount>::Read(const u64 address) noexcept
+u32 Cache<IndexBits, SetLineCount>::Read(u64 address) noexcept
 {
     const u64 lineOffset = address & 0x7;
+    address >>= 3;
+    address <<= 3;
     CacheLine<IndexBits>* cacheLine = GetCacheLine(address);
     
     if(!cacheLine || cacheLine->Mesi == MESI::Invalid)
@@ -31,9 +33,11 @@ u32 Cache<IndexBits, SetLineCount>::Read(const u64 address) noexcept
 }
 
 template<uSys IndexBits, uSys SetLineCount>
-void Cache<IndexBits, SetLineCount>::Write(const u64 address, const u32 value) noexcept
+void Cache<IndexBits, SetLineCount>::Write(u64 address, const u32 value) noexcept
 {
     const u64 lineOffset = address & 0x7;
+    address >>= 3;
+    address <<= 3;
     CacheLine<IndexBits>* cacheLine = GetCacheLine(address);
 
     if(!cacheLine || cacheLine->Mesi == MESI::Invalid)
@@ -60,9 +64,32 @@ void Cache<IndexBits, SetLineCount>::Write(const u64 address, const u32 value) n
 }
 
 template<uSys IndexBits, uSys SetLineCount>
+void Cache<IndexBits, SetLineCount>::Flush() noexcept
+{
+    for(uSys i = 0; i < 1 << IndexBits; ++i)
+    {
+        CacheSet<IndexBits, SetLineCount>& cacheSet = m_Sets[i];
+
+        for(u32 j = 0; j < SetLineCount; ++j)
+        {
+            CacheLine<IndexBits>& cacheLine = cacheSet.SetLines[j];
+
+            if(cacheLine.Mesi == MESI::Modified)
+            {
+                const u64 address = (cacheLine.Tag << (IndexBits + 3)) | (i << 3);
+
+                m_MemoryManager->WriteBackCacheLine(m_LineIndex, address, cacheLine.Data);
+                cacheLine.Mesi = MESI::Exclusive;
+            }
+        }
+    }
+}
+
+template<uSys IndexBits, uSys SetLineCount>
 CacheLine<IndexBits>* Cache<IndexBits, SetLineCount>::GetFreeCacheLine(const u64 address) noexcept
 {
     const u64 setIndex = (address >> 3) & ((1 << IndexBits) - 1);
+    const u64 tag = address >> (IndexBits + 3);
 
     CacheSet<IndexBits, SetLineCount>& targetSet = m_Sets[setIndex];
 
@@ -70,6 +97,7 @@ CacheLine<IndexBits>* Cache<IndexBits, SetLineCount>::GetFreeCacheLine(const u64
     {
         if(targetSet.SetLines[i].Mesi == MESI::Invalid)
         {
+            targetSet.SetLines[i].Tag = tag;
             return &targetSet.SetLines[i];
         }
     }
@@ -78,6 +106,7 @@ CacheLine<IndexBits>* Cache<IndexBits, SetLineCount>::GetFreeCacheLine(const u64
     {
         if(targetSet.SetLines[i].Mesi == MESI::Exclusive || targetSet.SetLines[i].Mesi == MESI::Shared)
         {
+            targetSet.SetLines[i].Tag = tag;
             return &targetSet.SetLines[i];
         }
     }
@@ -88,6 +117,7 @@ CacheLine<IndexBits>* Cache<IndexBits, SetLineCount>::GetFreeCacheLine(const u64
     CacheLine<IndexBits>* const cacheLine = &targetSet.SetLines[rollingSelector];
 
     m_MemoryManager->WriteBackCacheLine(m_LineIndex, address, cacheLine->Data);
+    cacheLine->Tag = tag;
 
     return cacheLine;
 }

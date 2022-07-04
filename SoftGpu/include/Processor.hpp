@@ -14,6 +14,19 @@ public:
         , m_SMs { { this, 0 }, { this, 1 }, { this, 2 }, { this, 3 } }
     { }
 
+    void Clock() noexcept
+    {
+        m_SMs[0].Clock();
+        m_SMs[1].Clock();
+        m_SMs[2].Clock();
+        m_SMs[3].Clock();
+    }
+
+    void TestLoadProgram(const u32 sm, const u32 dispatchPort, void* const program)
+    {
+        m_SMs[sm].TestLoadProgram(dispatchPort, static_cast<u64>(reinterpret_cast<uintptr_t>(program)));
+    }
+
     [[nodiscard]] u32 Read(const u32 coreIndex, const u64 address) noexcept
     {
         return m_MemoryManager.Read(coreIndex, address);
@@ -27,6 +40,11 @@ public:
     void Prefetch(const u32 coreIndex, const u64 address) noexcept
     {
         m_MemoryManager.Prefetch(coreIndex, address);
+    }
+
+    void FlushCache(const u32 coreIndex) noexcept
+    {
+        m_MemoryManager.Flush(coreIndex);
     }
 private:
     MemoryManager m_MemoryManager;

@@ -60,6 +60,7 @@ public:
     [[nodiscard]] u32 Read(u64 address) noexcept;
     void Write(u64 address, u32 value) noexcept;
     // void FillCacheLine(u64 address, const u32* data) noexcept;
+    void Flush() noexcept;
 
     bool SnoopBusRead(u32 requestorLine, u64 address, u32* dataBus) noexcept;
     bool SnoopBusReadX(u32 requestorLine, u64 address, u32* dataBus) noexcept;
@@ -118,6 +119,11 @@ public:
         (void) m_L0Caches[coreIndex].Read(address);
     }
 
+    void Flush(const u32 coreIndex) noexcept
+    {
+        m_L0Caches[coreIndex].Flush();
+    }
+
     bool ReadCacheLine(const u32 requestorLine, const u64 address, u32* const cacheLine) noexcept
     {
         bool didWrite = m_L0Caches[0].SnoopBusRead(requestorLine, address, cacheLine);
@@ -164,7 +170,7 @@ public:
 
     void WriteBackCacheLine(const u32 requestorLine, const u64 address, const u32* cacheLine) noexcept
     {
-        if(requestorLine == 4)
+        // if(requestorLine == 4)
         {
             // The memory granularity is 32 bits, thus we'll adjust to an 8 bit granularity for x86.
             const uintptr_t addressX86 = address << 2;

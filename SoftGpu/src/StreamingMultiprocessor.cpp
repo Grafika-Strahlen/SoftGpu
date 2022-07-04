@@ -16,3 +16,7 @@ void StreamingMultiprocessor::Prefetch(u64 address) noexcept
     m_Processor->Prefetch(m_SMIndex, address);
 }
 
+void StreamingMultiprocessor::FlushCache() noexcept
+{
+    m_Processor->FlushCache(m_SMIndex);
+}
