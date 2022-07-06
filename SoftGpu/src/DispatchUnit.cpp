@@ -4,10 +4,18 @@
 
 #include <cstring>
 
+#include <immintrin.h>
+
+
 void DispatchUnit::ResetCycle() noexcept
 {
     m_IsStalled = false;
     m_ClockIndex = 0;
+    ++m_TotalIterationsTracker;
+    m_FpSaturationTracker += 8 - _mm_popcnt_u32(m_FpAvailabilityMap);
+    m_IntFpSaturationTracker += 8 - _mm_popcnt_u32(m_IntFpAvailabilityMap);
+    m_LdStSaturationTracker += 4 - _mm_popcnt_u32(m_LdStAvailabilityMap);
+    m_TextureSaturationTracker += 2 - _mm_popcnt_u32(m_TextureSamplerAvailabilityMap);
 }
 
 void DispatchUnit::Clock() noexcept
@@ -45,6 +53,7 @@ void DispatchUnit::Clock() noexcept
             case EInstruction::LoadStore: DecodeLdSt(localInstructionPointer, wordIndex, instructionBytes); break;
             case EInstruction::LoadImmediate: DecodeLoadImmediate(localInstructionPointer, wordIndex, instructionBytes); break;
             case EInstruction::LoadZero: DecodeLoadZero(localInstructionPointer, wordIndex, instructionBytes); break;
+            case EInstruction::WriteStatistics: DecodeWriteStatistics(localInstructionPointer, wordIndex, instructionBytes); break;
             case EInstruction::AddF:
             case EInstruction::AddVec2F:
             case EInstruction::AddVec3F:
@@ -57,6 +66,54 @@ void DispatchUnit::Clock() noexcept
             case EInstruction::AddVec2D:
             case EInstruction::AddVec3D:
             case EInstruction::AddVec4D:
+            case EInstruction::SubF:
+            case EInstruction::SubVec2F:
+            case EInstruction::SubVec3F:
+            case EInstruction::SubVec4F:
+            case EInstruction::SubH:
+            case EInstruction::SubVec2H:
+            case EInstruction::SubVec3H:
+            case EInstruction::SubVec4H:
+            case EInstruction::SubD:
+            case EInstruction::SubVec2D:
+            case EInstruction::SubVec3D:
+            case EInstruction::SubVec4D:
+            case EInstruction::MulF:
+            case EInstruction::MulVec2F:
+            case EInstruction::MulVec3F:
+            case EInstruction::MulVec4F:
+            case EInstruction::MulH:
+            case EInstruction::MulVec2H:
+            case EInstruction::MulVec3H:
+            case EInstruction::MulVec4H:
+            case EInstruction::MulD:
+            case EInstruction::MulVec2D:
+            case EInstruction::MulVec3D:
+            case EInstruction::MulVec4D:
+            case EInstruction::DivF:
+            case EInstruction::DivVec2F:
+            case EInstruction::DivVec3F:
+            case EInstruction::DivVec4F:
+            case EInstruction::DivH:
+            case EInstruction::DivVec2H:
+            case EInstruction::DivVec3H:
+            case EInstruction::DivVec4H:
+            case EInstruction::DivD:
+            case EInstruction::DivVec2D:
+            case EInstruction::DivVec3D:
+            case EInstruction::DivVec4D:
+            case EInstruction::RemF:
+            case EInstruction::RemVec2F:
+            case EInstruction::RemVec3F:
+            case EInstruction::RemVec4F:
+            case EInstruction::RemH:
+            case EInstruction::RemVec2H:
+            case EInstruction::RemVec3H:
+            case EInstruction::RemVec4H:
+            case EInstruction::RemD:
+            case EInstruction::RemVec2D:
+            case EInstruction::RemVec3D:
+            case EInstruction::RemVec4D:
                 DecodeFpuBinOp(localInstructionPointer, wordIndex, instructionBytes);
                 break;
             default: break;
@@ -139,7 +196,27 @@ void DispatchUnit::Clock() noexcept
         case EInstruction::LoadStore: DispatchLdSt(replicationIndex); break;
         case EInstruction::LoadImmediate: DispatchLoadImmediate(replicationIndex); break;
         case EInstruction::LoadZero: DispatchLoadZero(replicationIndex); break;
-        case EInstruction::FlushCache: m_SM->FlushCache(); break;
+        case EInstruction::FlushCache:
+            for(u32 i = 0; i < 256; ++i)
+            {
+                if(m_RegisterContestationMap[replicationIndex][i] == 1u)
+                {
+                    m_IsStalled = true;
+                    return;
+                }
+            }
+            m_SM->FlushCache();
+            break;
+        case EInstruction::ResetStatistics:
+        {
+            m_FpSaturationTracker = 0;
+            m_IntFpSaturationTracker = 0;
+            m_LdStSaturationTracker = 0;
+            m_TextureSaturationTracker = 0;
+            m_TotalIterationsTracker = 0;
+            break;
+        }
+        case EInstruction::WriteStatistics: DispatchWriteStatistics(replicationIndex); break;
         case EInstruction::AddF:
         case EInstruction::AddVec2F:
         case EInstruction::AddVec3F:
@@ -152,6 +229,54 @@ void DispatchUnit::Clock() noexcept
         case EInstruction::AddVec2D:
         case EInstruction::AddVec3D:
         case EInstruction::AddVec4D:
+        case EInstruction::SubF:
+        case EInstruction::SubVec2F:
+        case EInstruction::SubVec3F:
+        case EInstruction::SubVec4F:
+        case EInstruction::SubH:
+        case EInstruction::SubVec2H:
+        case EInstruction::SubVec3H:
+        case EInstruction::SubVec4H:
+        case EInstruction::SubD:
+        case EInstruction::SubVec2D:
+        case EInstruction::SubVec3D:
+        case EInstruction::SubVec4D:
+        case EInstruction::MulF:
+        case EInstruction::MulVec2F:
+        case EInstruction::MulVec3F:
+        case EInstruction::MulVec4F:
+        case EInstruction::MulH:
+        case EInstruction::MulVec2H:
+        case EInstruction::MulVec3H:
+        case EInstruction::MulVec4H:
+        case EInstruction::MulD:
+        case EInstruction::MulVec2D:
+        case EInstruction::MulVec3D:
+        case EInstruction::MulVec4D:
+        case EInstruction::DivF:
+        case EInstruction::DivVec2F:
+        case EInstruction::DivVec3F:
+        case EInstruction::DivVec4F:
+        case EInstruction::DivH:
+        case EInstruction::DivVec2H:
+        case EInstruction::DivVec3H:
+        case EInstruction::DivVec4H:
+        case EInstruction::DivD:
+        case EInstruction::DivVec2D:
+        case EInstruction::DivVec3D:
+        case EInstruction::DivVec4D:
+        case EInstruction::RemF:
+        case EInstruction::RemVec2F:
+        case EInstruction::RemVec3F:
+        case EInstruction::RemVec4F:
+        case EInstruction::RemH:
+        case EInstruction::RemVec2H:
+        case EInstruction::RemVec3H:
+        case EInstruction::RemVec4H:
+        case EInstruction::RemD:
+        case EInstruction::RemVec2D:
+        case EInstruction::RemVec3D:
+        case EInstruction::RemVec4D:
             DispatchFpuBinOp(replicationIndex);
             break;
         default: break;
@@ -236,13 +361,13 @@ u64 DispatchUnit::ReadU64(u64& localInstructionPointer, u32& wordIndex, u8 instr
 
 void DispatchUnit::LockRegisterRead(const u32 registerIndex, const u32 replicationIndex) noexcept
 {
-    if(m_RegisterContestationMap[registerIndex][replicationIndex] == 0)
+    if(m_RegisterContestationMap[replicationIndex][registerIndex] == 0)
     {
-        m_RegisterContestationMap[registerIndex][replicationIndex] = 2;
+        m_RegisterContestationMap[replicationIndex][registerIndex] = 2;
     }
     else
     {
-        ++m_RegisterContestationMap[registerIndex][replicationIndex];
+        ++m_RegisterContestationMap[replicationIndex][registerIndex];
     }
 }
 
@@ -317,6 +442,25 @@ void DispatchUnit::DecodeLoadZero(u64& localInstructionPointer, u32& wordIndex, 
     m_DecodedInstructionData.LoadZero.StartRegister = startRegister;
 }
 
+void DispatchUnit::DecodeWriteStatistics(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) noexcept
+{
+    NextInstruction(localInstructionPointer, wordIndex, instructionBytes);
+
+    const u8 statisticIndex = instructionBytes[wordIndex];
+
+    NextInstruction(localInstructionPointer, wordIndex, instructionBytes);
+
+    const u8 startRegister = instructionBytes[wordIndex];
+
+    NextInstruction(localInstructionPointer, wordIndex, instructionBytes);
+
+    const u8 clockStartRegister = instructionBytes[wordIndex];
+
+    m_DecodedInstructionData.WriteStatistics.StatisticIndex = statisticIndex;
+    m_DecodedInstructionData.WriteStatistics.StartRegister = startRegister;
+    m_DecodedInstructionData.WriteStatistics.ClockStartRegister = clockStartRegister;
+}
+
 static u32 GetElementCount(EInstruction instruction) noexcept;
 static EPrecision GetElementPrecision(EInstruction instruction) noexcept;
 static EBinOp GetElementOperation(EInstruction instruction) noexcept;
@@ -380,13 +524,13 @@ void DispatchUnit::DispatchLdSt(const u32 replicationIndex) noexcept
         return;
     }
     
-    if(m_RegisterContestationMap[m_DecodedInstructionData.LoadStore.BaseRegister][replicationIndex] == 1 || m_RegisterContestationMap[m_DecodedInstructionData.LoadStore.BaseRegister + 1u][replicationIndex] == 1)
+    if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.LoadStore.BaseRegister] == 1 || m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.LoadStore.BaseRegister + 1u] == 1)
     {
         m_IsStalled = true;
         return;
     }
     
-    if(m_DecodedInstructionData.LoadStore.IndexExponent != 7u && m_RegisterContestationMap[m_DecodedInstructionData.LoadStore.IndexRegister][replicationIndex] == 1)
+    if(m_DecodedInstructionData.LoadStore.IndexExponent != 7u && m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.LoadStore.IndexRegister] == 1)
     {
         m_IsStalled = true;
         return;
@@ -394,12 +538,12 @@ void DispatchUnit::DispatchLdSt(const u32 replicationIndex) noexcept
     
     for(u32 i = 0; i < m_DecodedInstructionData.LoadStore.RegisterCount + 1u; ++i)
     {
-        if(m_RegisterContestationMap[m_DecodedInstructionData.LoadStore.TargetRegister + i][replicationIndex] == 1)
+        if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.LoadStore.TargetRegister + i] == 1)
         {
             m_IsStalled = true;
             return;
         }
-        else if(m_DecodedInstructionData.LoadStore.ReadWrite == 0u && m_RegisterContestationMap[m_DecodedInstructionData.LoadStore.TargetRegister + i][replicationIndex] != 0)
+        else if(m_DecodedInstructionData.LoadStore.ReadWrite == 0u && m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.LoadStore.TargetRegister + i] != 0)
         {
             m_IsStalled = true;
             return;
@@ -416,13 +560,13 @@ void DispatchUnit::DispatchLdSt(const u32 replicationIndex) noexcept
 
     for(u32 i = 0; i < m_DecodedInstructionData.LoadStore.RegisterCount + 1u; ++i)
     {
-        if(m_DecodedInstructionData.LoadStore.ReadWrite == 0u)
+        if(m_DecodedInstructionData.LoadStore.ReadWrite == 1u)
         {
-            LockRegisterRead(m_DecodedInstructionData.LoadStore.TargetRegister, replicationIndex);
+            LockRegisterRead(m_DecodedInstructionData.LoadStore.TargetRegister + i, replicationIndex);
         }
         else
         {
-            m_RegisterContestationMap[m_DecodedInstructionData.LoadStore.TargetRegister][replicationIndex] = 1;
+            m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.LoadStore.TargetRegister + i] = 1;
         }
     }
 
@@ -444,7 +588,7 @@ void DispatchUnit::DispatchLdSt(const u32 replicationIndex) noexcept
 
 void DispatchUnit::DispatchLoadImmediate(const u32 replicationIndex) noexcept
 {
-    if(m_RegisterContestationMap[m_DecodedInstructionData.LoadImmediate.Register][replicationIndex] != 0)
+    if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.LoadImmediate.Register] != 0)
     {
         m_IsStalled = true;
         return;
@@ -458,7 +602,7 @@ void DispatchUnit::DispatchLoadZero(const u32 replicationIndex) noexcept
 {
     for(uSys i = 0; i < m_DecodedInstructionData.LoadZero.RegisterCount + 1u; ++i)
     {
-        if(m_RegisterContestationMap[m_DecodedInstructionData.LoadZero.StartRegister + i][replicationIndex] != 0)
+        if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.LoadZero.StartRegister + i] != 0)
         {
             m_IsStalled = true;
             return;
@@ -473,95 +617,159 @@ void DispatchUnit::DispatchLoadZero(const u32 replicationIndex) noexcept
     m_ReplicationCompletedMask |= 1 << replicationIndex;
 }
 
-void DispatchUnit::DispatchFpuBinOp(const u32 replicationIndex) noexcept
+void DispatchUnit::DispatchWriteStatistics(const u32 replicationIndex) noexcept
 {
-    if(m_FpAvailabilityMap == 0u && m_IntFpAvailabilityMap == 0u)
+    if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.WriteStatistics.StartRegister] != 0)
     {
         m_IsStalled = true;
         return;
     }
 
-    u32 registerOffset = static_cast<u32>(m_VectorOpIndex);
-
-    if(m_DecodedInstructionData.FpuBinOp.Precision == EPrecision::Double)
+    if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.WriteStatistics.StartRegister + 1] != 0)
     {
-        registerOffset *= 2;
-
-        if(m_RegisterContestationMap[m_DecodedInstructionData.FpuBinOp.RegisterA + registerOffset][replicationIndex] == 1)
-        {
-            m_IsStalled = true;
-            return;
-        }
-
-        if(m_RegisterContestationMap[m_DecodedInstructionData.FpuBinOp.RegisterA + registerOffset + 1][replicationIndex] == 1)
-        {
-            m_IsStalled = true;
-            return;
-        }
-
-        if(m_RegisterContestationMap[m_DecodedInstructionData.FpuBinOp.RegisterB + registerOffset][replicationIndex] == 1)
-        {
-            m_IsStalled = true;
-            return;
-        }
-
-        if(m_RegisterContestationMap[m_DecodedInstructionData.FpuBinOp.RegisterB + registerOffset + 1][replicationIndex] == 1)
-        {
-            m_IsStalled = true;
-            return;
-        }
-
-        if(m_RegisterContestationMap[m_DecodedInstructionData.FpuBinOp.StorageRegister + registerOffset][replicationIndex] != 0)
-        {
-            m_IsStalled = true;
-            return;
-        }
-
-        if(m_RegisterContestationMap[m_DecodedInstructionData.FpuBinOp.StorageRegister + registerOffset + 1][replicationIndex] != 0)
-        {
-            m_IsStalled = true;
-            return;
-        }
-    }
-    else
-    {
-        if(m_RegisterContestationMap[m_DecodedInstructionData.FpuBinOp.RegisterA + registerOffset][replicationIndex] == 1)
-        {
-            m_IsStalled = true;
-            return;
-        }
-
-        if(m_RegisterContestationMap[m_DecodedInstructionData.FpuBinOp.RegisterB + registerOffset][replicationIndex] == 1)
-        {
-            m_IsStalled = true;
-            return;
-        }
-
-        if(m_RegisterContestationMap[m_DecodedInstructionData.FpuBinOp.StorageRegister + registerOffset][replicationIndex] != 0)
-        {
-            m_IsStalled = true;
-            return;
-        }
+        m_IsStalled = true;
+        return;
     }
 
-    u32 fpUnit = 0;
+    if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.WriteStatistics.ClockStartRegister] != 0)
     {
-        u32 fpAvailabilityMap = m_FpAvailabilityMap;
-        while(fpUnit < 8)
+        m_IsStalled = true;
+        return;
+    }
+
+    if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.WriteStatistics.ClockStartRegister + 1] != 0)
+    {
+        m_IsStalled = true;
+        return;
+    }
+
+    u32 clockWords[2];
+    (void) ::std::memcpy(clockWords, &m_TotalIterationsTracker, sizeof(m_TotalIterationsTracker));
+
+    m_SM->SetRegister(m_Index, replicationIndex, m_DecodedInstructionData.WriteStatistics.ClockStartRegister, clockWords[0]);
+    m_SM->SetRegister(m_Index, replicationIndex, m_DecodedInstructionData.WriteStatistics.ClockStartRegister + 1, clockWords[1]);
+
+    u64 targetStatistic = 0;
+    if(m_DecodedInstructionData.WriteStatistics.StatisticIndex == 0)
+    {
+        targetStatistic = m_FpSaturationTracker;
+    }
+    else if(m_DecodedInstructionData.WriteStatistics.StatisticIndex == 1)
+    {
+        targetStatistic = m_IntFpSaturationTracker;
+    }
+    else if(m_DecodedInstructionData.WriteStatistics.StatisticIndex == 2)
+    {
+        targetStatistic = m_LdStSaturationTracker;
+    }
+    else if(m_DecodedInstructionData.WriteStatistics.StatisticIndex == 3)
+    {
+        targetStatistic = m_TextureSaturationTracker;
+    }
+
+    u32 statisticWords[2];
+    (void) ::std::memcpy(statisticWords, &targetStatistic, sizeof(targetStatistic));
+
+    m_SM->SetRegister(m_Index, replicationIndex, m_DecodedInstructionData.WriteStatistics.StartRegister, statisticWords[0]);
+    m_SM->SetRegister(m_Index, replicationIndex, m_DecodedInstructionData.WriteStatistics.StartRegister + 1, statisticWords[1]);
+
+    m_ReplicationCompletedMask |= 1 << replicationIndex;
+}
+
+void DispatchUnit::DispatchFpuBinOp(const u32 replicationIndex) noexcept
+{
+    // Attempt to perform up to 4 ops per cycle for vectors.
+    // This will exit after either there are no more available cores or we complete the required number of vector ops.
+    // This can probably be a while(true) loop, but for safety and verbosity we're explicitly defining as for(0..3) loop.
+    for(u32 i = 0; i < 4; ++i)
+    {
+        if(m_FpAvailabilityMap == 0u && m_IntFpAvailabilityMap == 0u)
         {
-            if((fpAvailabilityMap & 0x1) != 0)
+            m_IsStalled = true;
+            return;
+        }
+
+        u32 registerOffset = static_cast<u32>(m_VectorOpIndex);
+
+        if(m_DecodedInstructionData.FpuBinOp.Precision == EPrecision::Double)
+        {
+            registerOffset *= 2;
+
+            if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.FpuBinOp.RegisterA + registerOffset] == 1)
             {
-                break;
+                m_IsStalled = true;
+                return;
             }
 
-            fpAvailabilityMap >>= 1;
-            ++fpUnit;
+            if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.FpuBinOp.RegisterA + registerOffset + 1] == 1)
+            {
+                m_IsStalled = true;
+                return;
+            }
+
+            if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.FpuBinOp.RegisterB + registerOffset] == 1)
+            {
+                m_IsStalled = true;
+                return;
+            }
+
+            if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.FpuBinOp.RegisterB + registerOffset + 1] == 1)
+            {
+                m_IsStalled = true;
+                return;
+            }
+
+            if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.FpuBinOp.StorageRegister + registerOffset] != 0)
+            {
+                m_IsStalled = true;
+                return;
+            }
+
+            if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.FpuBinOp.StorageRegister + registerOffset + 1] != 0)
+            {
+                m_IsStalled = true;
+                return;
+            }
+
+            LockRegisterRead(m_DecodedInstructionData.FpuBinOp.RegisterA + registerOffset, replicationIndex);
+            LockRegisterRead(m_DecodedInstructionData.FpuBinOp.RegisterA + registerOffset + 1, replicationIndex);
+
+            LockRegisterRead(m_DecodedInstructionData.FpuBinOp.RegisterB + registerOffset, replicationIndex);
+            LockRegisterRead(m_DecodedInstructionData.FpuBinOp.RegisterB + registerOffset + 1, replicationIndex);
+
+            m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.FpuBinOp.StorageRegister + registerOffset] = 1;
+            m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.FpuBinOp.StorageRegister + registerOffset + 1] = 1;
+        }
+        else
+        {
+            if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.FpuBinOp.RegisterA + registerOffset] == 1)
+            {
+                m_IsStalled = true;
+                return;
+            }
+
+            if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.FpuBinOp.RegisterB + registerOffset] == 1)
+            {
+                m_IsStalled = true;
+                return;
+            }
+
+            if(m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.FpuBinOp.StorageRegister + registerOffset] != 0)
+            {
+                m_IsStalled = true;
+                return;
+            }
+
+            LockRegisterRead(m_DecodedInstructionData.FpuBinOp.RegisterA + registerOffset, replicationIndex);
+            LockRegisterRead(m_DecodedInstructionData.FpuBinOp.RegisterB + registerOffset, replicationIndex);
+            
+            m_RegisterContestationMap[replicationIndex][m_DecodedInstructionData.FpuBinOp.StorageRegister + registerOffset] = 1;
         }
 
-        if(fpUnit == 8)
+        u32 fpUnit = 0;
         {
-            fpAvailabilityMap = m_IntFpAvailabilityMap;
-            while(fpUnit < 16)
+            u32 fpAvailabilityMap = m_FpAvailabilityMap;
+            while(fpUnit < 8)
             {
                 if((fpAvailabilityMap & 0x1) != 0)
                 {
@@ -571,38 +779,54 @@ void DispatchUnit::DispatchFpuBinOp(const u32 replicationIndex) noexcept
                 fpAvailabilityMap >>= 1;
                 ++fpUnit;
             }
+
+            if(fpUnit == 8)
+            {
+                fpAvailabilityMap = m_IntFpAvailabilityMap;
+                while(fpUnit < 16)
+                {
+                    if((fpAvailabilityMap & 0x1) != 0)
+                    {
+                        break;
+                    }
+
+                    fpAvailabilityMap >>= 1;
+                    ++fpUnit;
+                }
+            }
+
+            if(fpUnit == 16)
+            {
+                m_IsStalled = true;
+                return;
+            }
         }
 
-        if(fpUnit == 16)
+        // TODO: Handle replication for vectors.
+        FpuInstruction fpuInstruction;
+        fpuInstruction.DispatchPort = m_Index;
+        fpuInstruction.ReplicationIndex = replicationIndex;
+        fpuInstruction.Operation = EFpuOp::BasicBinOp;
+        fpuInstruction.Precision = m_DecodedInstructionData.FpuBinOp.Precision;
+        fpuInstruction.Reserved = 0;
+        fpuInstruction.OperandA = m_DecodedInstructionData.FpuBinOp.RegisterA + registerOffset;
+        fpuInstruction.OperandB = m_DecodedInstructionData.FpuBinOp.RegisterB + registerOffset;
+        fpuInstruction.OperandC = static_cast<u32>(m_DecodedInstructionData.FpuBinOp.BinOp);
+        fpuInstruction.StorageRegister = m_DecodedInstructionData.FpuBinOp.StorageRegister + registerOffset;
+
+        m_SM->DispatchFpu(fpUnit, fpuInstruction);
+
+        // Have we completed all operations for this vector.
+        if(static_cast<u32>(m_VectorOpIndex) + 1 == m_DecodedInstructionData.FpuBinOp.RegisterCount)
         {
-            m_IsStalled = true;
+            m_ReplicationCompletedMask |= 1 << replicationIndex;
+            m_VectorOpIndex = 0;
             return;
         }
-    }
-    
-    // TODO: Handle replication for vectors.
-    FpuInstruction fpuInstruction;
-    fpuInstruction.DispatchPort = m_Index;
-    fpuInstruction.ReplicationIndex = replicationIndex;
-    fpuInstruction.Operation = EFpuOp::BasicBinOp;
-    fpuInstruction.Precision = m_DecodedInstructionData.FpuBinOp.Precision;
-    fpuInstruction.Reserved = 0;
-    fpuInstruction.OperandA = m_DecodedInstructionData.FpuBinOp.RegisterA + registerOffset;
-    fpuInstruction.OperandB = m_DecodedInstructionData.FpuBinOp.RegisterB + registerOffset;
-    fpuInstruction.OperandC = static_cast<u32>(m_DecodedInstructionData.FpuBinOp.BinOp);
-    fpuInstruction.StorageRegister = m_DecodedInstructionData.FpuBinOp.StorageRegister + registerOffset;
-
-    m_SM->DispatchFpu(fpUnit, fpuInstruction);
-
-    // Have we completed all operations for this vector.
-    if(static_cast<u32>(m_VectorOpIndex) + 1 == m_DecodedInstructionData.FpuBinOp.RegisterCount)
-    {
-        m_ReplicationCompletedMask |= 1 << replicationIndex;
-        m_VectorOpIndex = 0;
-    }
-    else
-    {
-        ++m_VectorOpIndex;
+        else
+        {
+            ++m_VectorOpIndex;
+        }
     }
 }
 
@@ -613,18 +837,66 @@ static u32 GetElementCount(const EInstruction instruction) noexcept
         case EInstruction::AddF:
         case EInstruction::AddH:
         case EInstruction::AddD:
+        case EInstruction::SubF:
+        case EInstruction::SubH:
+        case EInstruction::SubD:
+        case EInstruction::MulF:
+        case EInstruction::MulH:
+        case EInstruction::MulD:
+        case EInstruction::DivF:
+        case EInstruction::DivH:
+        case EInstruction::DivD:
+        case EInstruction::RemF:
+        case EInstruction::RemH:
+        case EInstruction::RemD:
             return 1;
         case EInstruction::AddVec2F:
         case EInstruction::AddVec2H:
         case EInstruction::AddVec2D:
+        case EInstruction::SubVec2F:
+        case EInstruction::SubVec2H:
+        case EInstruction::SubVec2D:
+        case EInstruction::MulVec2F:
+        case EInstruction::MulVec2H:
+        case EInstruction::MulVec2D:
+        case EInstruction::DivVec2F:
+        case EInstruction::DivVec2H:
+        case EInstruction::DivVec2D:
+        case EInstruction::RemVec2F:
+        case EInstruction::RemVec2H:
+        case EInstruction::RemVec2D:
             return 2;
         case EInstruction::AddVec3F:
         case EInstruction::AddVec3H:
         case EInstruction::AddVec3D:
+        case EInstruction::SubVec3F:
+        case EInstruction::SubVec3H:
+        case EInstruction::SubVec3D:
+        case EInstruction::MulVec3F:
+        case EInstruction::MulVec3H:
+        case EInstruction::MulVec3D:
+        case EInstruction::DivVec3F:
+        case EInstruction::DivVec3H:
+        case EInstruction::DivVec3D:
+        case EInstruction::RemVec3F:
+        case EInstruction::RemVec3H:
+        case EInstruction::RemVec3D:
             return 3;
         case EInstruction::AddVec4F:
         case EInstruction::AddVec4H:
         case EInstruction::AddVec4D:
+        case EInstruction::SubVec4F:
+        case EInstruction::SubVec4H:
+        case EInstruction::SubVec4D:
+        case EInstruction::MulVec4F:
+        case EInstruction::MulVec4H:
+        case EInstruction::MulVec4D:
+        case EInstruction::DivVec4F:
+        case EInstruction::DivVec4H:
+        case EInstruction::DivVec4D:
+        case EInstruction::RemVec4F:
+        case EInstruction::RemVec4H:
+        case EInstruction::RemVec4D:
             return 4;
         default: return 0;
     }
@@ -638,16 +910,64 @@ static EPrecision GetElementPrecision(const EInstruction instruction) noexcept
         case EInstruction::AddVec2F:
         case EInstruction::AddVec3F:
         case EInstruction::AddVec4F:
+        case EInstruction::SubF:
+        case EInstruction::SubVec2F:
+        case EInstruction::SubVec3F:
+        case EInstruction::SubVec4F:
+        case EInstruction::MulF:
+        case EInstruction::MulVec2F:
+        case EInstruction::MulVec3F:
+        case EInstruction::MulVec4F:
+        case EInstruction::DivF:
+        case EInstruction::DivVec2F:
+        case EInstruction::DivVec3F:
+        case EInstruction::DivVec4F:
+        case EInstruction::RemF:
+        case EInstruction::RemVec2F:
+        case EInstruction::RemVec3F:
+        case EInstruction::RemVec4F:
             return EPrecision::Single;
         case EInstruction::AddH:
         case EInstruction::AddVec2H:
         case EInstruction::AddVec3H:
         case EInstruction::AddVec4H:
+        case EInstruction::SubH:
+        case EInstruction::SubVec2H:
+        case EInstruction::SubVec3H:
+        case EInstruction::SubVec4H:
+        case EInstruction::MulH:
+        case EInstruction::MulVec2H:
+        case EInstruction::MulVec3H:
+        case EInstruction::MulVec4H:
+        case EInstruction::DivH:
+        case EInstruction::DivVec2H:
+        case EInstruction::DivVec3H:
+        case EInstruction::DivVec4H:
+        case EInstruction::RemH:
+        case EInstruction::RemVec2H:
+        case EInstruction::RemVec3H:
+        case EInstruction::RemVec4H:
             return EPrecision::Half;
         case EInstruction::AddD:
         case EInstruction::AddVec2D:
         case EInstruction::AddVec3D:
         case EInstruction::AddVec4D:
+        case EInstruction::SubD:
+        case EInstruction::SubVec2D:
+        case EInstruction::SubVec3D:
+        case EInstruction::SubVec4D:
+        case EInstruction::MulD:
+        case EInstruction::MulVec2D:
+        case EInstruction::MulVec3D:
+        case EInstruction::MulVec4D:
+        case EInstruction::DivD:
+        case EInstruction::DivVec2D:
+        case EInstruction::DivVec3D:
+        case EInstruction::DivVec4D:
+        case EInstruction::RemD:
+        case EInstruction::RemVec2D:
+        case EInstruction::RemVec3D:
+        case EInstruction::RemVec4D:
             return EPrecision::Double;
         default: return EPrecision::Single;
     }
@@ -670,6 +990,58 @@ static EBinOp GetElementOperation(const EInstruction instruction) noexcept
         case EInstruction::AddVec3D:
         case EInstruction::AddVec4D:
             return EBinOp::Add;
+        case EInstruction::SubF:
+        case EInstruction::SubVec2F:
+        case EInstruction::SubVec3F:
+        case EInstruction::SubVec4F:
+        case EInstruction::SubH:
+        case EInstruction::SubVec2H:
+        case EInstruction::SubVec3H:
+        case EInstruction::SubVec4H:
+        case EInstruction::SubD:
+        case EInstruction::SubVec2D:
+        case EInstruction::SubVec3D:
+        case EInstruction::SubVec4D:
+            return EBinOp::Subtract;
+        case EInstruction::MulF:
+        case EInstruction::MulVec2F:
+        case EInstruction::MulVec3F:
+        case EInstruction::MulVec4F:
+        case EInstruction::MulH:
+        case EInstruction::MulVec2H:
+        case EInstruction::MulVec3H:
+        case EInstruction::MulVec4H:
+        case EInstruction::MulD:
+        case EInstruction::MulVec2D:
+        case EInstruction::MulVec3D:
+        case EInstruction::MulVec4D:
+            return EBinOp::Multiply;
+        case EInstruction::DivF:
+        case EInstruction::DivVec2F:
+        case EInstruction::DivVec3F:
+        case EInstruction::DivVec4F:
+        case EInstruction::DivH:
+        case EInstruction::DivVec2H:
+        case EInstruction::DivVec3H:
+        case EInstruction::DivVec4H:
+        case EInstruction::DivD:
+        case EInstruction::DivVec2D:
+        case EInstruction::DivVec3D:
+        case EInstruction::DivVec4D:
+            return EBinOp::Divide;
+        case EInstruction::RemF:
+        case EInstruction::RemVec2F:
+        case EInstruction::RemVec3F:
+        case EInstruction::RemVec4F:
+        case EInstruction::RemH:
+        case EInstruction::RemVec2H:
+        case EInstruction::RemVec3H:
+        case EInstruction::RemVec4H:
+        case EInstruction::RemD:
+        case EInstruction::RemVec2D:
+        case EInstruction::RemVec3D:
+        case EInstruction::RemVec4D:
+            return EBinOp::Remainder;
         default: return EBinOp::Add;
     }
 }

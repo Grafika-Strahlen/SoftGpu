@@ -17,6 +17,8 @@ enum class EInstruction : u8
     LoadImmediate, // Register : 8, Value : 32
     LoadZero, // RegisterCount : 8, StartRegister : 8
     FlushCache,
+    ResetStatistics,
+    WriteStatistics, // TargetStatisticIndex : 8, TargetRegister: 8, CounterRegister : 8
     AddF,     // RegisterA : 8, RegisterB : 8, StorageRegister : 8
     AddVec2F, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
     AddVec3F, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
@@ -29,6 +31,54 @@ enum class EInstruction : u8
     AddVec2D, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
     AddVec3D, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
     AddVec4D, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    SubF,     // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    SubVec2F, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    SubVec3F, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    SubVec4F, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    SubH,     // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    SubVec2H, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    SubVec3H, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    SubVec4H, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    SubD,     // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    SubVec2D, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    SubVec3D, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    SubVec4D, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    MulF,     // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    MulVec2F, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    MulVec3F, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    MulVec4F, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    MulH,     // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    MulVec2H, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    MulVec3H, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    MulVec4H, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    MulD,     // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    MulVec2D, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    MulVec3D, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    MulVec4D, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    DivF,     // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    DivVec2F, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    DivVec3F, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    DivVec4F, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    DivH,     // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    DivVec2H, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    DivVec3H, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    DivVec4H, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    DivD,     // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    DivVec2D, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    DivVec3D, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    DivVec4D, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    RemF,     // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    RemVec2F, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    RemVec3F, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    RemVec4F, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    RemH,     // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    RemVec2H, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    RemVec3H, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    RemVec4H, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    RemD,     // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    RemVec2D, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    RemVec3D, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
+    RemVec4D, // RegisterA : 8, RegisterB : 8, StorageRegister : 8
 };
 
 namespace InstructionDecodeData {
@@ -57,6 +107,13 @@ struct LoadZeroData final
     u8 StartRegister;
 };
 
+struct WriteStatisticsData final
+{
+    u8 StatisticIndex;
+    u8 StartRegister;
+    u8 ClockStartRegister;
+};
+
 struct FpuBinOpData final
 {
     u8 RegisterA;
@@ -72,6 +129,7 @@ union InstructionData
     LoadStoreData LoadStore;
     LoadImmediateData LoadImmediate;
     LoadZeroData LoadZero;
+    WriteStatisticsData WriteStatistics;
     FpuBinOpData FpuBinOp;
 };
 
@@ -102,6 +160,11 @@ public:
         , m_CurrentInstruction(EInstruction::Nop)
         , m_DecodedInstructionData{ }
         , m_RegisterContestationMap()
+        , m_FpSaturationTracker(0)
+        , m_IntFpSaturationTracker(0)
+        , m_LdStSaturationTracker(0)
+        , m_TextureSaturationTracker(0)
+        , m_TotalIterationsTracker(0)
     { }
 
     [[nodiscard]] u32 BaseRegister(const u32 index) const noexcept { return m_BaseRegisters[index]; }
@@ -245,11 +308,13 @@ private:
     void DecodeLdSt(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) noexcept;
     void DecodeLoadImmediate(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) noexcept;
     void DecodeLoadZero(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) noexcept;
+    void DecodeWriteStatistics(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) noexcept;
     void DecodeFpuBinOp(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) noexcept;
 
     void DispatchLdSt(u32 replicationIndex) noexcept;
     void DispatchLoadImmediate(u32 replicationIndex) noexcept;
     void DispatchLoadZero(u32 replicationIndex) noexcept;
+    void DispatchWriteStatistics(u32 replicationIndex) noexcept;
     void DispatchFpuBinOp(u32 replicationIndex) noexcept;
 private:
     StreamingMultiprocessor* m_SM;
@@ -277,6 +342,12 @@ private:
     // If the value is one it is locked for writes.
     // Otherwise the register is locked for reads. Any number of simultaneous reads are allowed.
     u8 m_RegisterContestationMap[4][256];
+    u64 m_FpSaturationTracker;
+    u64 m_IntFpSaturationTracker;
+    u64 m_SfuSaturationTracker;
+    u64 m_LdStSaturationTracker;
+    u64 m_TextureSaturationTracker;
+    u64 m_TotalIterationsTracker;
 };
 
 

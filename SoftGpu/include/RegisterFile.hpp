@@ -12,5 +12,5 @@ public:
     [[nodiscard]] u32 GetRegister(const u32 baseRegister, const u32 targetRegister) const noexcept { return m_Registers[baseRegister + targetRegister]; }
     void SetRegister(const u32 baseRegister, const u32 targetRegister, const u32 value) noexcept { m_Registers[baseRegister + targetRegister] = value; }
 private:
-    u32 m_Registers[2048];
+    u32 m_Registers[4096];
 };

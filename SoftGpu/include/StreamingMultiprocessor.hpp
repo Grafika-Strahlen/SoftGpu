@@ -38,14 +38,11 @@ public:
         m_DispatchUnits[0].ResetCycle();
         m_DispatchUnits[1].ResetCycle();
 
-        m_DispatchUnits[0].Clock();
-        m_DispatchUnits[1].Clock();
-
-        m_DispatchUnits[0].Clock();
-        m_DispatchUnits[1].Clock();
-
-        m_DispatchUnits[0].Clock();
-        m_DispatchUnits[1].Clock();
+        for(u32 i = 0; i < 6; ++i)
+        {
+            m_DispatchUnits[0].Clock();
+            m_DispatchUnits[1].Clock();
+        }
     }
 
     void TestLoadProgram(const u32 dispatchPort, const u8 replicationMask, const u64 program)
@@ -114,9 +111,9 @@ public:
         }
         else
         {
-            m_DispatchUnits[0].ReportUnitBusy(fpIndex + INT_FP_AVAIL_OFFSET);
-            m_DispatchUnits[1].ReportUnitBusy(fpIndex + INT_FP_AVAIL_OFFSET);
-            m_IntFpCores[fpIndex].ExecuteFP(instructionInfo);
+            m_DispatchUnits[0].ReportUnitBusy(fpIndex - 8 + INT_FP_AVAIL_OFFSET);
+            m_DispatchUnits[1].ReportUnitBusy(fpIndex - 8 + INT_FP_AVAIL_OFFSET);
+            m_IntFpCores[fpIndex - 8].ExecuteFP(instructionInfo);
         }
     }
 
