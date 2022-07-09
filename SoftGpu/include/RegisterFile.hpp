@@ -1,7 +1,9 @@
 #pragma once
 
+#include <cassert>
 #include <Objects.hpp>
 #include <NumTypes.hpp>
+#include <ConPrinter.hpp>
 #include "DebugManager.hpp"
 
 #define REGISTER_FILE_REGISTER_COUNT (4096)
@@ -35,6 +37,13 @@ public:
     void ReleaseRegisterContestation(const u32 registerIndex) noexcept
     {
         --m_RegisterContestationMap[registerIndex];
+
+        if(m_RegisterContestationMap[registerIndex] == 0xFF)
+        {
+            ConPrinter::Print("Register Unlock {} has underflowed.\n", registerIndex);
+
+            assert(m_RegisterContestationMap[registerIndex] != 0xFF);
+        }
 
         // If that was the last read lock the value will now be 1, which is actually the write lock. Set it to no lock.
         if(m_RegisterContestationMap[registerIndex] == 1)
