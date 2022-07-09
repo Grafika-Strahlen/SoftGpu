@@ -1,7 +1,10 @@
 #include "Processor.hpp"
 #include <ConPrinter.hpp>
+#include "DebugManager.hpp"
 
 static Processor processor;
+
+DebugManager GlobalDebug;
 
 static void TestMove() noexcept;
 static void TestAdd1F() noexcept;
@@ -13,6 +16,11 @@ static void TestMul2FReplicatedDualDispatch() noexcept;
 int main(int argCount, char* args[])
 {
     Console::Init();
+
+    if(!SUCCEEDED(DebugManager::Create(&GlobalDebug, L"\\\\.\\pipe\\gpu-pipe")))
+    {
+        ConPrinter::Print("Debug not enabled.\n");
+    }
 
     // TestMove();
     // TestAdd1F();
@@ -99,7 +107,7 @@ static void TestAdd1F() noexcept
 
     processor.TestLoadProgram(0, 0, 0x1, program);
 
-    for(int i = 0; i < 20; ++i)
+    for(int i = 0; i < 40; ++i)
     {
         processor.Clock();
     }
@@ -223,7 +231,7 @@ static void TestAdd2FReplicated() noexcept
     processor.TestLoadRegister(0, 0, 1, 2, outData1Words[0]);
     processor.TestLoadRegister(0, 0, 1, 3, outData1Words[1]);
 
-    for(int i = 0; i < 20; ++i)
+    for(int i = 0; i < 100; ++i)
     {
         processor.Clock();
     }

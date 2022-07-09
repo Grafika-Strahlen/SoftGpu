@@ -14,56 +14,30 @@ void Fpu::Clock() noexcept
     }
     else if(m_ExecutionStage == 1)
     {
-        for(u32 i = 0; i < m_StorageRegisterCount; ++i)
-        {
-            m_Core->ReleaseRegisterContestation(m_DispatchPort, m_ReplicationIndex, m_StorageRegister + i);
-        }
         m_Core->ReportReady();
     }
 
     --m_ExecutionStage;
 }
 
-void Fpu::InitiateInstruction(const FpuInstruction instructionInfo) noexcept
+void Fpu::ExecuteInstruction(const LoadedFpuInstruction instructionInfo) noexcept
 {
     m_DispatchPort = instructionInfo.DispatchPort;
-    m_ReplicationIndex = instructionInfo.ReplicationIndex;
     m_StorageRegister = instructionInfo.StorageRegister;
-
-    if(instructionInfo.Operation == EFpuOp::Cross)
-    {
-        Cross(instructionInfo);
-        return;
-    }
-    else if(instructionInfo.Operation == EFpuOp::Dot)
-    {
-        Dot(instructionInfo);
-        return;
-    }
-    else if(instructionInfo.Operation == EFpuOp::Normalize)
-    {
-        Normalize(instructionInfo);
-        return;
-    }
-
+    
     if(instructionInfo.Precision == EPrecision::Single)
     {
         m_StorageRegisterCount = 1;
 
         if(instructionInfo.Operation == EFpuOp::NegateAbs)
         {
-            const u32 value = m_Core->GetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandA);
-            const u32 result = NegateAbsF32(value, instructionInfo.OperandB);
-            m_Core->SetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.StorageRegister, result);
+            const u32 result = NegateAbsF32(static_cast<u32>(instructionInfo.OperandA), instructionInfo.OperandB);
+            m_Core->PrepareRegisterWrite(false, instructionInfo.StorageRegister, result);
             return;
         }
 
         f32 valueA;
-        {
-            const u32 value = m_Core->GetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandA);
-            m_Core->ReleaseRegisterContestation(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandA);
-            (void) ::std::memcpy(&valueA, &value, sizeof(value));
-        }
+        (void) ::std::memcpy(&valueA, &instructionInfo.OperandA, sizeof(valueA));
 
         f32 result;
 
@@ -74,11 +48,7 @@ void Fpu::InitiateInstruction(const FpuInstruction instructionInfo) noexcept
             case EFpuOp::Compare:
             {
                 f32 valueB;
-                {
-                    const u32 value = m_Core->GetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandB);
-                    m_Core->ReleaseRegisterContestation(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandB);
-                    (void) ::std::memcpy(&valueB, &value, sizeof(value));
-                }
+                (void) ::std::memcpy(&valueB, &instructionInfo.OperandB, sizeof(valueB));
 
                 switch(instructionInfo.Operation)
                 {
@@ -90,11 +60,7 @@ void Fpu::InitiateInstruction(const FpuInstruction instructionInfo) noexcept
                     case EFpuOp::Fma:
                     {
                         f32 valueC;
-                        {
-                            const u32 value = m_Core->GetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandC);
-                            m_Core->ReleaseRegisterContestation(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandC);
-                            (void) ::std::memcpy(&valueC, &value, sizeof(value));
-                        }
+                        (void) ::std::memcpy(&valueC, &instructionInfo.OperandC, sizeof(valueC));
 
                         result = FmaF32(valueA, valueB, valueC);
                         break;
@@ -102,7 +68,7 @@ void Fpu::InitiateInstruction(const FpuInstruction instructionInfo) noexcept
                     case EFpuOp::Compare:
                     {
                         const u32 compResult = CompareF32(valueA, valueB);
-                        m_Core->SetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.StorageRegister, compResult);
+                        m_Core->PrepareRegisterWrite(false, instructionInfo.StorageRegister, compResult);
                         return;
                     }
                     default: break;
@@ -121,7 +87,7 @@ void Fpu::InitiateInstruction(const FpuInstruction instructionInfo) noexcept
         u32 resultU;
         (void) ::std::memcpy(&resultU, &result, sizeof(result));
 
-        m_Core->SetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.StorageRegister, resultU);
+        m_Core->PrepareRegisterWrite(false, instructionInfo.StorageRegister, resultU);
     }
     else if(instructionInfo.Precision == EPrecision::Half)
     {
@@ -129,18 +95,12 @@ void Fpu::InitiateInstruction(const FpuInstruction instructionInfo) noexcept
 
         if(instructionInfo.Operation == EFpuOp::NegateAbs)
         {
-            const u32 value = m_Core->GetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandA);
-            m_Core->ReleaseRegisterContestation(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandA);
-            const u32 result = NegateAbsF16(value, instructionInfo.OperandB);
-            m_Core->SetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.StorageRegister, result);
+            const u32 result = NegateAbsF16(static_cast<u32>(instructionInfo.OperandA), instructionInfo.OperandB);
+            m_Core->PrepareRegisterWrite(false, instructionInfo.StorageRegister, result);
             return;
         }
 
-        f32 valueA;
-        {
-            const u32 value = m_Core->GetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandA);
-            valueA = _cvtsh_ss(static_cast<u16>(value));
-        }
+        const f32 valueA = _cvtsh_ss(static_cast<u16>(instructionInfo.OperandA));
 
         f32 result;
 
@@ -150,12 +110,7 @@ void Fpu::InitiateInstruction(const FpuInstruction instructionInfo) noexcept
             case EFpuOp::Fma:
             case EFpuOp::Compare:
             {
-                f32 valueB;
-                {
-                    const u32 value = m_Core->GetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandB);
-                    m_Core->ReleaseRegisterContestation(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandB);
-                    valueB = _cvtsh_ss(static_cast<u16>(value));
-                }
+                const f32 valueB = _cvtsh_ss(static_cast<u16>(instructionInfo.OperandB));
 
                 switch(instructionInfo.Operation)
                 {
@@ -166,12 +121,7 @@ void Fpu::InitiateInstruction(const FpuInstruction instructionInfo) noexcept
                     }
                     case EFpuOp::Fma:
                     {
-                        f32 valueC;
-                        {
-                            const u32 value = m_Core->GetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandC);
-                            m_Core->ReleaseRegisterContestation(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandC);
-                            valueC = _cvtsh_ss(static_cast<u16>(value));
-                        }
+                        const f32 valueC = _cvtsh_ss(static_cast<u16>(instructionInfo.OperandC));
 
                         result = FmaF32(valueA, valueB, valueC);
                         break;
@@ -179,7 +129,7 @@ void Fpu::InitiateInstruction(const FpuInstruction instructionInfo) noexcept
                     case EFpuOp::Compare:
                     {
                         const u32 compResult = CompareF32(valueA, valueB);
-                        m_Core->SetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.StorageRegister, compResult);
+                        m_Core->PrepareRegisterWrite(false, instructionInfo.StorageRegister, compResult);
                         return;
                     }
                     default:
@@ -192,7 +142,7 @@ void Fpu::InitiateInstruction(const FpuInstruction instructionInfo) noexcept
             case EFpuOp::Round:
             {
                 const u16 resultU = RoundF16(static_cast<ERoundingMode>(instructionInfo.OperandB), valueA);
-                m_Core->SetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.StorageRegister, static_cast<u32>(resultU));
+                m_Core->PrepareRegisterWrite(false, instructionInfo.StorageRegister, resultU);
                 return;
             }
             default:
@@ -201,7 +151,7 @@ void Fpu::InitiateInstruction(const FpuInstruction instructionInfo) noexcept
         }
 
         const u32 resultU = _cvtss_sh(result, _MM_FROUND_CUR_DIRECTION);
-        m_Core->SetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.StorageRegister, resultU);
+        m_Core->PrepareRegisterWrite(false, instructionInfo.StorageRegister, resultU);
     }
     else if(instructionInfo.Precision == EPrecision::Double)
     {
@@ -209,24 +159,13 @@ void Fpu::InitiateInstruction(const FpuInstruction instructionInfo) noexcept
 
         if(instructionInfo.Operation == EFpuOp::NegateAbs)
         {
-            const u32 valueLow = m_Core->GetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandA);
-            const u32 valueHigh = m_Core->GetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandA + 1u);
-            m_Core->ReleaseRegisterContestation(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandA);
-            m_Core->ReleaseRegisterContestation(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandA + 1u);
-            const u32 result = NegateAbsF32(valueHigh, instructionInfo.OperandB);
-            m_Core->SetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.StorageRegister, valueLow);
-            m_Core->SetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.StorageRegister + 1u, result);
+            const u64 result = NegateAbsF64(instructionInfo.OperandA, instructionInfo.OperandB);
+            m_Core->PrepareRegisterWrite(true, instructionInfo.StorageRegister, result);
             return;
         }
 
         f64 valueA;
-        {
-            const u32 valueLow = m_Core->GetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandA);
-            const u32 valueHigh = m_Core->GetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandA + 1u);
-
-            const u64 value = (static_cast<u64>(valueHigh) << 32) | valueLow;
-            ::std::memcpy(&valueA, &value, sizeof(value));
-        }
+        ::std::memcpy(&valueA, &instructionInfo.OperandA, sizeof(valueA));
 
         f64 result;
 
@@ -237,15 +176,7 @@ void Fpu::InitiateInstruction(const FpuInstruction instructionInfo) noexcept
             case EFpuOp::Compare:
             {
                 f64 valueB;
-                {
-                    const u32 valueLow = m_Core->GetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandB);
-                    const u32 valueHigh = m_Core->GetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandB + 1u);
-                    m_Core->ReleaseRegisterContestation(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandB);
-                    m_Core->ReleaseRegisterContestation(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandB + 1u);
-
-                    const u64 value = (static_cast<u64>(valueHigh) << 32) | valueLow;
-                    ::std::memcpy(&valueB, &value, sizeof(value));
-                }
+                ::std::memcpy(&valueB, &instructionInfo.OperandB, sizeof(valueB));
 
                 switch(instructionInfo.Operation)
                 {
@@ -257,15 +188,7 @@ void Fpu::InitiateInstruction(const FpuInstruction instructionInfo) noexcept
                     case EFpuOp::Fma:
                     {
                         f64 valueC;
-                        {
-                            const u32 valueLow = m_Core->GetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandC);
-                            const u32 valueHigh = m_Core->GetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandC + 1u);
-                            m_Core->ReleaseRegisterContestation(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandC);
-                            m_Core->ReleaseRegisterContestation(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.OperandC + 1u);
-
-                            const u64 value = (static_cast<u64>(valueHigh) << 32) | valueLow;
-                            ::std::memcpy(&valueC, &value, sizeof(value));
-                        }
+                        ::std::memcpy(&valueC, &instructionInfo.OperandC, sizeof(valueC));
 
                         result = FmaF64(valueA, valueB, valueC);
                         break;
@@ -273,7 +196,7 @@ void Fpu::InitiateInstruction(const FpuInstruction instructionInfo) noexcept
                     case EFpuOp::Compare:
                     {
                         const u32 compResult = CompareF64(valueA, valueB);
-                        m_Core->SetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.StorageRegister, compResult);
+                        m_Core->PrepareRegisterWrite(false, instructionInfo.StorageRegister, compResult);
                         return;
                     }
                     default: break;
@@ -292,11 +215,7 @@ void Fpu::InitiateInstruction(const FpuInstruction instructionInfo) noexcept
         u64 resultU;
         ::std::memcpy(&resultU, &result, sizeof(result));
 
-        const u32 resultHigh = static_cast<u32>(resultU >> 32);
-        const u32 resultLow = static_cast<u32>(resultU);
-
-        m_Core->SetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.StorageRegister, resultLow);
-        m_Core->SetRegister(instructionInfo.DispatchPort, instructionInfo.ReplicationIndex, instructionInfo.StorageRegister + 1u, resultHigh);
+        m_Core->PrepareRegisterWrite(true, instructionInfo.StorageRegister, resultU);
     }
 }
 
@@ -510,14 +429,8 @@ u32 Fpu::NegateAbsF16(u32 value, bool isAbs) noexcept
     return isAbs ? value & 0x7FFF : value ^ 0x8000;
 }
 
-void Fpu::Cross(const FpuInstruction instructionInfo) noexcept
+u64 Fpu::NegateAbsF64(u64 value, bool isAbs) noexcept
 {
-}
-
-void Fpu::Dot(const FpuInstruction instructionInfo) noexcept
-{
-}
-
-void Fpu::Normalize(const FpuInstruction instructionInfo) noexcept
-{
+    m_ExecutionStage = 1;
+    return isAbs ? value & 0x7FFFFFFFFFFFFFFF : value ^ 0x8000000000000000;
 }

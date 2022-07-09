@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include "FPU.hpp"
+#include "DebugManager.hpp"
 
 class StreamingMultiprocessor;
 
@@ -159,9 +160,9 @@ public:
         , m_Pad1{ }
         , m_CurrentInstruction(EInstruction::Nop)
         , m_DecodedInstructionData{ }
-        , m_RegisterContestationMap()
         , m_FpSaturationTracker(0)
         , m_IntFpSaturationTracker(0)
+        , m_SfuSaturationTracker(0)
         , m_LdStSaturationTracker(0)
         , m_TextureSaturationTracker(0)
         , m_TotalIterationsTracker(0)
@@ -281,16 +282,6 @@ public:
         }
     }
 
-    void ReleaseRegisterContestation(const u32 registerIndex, const u32 replicationIndex) noexcept
-    {
-        --m_RegisterContestationMap[replicationIndex][registerIndex];
-        // If that was the last read lock the value will now be 1, which is actually the write lock. Set it to no lock.
-        if(m_RegisterContestationMap[replicationIndex][registerIndex] == 1)
-        {
-            m_RegisterContestationMap[replicationIndex][registerIndex] = 0;
-        }
-    }
-
     void LoadIP(const u32 replicationMask, const u32 baseRegisters[4], const u64 instructionPointer) noexcept
     {
         m_ReplicationMask = replicationMask;
@@ -298,12 +289,33 @@ public:
         ::std::memcpy(m_BaseRegisters, baseRegisters, sizeof(u32[4]));
         m_InstructionPointer = instructionPointer;
     }
+
+    void ReportBaseRegisters(const u32 smIndex) noexcept
+    {
+        if(GlobalDebug.IsAttached())
+        {
+            GlobalDebug.WriteRaw(DebugCodeReportBaseRegister);
+            GlobalDebug.WriteRaw(6);
+            GlobalDebug.WriteRaw(smIndex);
+            GlobalDebug.WriteRaw(m_Index);
+            GlobalDebug.WriteRaw(m_BaseRegisters[0]);
+            GlobalDebug.WriteRaw(m_BaseRegisters[1]);
+            GlobalDebug.WriteRaw(m_BaseRegisters[2]);
+            GlobalDebug.WriteRaw(m_BaseRegisters[3]);
+        }
+    }
 private:
     void NextInstruction(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) const noexcept;
     u16 ReadU16(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) const noexcept;
     u32 ReadU32(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) const noexcept;
     u64 ReadU64(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) const noexcept;
-    void LockRegisterRead(u32 registerIndex, const u32 replicationIndex) noexcept;
+
+    [[nodiscard]] bool CanReadRegister(u32 registerIndex, u32 replicationIndex) noexcept;
+    [[nodiscard]] bool CanWriteRegister(u32 registerIndex, u32 replicationIndex) noexcept;
+    void ReleaseRegisterContestation(u32 registerIndex, u32 replicationIndex) noexcept;
+    void LockRegisterRead(u32 registerIndex, u32 replicationIndex) noexcept;
+    void LockRegisterWrite(u32 registerIndex, u32 replicationIndex) noexcept;
+
 
     void DecodeLdSt(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) noexcept;
     void DecodeLoadImmediate(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) noexcept;
@@ -337,11 +349,7 @@ private:
     // The currently decoded instruction.
     EInstruction m_CurrentInstruction;
     InstructionDecodeData::InstructionData m_DecodedInstructionData;
-    // This contains information about how each register is being used.
-    // If the value is zero the register is unused.
-    // If the value is one it is locked for writes.
-    // Otherwise the register is locked for reads. Any number of simultaneous reads are allowed.
-    u8 m_RegisterContestationMap[4][256];
+
     u64 m_FpSaturationTracker;
     u64 m_IntFpSaturationTracker;
     u64 m_SfuSaturationTracker;

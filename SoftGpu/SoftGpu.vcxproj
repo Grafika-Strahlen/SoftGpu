@@ -225,6 +225,7 @@
       <FileType>Document</FileType>
     </ClInclude>
     <ClCompile Include="src\Core.cpp" />
+    <ClCompile Include="src\CoreRegisterManager.cpp" />
     <ClCompile Include="src\DispatchUnit.cpp" />
     <ClCompile Include="src\FPU.cpp" />
     <ClCompile Include="src\LoadStore.cpp" />
@@ -234,6 +235,8 @@
   <ItemGroup>
     <ClInclude Include="include\Cache.hpp" />
     <ClInclude Include="include\Core.hpp" />
+    <ClInclude Include="include\CoreRegisterManager.hpp" />
+    <ClInclude Include="include\DebugManager.hpp" />
     <ClInclude Include="include\DispatchUnit.hpp" />
     <ClInclude Include="include\FPU.hpp" />
     <ClInclude Include="include\LoadStore.hpp" />

@@ -1,7 +1,11 @@
 #pragma once
 
 #include <Objects.hpp>
+#include <NumTypes.hpp>
 #include "FPU.hpp"
+#include "CoreRegisterManager.hpp"
+
+#include <cstring>
 
 class StreamingMultiprocessor;
 
@@ -12,15 +16,15 @@ class ICore
     DEFAULT_DESTRUCT_VI(ICore);
     DELETE_CM(ICore);
 public:
-    virtual void Clock() noexcept = 0;
-
-    [[nodiscard]] virtual u32 GetRegister(u32 dispatchPort, u32 replicationIndex, u32 targetRegister) const noexcept = 0;
-    virtual void SetRegister(u32 dispatchPort, u32 replicationIndex, u32 targetRegister, u32 value) noexcept = 0;
+    [[nodiscard]] virtual u32 GetRegister(u32 targetRegister) const noexcept = 0;
+    virtual void SetRegister(u32 targetRegister, u32 value) noexcept = 0;
+    
+    virtual void ReportRegisterValues(u64 a, u64 b, u64 c) noexcept = 0;
+    virtual void PrepareRegisterWrite(bool is64Bit, u32 storageRegister, u64 value) noexcept = 0;
 
     virtual void ReportReady() const noexcept = 0;
-    [[nodiscard]] virtual bool IsReady() const noexcept = 0;
 
-    virtual void ReleaseRegisterContestation(u32 dispatchPort, u32 replicationIndex, u32 registerIndex) const noexcept = 0;
+    virtual void ReleaseRegisterContestation(u32 registerIndex) const noexcept = 0;
 };
 
 class FpCore final : public ICore
@@ -32,35 +36,90 @@ public:
         : m_SM(sm)
         , m_UnitIndex(unitIndex)
         , m_Fpu(this)
+        , m_CRM(this)
+        , m_PipelineSlot0{ }
+        , m_PipelineSlot1{ }
+        , m_PipelineSlot2{ }
+        , m_Stage0Ready(false)
+        , m_Stage1Ready(false)
+        , m_Stage2Ready(false)
+        , m_Pad{ }
     { }
 
-    void Clock() noexcept override
+    void Clock(const u32 clockIndex) noexcept
     {
-        m_Fpu.Clock();
+        m_CRM.Clock(clockIndex);
+
+        if(clockIndex == 2 && m_Stage2Ready)
+        {
+            m_Fpu.ExecuteInstruction(m_PipelineSlot2);
+        }
+        else if(clockIndex == 5)
+        {
+            (void) ::std::memcpy(&m_PipelineSlot2, &m_PipelineSlot1, sizeof(LoadedFpuInstruction));
+            (void) ::std::memcpy(&m_PipelineSlot1, &m_PipelineSlot0, sizeof(LoadedFpuInstruction));
+
+            m_Stage2Ready = m_Stage1Ready;
+            m_Stage1Ready = m_Stage0Ready;
+            m_Stage0Ready = false;
+        }
     }
 
-    [[nodiscard]] u32 GetRegister(u32 dispatchPort, u32 replicationIndex, u32 targetRegister) const noexcept override;
-    void SetRegister(u32 dispatchPort, u32 replicationIndex, u32 targetRegister, u32 value) noexcept override;
+    [[nodiscard]] u32 GetRegister(u32 targetRegister) const noexcept override;
+    void SetRegister(u32 targetRegister, u32 value) noexcept override;
 
-    void Execute(const FpuInstruction fpuInstruction) noexcept
+    void InitiateInstruction(const FpuInstruction fpuInstruction) noexcept
     {
-        m_Fpu.InitiateInstruction(fpuInstruction);
+        m_CRM.InitiateRegisterRead(fpuInstruction.Precision == EPrecision::Double, RequiredRegisterCount(fpuInstruction.Operation), fpuInstruction.OperandA, fpuInstruction.OperandB, fpuInstruction.OperandC);
+
+        m_PipelineSlot0.DispatchPort = fpuInstruction.DispatchPort;
+        m_PipelineSlot0.Operation = fpuInstruction.Operation;
+        m_PipelineSlot0.Precision = fpuInstruction.Precision;
+        m_PipelineSlot0.StorageRegister = fpuInstruction.StorageRegister;
+        m_PipelineSlot0.OperandA = fpuInstruction.OperandA;
+        m_PipelineSlot0.OperandB = fpuInstruction.OperandB;
+        m_PipelineSlot0.OperandC = fpuInstruction.OperandC;
+
+        m_Stage0Ready = true;
+    }
+
+    void ReportRegisterValues(const u64 a, const u64 b, const u64 c) noexcept override
+    {
+        switch(RequiredRegisterCount(m_PipelineSlot2.Operation))
+        {
+            case 2:
+                m_PipelineSlot0.OperandC = c;
+            case 1:
+                m_PipelineSlot0.OperandB = b;
+            case 0:
+                m_PipelineSlot0.OperandA = a;
+            default: break;
+        }
+    }
+
+    void PrepareRegisterWrite(const bool is64Bit, const u32 storageRegister, const u64 value) noexcept override
+    {
+        m_CRM.InitiateRegisterWrite(is64Bit, storageRegister, value);
     }
 
     void ReportReady() const noexcept override;
 
-    [[nodiscard]] bool IsReady() const noexcept override
-    {
-        return m_Fpu.ReadyToExecute();
-    }
-
-    void ReleaseRegisterContestation(u32 dispatchPort, u32 replicationIndex, u32 registerIndex) const noexcept override;
+    void ReleaseRegisterContestation(u32 registerIndex) const noexcept override;
 private:
     StreamingMultiprocessor* m_SM;
     u32 m_UnitIndex;
     Fpu m_Fpu;
-};
+    CoreRegisterManager m_CRM;
 
+    LoadedFpuInstruction m_PipelineSlot0;
+    LoadedFpuInstruction m_PipelineSlot1;
+    LoadedFpuInstruction m_PipelineSlot2;
+
+    u8 m_Stage0Ready : 1;
+    u8 m_Stage1Ready : 1;
+    u8 m_Stage2Ready : 1;
+    u8 m_Pad : 5;
+};
 
 class IntFpCore final : public ICore
 {
@@ -71,31 +130,87 @@ public:
         : m_SM(sm)
         , m_UnitIndex(unitIndex)
         , m_Fpu(this)
+        , m_CRM(this)
+        , m_PipelineSlot0{ }
+        , m_PipelineSlot1{ }
+        , m_PipelineSlot2{ }
+        , m_Stage0Ready(false)
+        , m_Stage1Ready(false)
+        , m_Stage2Ready(false)
+        , m_Pad{ }
     { }
 
-    void Clock() noexcept override
+    void Clock(const u32 clockIndex) noexcept
     {
-        m_Fpu.Clock();
+        m_CRM.Clock(clockIndex);
+
+        if(clockIndex == 2 && m_Stage2Ready)
+        {
+            m_Fpu.ExecuteInstruction(m_PipelineSlot2);
+        }
+        else if(clockIndex == 5)
+        {
+            (void) ::std::memcpy(&m_PipelineSlot2, &m_PipelineSlot1, sizeof(LoadedFpuInstruction));
+            (void) ::std::memcpy(&m_PipelineSlot1, &m_PipelineSlot0, sizeof(LoadedFpuInstruction));
+
+            m_Stage2Ready = m_Stage1Ready;
+            m_Stage1Ready = m_Stage0Ready;
+            m_Stage0Ready = false;
+        }
     }
 
-    [[nodiscard]] u32 GetRegister(u32 dispatchPort, u32 replicationIndex, u32 targetRegister) const noexcept override;
-    void SetRegister(u32 dispatchPort, u32 replicationIndex, u32 targetRegister, u32 value) noexcept override;
-
-    void ExecuteFP(const FpuInstruction fpuInstruction) noexcept
+    [[nodiscard]] u32 GetRegister(u32 targetRegister) const noexcept override;
+    void SetRegister(u32 targetRegister, u32 value) noexcept override;
+    
+    void InitiateInstructionFP(const FpuInstruction fpuInstruction) noexcept
     {
-        m_Fpu.InitiateInstruction(fpuInstruction);
+        m_CRM.InitiateRegisterRead(fpuInstruction.Precision == EPrecision::Double, RequiredRegisterCount(fpuInstruction.Operation), fpuInstruction.OperandA, fpuInstruction.OperandB, fpuInstruction.OperandC);
+
+        m_PipelineSlot0.DispatchPort = fpuInstruction.DispatchPort;
+        m_PipelineSlot0.Operation = fpuInstruction.Operation;
+        m_PipelineSlot0.Precision = fpuInstruction.Precision;
+        m_PipelineSlot0.StorageRegister = fpuInstruction.StorageRegister;
+        m_PipelineSlot0.OperandA = fpuInstruction.OperandA;
+        m_PipelineSlot0.OperandB = fpuInstruction.OperandB;
+        m_PipelineSlot0.OperandC = fpuInstruction.OperandC;
+
+        m_Stage0Ready = true;
+    }
+
+    void ReportRegisterValues(const u64 a, const u64 b, const u64 c) noexcept override
+    {
+        switch(RequiredRegisterCount(m_PipelineSlot2.Operation))
+        {
+            case 2:
+                m_PipelineSlot0.OperandC = c;
+            case 1:
+                m_PipelineSlot0.OperandB = b;
+            case 0:
+                m_PipelineSlot0.OperandA = a;
+            default: break;
+        }
+    }
+
+    void PrepareRegisterWrite(const bool is64Bit, const u32 storageRegister, const u64 value) noexcept override
+    {
+        m_CRM.InitiateRegisterWrite(is64Bit, storageRegister, value);
     }
 
     void ReportReady() const noexcept override;
 
-    [[nodiscard]] bool IsReady() const noexcept override
-    {
-        return m_Fpu.ReadyToExecute();
-    }
-
-    void ReleaseRegisterContestation(u32 dispatchPort, u32 replicationIndex, u32 registerIndex) const noexcept override;
+    void ReleaseRegisterContestation(u32 registerIndex) const noexcept override;
 private:
     StreamingMultiprocessor* m_SM;
     u32 m_UnitIndex;
     Fpu m_Fpu;
+    CoreRegisterManager m_CRM;
+
+    LoadedFpuInstruction m_PipelineSlot0;
+    LoadedFpuInstruction m_PipelineSlot1;
+    LoadedFpuInstruction m_PipelineSlot2;
+
+    u8 m_Stage0Ready : 1;
+    u8 m_Stage1Ready : 1;
+    u8 m_Stage2Ready : 1;
+    u8 m_Pad : 5;
 };

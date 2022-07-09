@@ -4,6 +4,7 @@
 #include "LoadStore.hpp"
 #include "DispatchUnit.hpp"
 #include "Core.hpp"
+#include "DebugManager.hpp"
 
 class Processor;
 
@@ -24,15 +25,25 @@ public:
 
     void Clock() noexcept
     {
+        if(GlobalDebug.IsAttached())
+        {
+            m_RegisterFile.ReportRegisters(m_SMIndex);
+            m_DispatchUnits[0].ReportBaseRegisters(m_SMIndex);
+            m_DispatchUnits[1].ReportBaseRegisters(m_SMIndex);
+        }
+
         m_LdSt[0].Clock();
         m_LdSt[1].Clock();
         m_LdSt[2].Clock();
         m_LdSt[3].Clock();
 
-        for(u32 i = 0; i < 8; ++i)
+        for(u32 subClockIndex = 0; subClockIndex <= 5; ++subClockIndex)
         {
-            m_FpCores[i].Clock();
-            m_IntFpCores[i].Clock();
+            for(u32 coreIndex = 0; coreIndex < 8; ++coreIndex)
+            {
+                m_FpCores[coreIndex].Clock(subClockIndex);
+                m_IntFpCores[coreIndex].Clock(subClockIndex);
+            }
         }
 
         m_DispatchUnits[0].ResetCycle();
@@ -53,21 +64,21 @@ public:
 
     void TestLoadRegister(const u32 dispatchPort, const u32 replicationIndex, const u8 registerIndex, const u32 registerValue)
     {
-        m_RegisterFile.SetRegister((dispatchPort * 4 + replicationIndex) * 256, registerIndex, registerValue);
+        m_RegisterFile.SetRegister((dispatchPort * 4 + replicationIndex) * 256 + registerIndex, registerValue);
     }
 
     [[nodiscard]] u32 Read(u64 address) noexcept;
     void Write(u64 address, u32 value) noexcept;
     void Prefetch(u64 address) noexcept;
 
-    [[nodiscard]] u32 GetRegister(const u32 dispatchPort, const u32 replicationIndex, const u32 targetRegister) const noexcept
+    [[nodiscard]] u32 GetRegister(const u32 targetRegister) const noexcept
     {
-        return m_RegisterFile.GetRegister(m_DispatchUnits[dispatchPort].BaseRegister(replicationIndex), targetRegister);
+        return m_RegisterFile.GetRegister(targetRegister);
     }
 
-    void SetRegister(const u32 dispatchPort, const u32 replicationIndex, const u32 targetRegister, const u32 value) noexcept
+    void SetRegister(const u32 targetRegister, const u32 value) noexcept
     {
-        m_RegisterFile.SetRegister(m_DispatchUnits[dispatchPort].BaseRegister(replicationIndex), targetRegister, value);
+        m_RegisterFile.SetRegister(targetRegister, value);
     }
 
     void ReportFpCoreReady(const u32 unitIndex) noexcept
@@ -88,10 +99,35 @@ public:
         m_DispatchUnits[1].ReportUnitReady(unitIndex + LDST_AVAIL_OFFSET);
     }
 
-    void ReleaseRegisterContestation(const u32 dispatchPort, const u32 replicationIndex, const u32 registerIndex)
+    [[nodiscard]] bool CanReadRegister(const u32 registerIndex) noexcept
     {
-        m_DispatchUnits[dispatchPort].ReleaseRegisterContestation(registerIndex, replicationIndex);
+        return m_RegisterFile.CanReadRegister(registerIndex);
     }
+
+    [[nodiscard]] bool CanWriteRegister(const u32 registerIndex) noexcept
+    {
+        return m_RegisterFile.CanWriteRegister(registerIndex);
+    }
+
+    void ReleaseRegisterContestation(const u32 registerIndex) noexcept
+    {
+        m_RegisterFile.ReleaseRegisterContestation(registerIndex);
+    }
+
+    void LockRegisterRead(const u32 registerIndex) noexcept
+    {
+        m_RegisterFile.LockRegisterRead(registerIndex);
+    }
+
+    void LockRegisterWrite(const u32 registerIndex) noexcept
+    {
+        m_RegisterFile.LockRegisterWrite(registerIndex);
+    }
+
+    // [[deprecated]] void ReleaseRegisterContestation(const u32 dispatchPort, const u32 replicationIndex, const u32 registerIndex)
+    // {
+    //     m_DispatchUnits[dispatchPort].ReleaseRegisterContestation(registerIndex, replicationIndex);
+    // }
 
     void DispatchLdSt(const u32 ldStIndex, const LoadStoreInstruction instructionInfo) noexcept
     {
@@ -107,13 +143,13 @@ public:
         {
             m_DispatchUnits[0].ReportUnitBusy(fpIndex + FP_AVAIL_OFFSET);
             m_DispatchUnits[1].ReportUnitBusy(fpIndex + FP_AVAIL_OFFSET);
-            m_FpCores[fpIndex].Execute(instructionInfo);
+            m_FpCores[fpIndex].InitiateInstruction(instructionInfo);
         }
         else
         {
             m_DispatchUnits[0].ReportUnitBusy(fpIndex - 8 + INT_FP_AVAIL_OFFSET);
             m_DispatchUnits[1].ReportUnitBusy(fpIndex - 8 + INT_FP_AVAIL_OFFSET);
-            m_IntFpCores[fpIndex - 8].ExecuteFP(instructionInfo);
+            m_IntFpCores[fpIndex - 8].InitiateInstructionFP(instructionInfo);
         }
     }
 

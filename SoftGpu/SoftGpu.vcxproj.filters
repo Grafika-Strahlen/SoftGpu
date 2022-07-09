@@ -33,6 +33,9 @@
     <ClCompile Include="src\DispatchUnit.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\CoreRegisterManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\RegisterFile.hpp">
@@ -60,6 +63,12 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="include\DispatchUnit.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\CoreRegisterManager.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\DebugManager.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
