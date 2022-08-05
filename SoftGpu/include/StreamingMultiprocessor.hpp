@@ -23,6 +23,27 @@ public:
         , m_SMIndex(smIndex)
     { }
 
+    void Reset()
+    {
+        m_RegisterFile.Reset();
+        m_LdSt[0].Reset();
+        m_LdSt[1].Reset();
+        m_LdSt[2].Reset();
+        m_LdSt[3].Reset();
+
+        for(u32 subClockIndex = 0; subClockIndex <= 5; ++subClockIndex)
+        {
+            for(u32 coreIndex = 0; coreIndex < 8; ++coreIndex)
+            {
+                m_FpCores[coreIndex].Reset();
+                m_IntFpCores[coreIndex].Reset();
+            }
+        }
+
+        m_DispatchUnits[0].Reset();
+        m_DispatchUnits[1].Reset();
+    }
+
     void Clock() noexcept
     {
         if(GlobalDebug.IsAttached())
@@ -58,13 +79,18 @@ public:
 
     void TestLoadProgram(const u32 dispatchPort, const u8 replicationMask, const u64 program)
     {
-        const u32 baseRegisters[4] = { (dispatchPort * 4 + 0) * 256, (dispatchPort * 4 + 1) * 256, (dispatchPort * 4 + 2) * 256, (dispatchPort * 4 + 3) * 256 };
+        const u16 baseRegisters[4] = { static_cast<u16>((dispatchPort * 4 + 0) * 256), static_cast<u16>((dispatchPort * 4 + 1) * 256), static_cast<u16>((dispatchPort * 4 + 2) * 256), static_cast<u16>((dispatchPort * 4 + 3) * 256) };
         m_DispatchUnits[dispatchPort].LoadIP(replicationMask, baseRegisters, program);
     }
 
     void TestLoadRegister(const u32 dispatchPort, const u32 replicationIndex, const u8 registerIndex, const u32 registerValue)
     {
         m_RegisterFile.SetRegister((dispatchPort * 4 + replicationIndex) * 256 + registerIndex, registerValue);
+    }
+
+    void LoadWarp(const u32 dispatchPort, const u8 enabledMask, const u8 completedMask, const u16 baseRegisters[8], const u64 instructionPointer) noexcept
+    {
+        m_DispatchUnits[dispatchPort].LoadWarp(enabledMask, completedMask, baseRegisters, instructionPointer);
     }
 
     [[nodiscard]] u32 Read(u64 address) noexcept;
@@ -154,6 +180,16 @@ public:
     }
 
     void FlushCache() noexcept;
+
+    u16 AllocateRegisters(const u32 registerCount) noexcept
+    {
+        return 0;
+    }
+
+    void FreeRegisters(const u32 registerCount, const u16 registerId) noexcept
+    {
+        
+    }
 private:
     Processor* m_Processor;
     RegisterFile m_RegisterFile;

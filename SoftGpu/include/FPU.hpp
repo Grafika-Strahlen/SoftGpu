@@ -86,10 +86,19 @@ public:
         : m_Core(core)
         , m_ExecutionStage(0)
         , m_DispatchPort{ }
-        , m_ReplicationIndex { }
+        , m_ReplicationIndex{ }
         , m_StorageRegister{ }
         , m_StorageRegisterCount(0)
     { }
+
+    void Reset()
+    {
+        m_ExecutionStage = 0;
+        m_DispatchPort = { };
+        m_ReplicationIndex = { };
+        m_StorageRegister = { };
+        m_StorageRegisterCount = 0;
+    }
 
     void Clock() noexcept;
 

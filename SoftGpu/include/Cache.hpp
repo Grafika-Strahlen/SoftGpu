@@ -30,6 +30,14 @@ public:
         , Pad{ }
         , Data{ }
     { }
+
+    void Reset()
+    {
+        Mesi = MESI::Invalid;
+        Tag = { };
+        Pad = { };
+        Data = { };
+    }
 };
 
 template<uSys IndexBits, uSys SetLineCount>
@@ -40,6 +48,14 @@ struct CacheSet final
     DELETE_CM(CacheSet);
 public:
     CacheLine<IndexBits> SetLines[SetLineCount];
+
+    void Reset()
+    {
+        for(uSys i = 0; i < SetLineCount; ++i)
+        {
+            SetLines[i].Reset();
+        }
+    }
 };
 
 class MemoryManager;
@@ -56,6 +72,16 @@ public:
         , m_Sets{ }
         , m_RollingSelector(0)
     { }
+
+    void Reset()
+    {
+        m_RollingSelector = 0;
+
+        for(uSys i = 0; i < ::std::size(m_Sets); ++i)
+        {
+            m_Sets[i].Reset();
+        }
+    }
 
     [[nodiscard]] u32 Read(u64 address) noexcept;
     void Write(u64 address, u32 value) noexcept;
@@ -102,6 +128,14 @@ public:
         , m_L0Caches{ { this, 0 }, { this, 1 }, { this, 2 }, { this, 3 } }
         // , L1Cache(this, 4)
     { }
+
+    void Reset()
+    {
+        m_L0Caches[0].Reset();
+        m_L0Caches[1].Reset();
+        m_L0Caches[2].Reset();
+        m_L0Caches[3].Reset();
+    }
 
     [[nodiscard]] u32 Read(const u32 coreIndex, const u64 address) noexcept
     {

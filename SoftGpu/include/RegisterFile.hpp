@@ -14,6 +14,12 @@ class RegisterFile final
     DEFAULT_DESTRUCT(RegisterFile);
     DELETE_CM(RegisterFile);
 public:
+    void Reset()
+    {
+        ::std::memset(m_Registers, 0, sizeof(m_Registers));
+        ::std::memset(m_RegisterContestationMap, 0, sizeof(m_RegisterContestationMap));
+    }
+
     [[nodiscard]] u32 GetRegister(const u32 targetRegister) const noexcept
     {
         return m_Registers[targetRegister];

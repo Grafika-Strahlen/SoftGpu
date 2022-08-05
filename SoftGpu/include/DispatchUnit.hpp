@@ -17,6 +17,8 @@ enum class EInstruction : u8
     LoadStore, // { 0 : 1, Read/Write : 1, IndexExponent : 3, RegisterCount : 3 }, BaseRegister : 8, [ IndexRegister : 8 ], TargetRegister : 8, Offset : 16
     LoadImmediate, // Register : 8, Value : 32
     LoadZero, // RegisterCount : 8, StartRegister : 8
+    SwapRegister, // RegisterA : 8, RegisterB : 8
+    CopyRegister, // SourceRegister : 8, DestinationRegister : 8
     FlushCache,
     ResetStatistics,
     WriteStatistics, // TargetStatisticIndex : 8, TargetRegister: 8, CounterRegister : 8
@@ -144,7 +146,7 @@ public:
     DispatchUnit(StreamingMultiprocessor* const m_sm, const u32 m_index) noexcept
         : m_SM(m_sm)
         , m_Index(m_index)
-        , m_BaseRegisters{ 0, 0, 0, 0 }
+        , m_BaseRegisters{ 0, 0, 0, 0, 0, 0, 0, 0 }
         , m_ClockIndex(0)
         , m_InstructionPointer(0)
         , m_FpAvailabilityMap(0xFF)
@@ -167,6 +169,40 @@ public:
         , m_TextureSaturationTracker(0)
         , m_TotalIterationsTracker(0)
     { }
+
+    void Reset()
+    {
+        m_BaseRegisters[0] = 0;
+        m_BaseRegisters[1] = 0;
+        m_BaseRegisters[2] = 0;
+        m_BaseRegisters[3] = 0;
+        m_BaseRegisters[4] = 0;
+        m_BaseRegisters[5] = 0;
+        m_BaseRegisters[6] = 0;
+        m_BaseRegisters[7] = 0;
+
+        m_ClockIndex = 0;
+        m_InstructionPointer = 0;
+        m_FpAvailabilityMap = 0xFF;
+        m_IntFpAvailabilityMap = 0xFF;
+        m_SfuAvailabilityMap = 0xF;
+        m_LdStAvailabilityMap = 0xF;
+        m_TextureSamplerAvailabilityMap = 0x3;
+        m_IsStalled = 0;
+        m_NeedToDecode = true;
+        m_ReplicationMask = 0x0;
+        m_ReplicationCompletedMask = 0x0;
+        m_VectorOpIndex = 0;
+        m_Pad1 = { };
+        m_CurrentInstruction = EInstruction::Nop;
+        m_DecodedInstructionData = { };
+        m_FpSaturationTracker = 0;
+        m_IntFpSaturationTracker = 0;
+        m_SfuSaturationTracker = 0;
+        m_LdStSaturationTracker = 0;
+        m_TextureSaturationTracker = 0;
+        m_TotalIterationsTracker = 0;
+    }
 
     [[nodiscard]] u32 BaseRegister(const u32 index) const noexcept { return m_BaseRegisters[index]; }
 
@@ -282,11 +318,19 @@ public:
         }
     }
 
-    void LoadIP(const u32 replicationMask, const u32 baseRegisters[4], const u64 instructionPointer) noexcept
+    void LoadIP(const u32 replicationMask, const u16 baseRegisters[4], const u64 instructionPointer) noexcept
     {
         m_ReplicationMask = replicationMask;
         m_ReplicationCompletedMask = 0x0;
-        ::std::memcpy(m_BaseRegisters, baseRegisters, sizeof(u32[4]));
+        ::std::memcpy(m_BaseRegisters, baseRegisters, sizeof(u16[4]));
+        m_InstructionPointer = instructionPointer;
+    }
+
+    void LoadWarp(const u32 enabledMask, const u32 completedMask, const u16 baseRegisters[8], const u64 instructionPointer) noexcept
+    {
+        m_ReplicationMask = enabledMask;
+        m_ReplicationCompletedMask = completedMask;
+        ::std::memcpy(m_BaseRegisters, baseRegisters, sizeof(m_BaseRegisters));
         m_InstructionPointer = instructionPointer;
     }
 
@@ -331,7 +375,7 @@ private:
 private:
     StreamingMultiprocessor* m_SM;
     u32 m_Index;
-    u32 m_BaseRegisters[4];
+    u16 m_BaseRegisters[8];
     u32 m_ClockIndex;
     u64 m_InstructionPointer;
     u32 m_FpAvailabilityMap : 8;
@@ -341,11 +385,11 @@ private:
     u32 m_TextureSamplerAvailabilityMap : 2;
     u32 m_IsStalled : 1;
     u32 m_NeedToDecode : 1;
-    u32 m_ReplicationMask : 4;
-    u32 m_ReplicationCompletedMask : 4;
+    u32 m_ReplicationMask : 8;
+    u32 m_ReplicationCompletedMask : 8;
     // The current element of a vector we're operating on.
     u32 m_VectorOpIndex : 2;
-    u32 m_Pad1 : 22;
+    u32 m_Pad1 : 14;
     // The currently decoded instruction.
     EInstruction m_CurrentInstruction;
     InstructionDecodeData::InstructionData m_DecodedInstructionData;
@@ -357,7 +401,6 @@ private:
     u64 m_TextureSaturationTracker;
     u64 m_TotalIterationsTracker;
 };
-
 
 #define FP_AVAIL_OFFSET (0)
 #define INT_FP_AVAIL_OFFSET (FP_AVAIL_OFFSET + 8)

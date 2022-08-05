@@ -3,6 +3,7 @@
 #include <ConPrinter.hpp>
 #include <Objects.hpp>
 #include "StreamingMultiprocessor.hpp"
+#include "PCIControlRegisters.hpp"
 #include "Cache.hpp"
 #include "DebugManager.hpp"
 
@@ -12,10 +13,22 @@ class Processor final
     DELETE_CM(Processor);
 public:
     Processor() noexcept
-        : m_MemoryManager(this)
+        : m_PCIRegisters(this)
+        , m_MemoryManager(this)
         , m_SMs { { this, 0 }, { this, 1 }, { this, 2 }, { this, 3 } }
         , m_ClockCycle(0)
     { }
+
+    void Reset()
+    {
+        m_PCIRegisters.Reset();
+        m_MemoryManager.Reset();
+        m_SMs[0].Reset();
+        m_SMs[1].Reset();
+        m_SMs[2].Reset();
+        m_SMs[3].Reset();
+        m_ClockCycle = 0;
+    }
 
     void Clock() noexcept
     {
@@ -98,6 +111,7 @@ public:
         m_MemoryManager.Flush(coreIndex);
     }
 private:
+    PCIControlRegisters m_PCIRegisters;
     MemoryManager m_MemoryManager;
     StreamingMultiprocessor m_SMs[4];
     u32 m_ClockCycle;

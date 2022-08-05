@@ -35,6 +35,15 @@ public:
         , m_StartRegister{ }
     { }
 
+    void Reset()
+    {
+        m_ExecutionStage = 0;
+        m_DispatchPort = { };
+        m_RegisterCount = { };
+        m_Pad = { };
+        m_StartRegister = { };
+    }
+
     void Clock() noexcept;
 
     void Execute(LoadStoreInstruction instructionInfo) noexcept;

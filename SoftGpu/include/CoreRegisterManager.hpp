@@ -34,6 +34,30 @@ public:
         , m_RegisterWriteLock{ }
     { }
 
+    void Reset()
+    {
+        m_RegisterReadReady = false;
+        m_RegisterReadLockReleaseReady = false;
+        m_RegisterWriteReady = false;
+        m_RegisterWriteLockReleaseReady = false;
+        m_Read64Bit = { };
+        m_ReadLock64Bit = { };
+        m_Write64Bit = { };
+        m_WriteLock64Bit = { };
+        m_RegisterReadEnabledCount = { };
+        m_RegisterReadLockEnabledCount = { };
+        m_Pad0 = { };
+        m_RegisterReadA = { };
+        m_RegisterReadB = { };
+        m_RegisterReadC = { };
+        m_RegisterReadLockA = { };
+        m_RegisterReadLockB = { };
+        m_RegisterReadLockC = { };
+        m_RegisterWrite = { };
+        m_RegisterWriteValue = { };
+        m_RegisterWriteLock = { };
+    }
+
     void Clock(u32 clockIndex) noexcept;
 
     void InitiateRegisterRead(bool is64Bit, u8 registerCount, u32 registerA, u32 registerB, u32 registerC) noexcept;

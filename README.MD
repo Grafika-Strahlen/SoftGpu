@@ -22,6 +22,24 @@ This emulates the hardware of a GPU entirely in software. To make it easier to c
   * Structs can have padding bits for alignment with x86, but these can easily be removed in the hardware.
   * Only the minimum number of bits to represent a unit of data are used.
 
+## PCI Spec
+
+BAR 0&1 is a 64  bit BAR to access the main graphics memory.
+
+BAR 2&4 is a 64 bit BAR to access the device registers.
+
+### Registers
+
+| Address | Name      | Access | Description                                                  |
+| ------- | --------- | ------ | ------------------------------------------------------------ |
+| 0x0000  | Magic     | R      | A 32 bit magic indicator of the GPU. This should always return 0x4879666C. |
+| 0x0004  | Revision  | R      | A 32 bit value indicating the revision of the chip.          |
+| 0x0008  | Emulation | R      | A 32 bit value indicating if this is emulated. 0 = Microprocessor, 1 = FPGA, 2 = Emulation |
+| 0x000C  | Reset     | R      | Performing a 32 bit read on this register will cause the GPU to reset to the default state. |
+| 0x0010  | Control   | RW     | Bit 0: Interrupt Enable.<br />Bits 1 - 31: Reserved.         |
+
+
+
 ## Current Layout Plan
 
 ```
@@ -57,9 +75,9 @@ This emulates the hardware of a GPU entirely in software. To make it easier to c
          +--| Texture Cache (Not implemented yet) |
          |  *-------------------------------------*
          |
-         |  .-------------------------------------.
-         +--| Dispatch Unit (Not implemented yet) |
-         |  *-------------------------------------*
+         |  .---------------.
+         +--| Dispatch Unit |
+         |  *---------------*
          |
          |  .-----------------.
          +--| Load/Store 0..3 |
@@ -73,9 +91,9 @@ This emulates the hardware of a GPU entirely in software. To make it easier to c
          |     \--| FPU |
          |        *-----*
          |
-         |  .----------------------------------------.
-         +--| Int/FP Core 0..7 (Not Implemented Yet) |
-         |  *--+-------------------------------------*
+         |  .------------------.
+         +--| Int/FP Core 0..7 |
+         |  *--+---------------*
          |	   |
          |	   |  .-----.
          |     +--| FPU |

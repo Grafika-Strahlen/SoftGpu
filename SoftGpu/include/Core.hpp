@@ -46,6 +46,18 @@ public:
         , m_Pad{ }
     { }
 
+    void Reset()
+    {
+        m_Fpu.Reset();
+        m_CRM.Reset();
+        m_PipelineSlot0 = { };
+        m_PipelineSlot1 = { };
+        m_PipelineSlot2 = { };
+        m_Stage0Ready = false;
+        m_Stage1Ready = false;
+        m_Stage2Ready = false;
+    }
+
     void Clock(const u32 clockIndex) noexcept
     {
         m_CRM.Clock(clockIndex);
@@ -139,6 +151,18 @@ public:
         , m_Stage2Ready(false)
         , m_Pad{ }
     { }
+
+    void Reset()
+    {
+        m_Fpu.Reset();
+        m_CRM.Reset();
+        m_PipelineSlot0 = { };
+        m_PipelineSlot1 = { };
+        m_PipelineSlot2 = { };
+        m_Stage0Ready = false;
+        m_Stage1Ready = false;
+        m_Stage2Ready = false;
+    }
 
     void Clock(const u32 clockIndex) noexcept
     {
