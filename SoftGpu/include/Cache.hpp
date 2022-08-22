@@ -21,12 +21,14 @@ struct CacheLine final
 public:
     MESI Mesi : 2;
     u64 Tag : 61 - IndexBits; // 3 bits of offset, IndexBits bits of set index
-    u64 Pad : 9; // Because we're at a high level we'll pad the structure to be nice.
+    u64 External : 1; // Was this from external memory?
+    u64 Pad : 8; // Because we're at a high level we'll pad the structure to be nice.
     u32 Data[8]; // 32 bytes / 8 words per cache line.
 
     CacheLine() noexcept
         : Mesi(MESI::Invalid)
         , Tag{ }
+        , External{ }
         , Pad{ }
         , Data{ }
     { }
@@ -35,8 +37,8 @@ public:
     {
         Mesi = MESI::Invalid;
         Tag = { };
+        External = { };
         Pad = { };
-        Data = { };
     }
 };
 
@@ -83,16 +85,16 @@ public:
         }
     }
 
-    [[nodiscard]] u32 Read(u64 address) noexcept;
-    void Write(u64 address, u32 value) noexcept;
+    [[nodiscard]] u32 Read(u64 address, bool external) noexcept;
+    void Write(u64 address, u32 value, bool external, bool writeThrough) noexcept;
     // void FillCacheLine(u64 address, const u32* data) noexcept;
     void Flush() noexcept;
 
-    bool SnoopBusRead(u32 requestorLine, u64 address, u32* dataBus) noexcept;
-    bool SnoopBusReadX(u32 requestorLine, u64 address, u32* dataBus) noexcept;
-    void SnoopBusUpgrade(u32 requestorLine, u64 address) noexcept;
+    bool SnoopBusRead(u32 requestorLine, u64 address, bool external, u32* dataBus) noexcept;
+    bool SnoopBusReadX(u32 requestorLine, u64 address, bool external, u32* dataBus) noexcept;
+    void SnoopBusUpgrade(u32 requestorLine, u64 address, bool external) noexcept;
 private:
-    [[nodiscard]] CacheLine<IndexBits>* GetCacheLine(const u64 address) noexcept
+    [[nodiscard]] CacheLine<IndexBits>* GetCacheLine(const u64 address, const bool external) noexcept
     {
         const u64 setIndex = (address >> 3) & ((1 << IndexBits) - 1);
         const u64 tag = address >> (IndexBits + 3);
@@ -101,7 +103,7 @@ private:
 
         for(uSys i = 0; i < SetLineCount; ++i)
         {
-            if(targetSet.SetLines[i].Tag == tag)
+            if(targetSet.SetLines[i].Tag == tag && targetSet.SetLines[i].External == external)
             {
                 return &targetSet.SetLines[i];
             }
@@ -110,7 +112,7 @@ private:
         return nullptr;
     }
 
-    [[nodiscard]] CacheLine<IndexBits>* GetFreeCacheLine(u64 address) noexcept;
+    [[nodiscard]] CacheLine<IndexBits>* GetFreeCacheLine(u64 address, bool external) noexcept;
 private:
     MemoryManager* m_MemoryManager;
     u32 m_LineIndex;
@@ -137,20 +139,20 @@ public:
         m_L0Caches[3].Reset();
     }
 
-    [[nodiscard]] u32 Read(const u32 coreIndex, const u64 address) noexcept
+    [[nodiscard]] u32 Read(const u32 coreIndex, const u64 address, const bool external) noexcept
     {
-        return m_L0Caches[coreIndex].Read(address);
+        return m_L0Caches[coreIndex].Read(address, external);
     }
 
-    void Write(const u32 coreIndex, const u64 address, const u32 value) noexcept
+    void Write(const u32 coreIndex, const u64 address, const u32 value, const bool external, const bool writeThrough) noexcept
     {
-        m_L0Caches[coreIndex].Write(address, value);
+        m_L0Caches[coreIndex].Write(address, value, external, writeThrough);
     }
 
-    void Prefetch(const u32 coreIndex, const u64 address) noexcept
+    void Prefetch(const u32 coreIndex, const u64 address, const bool external) noexcept
     {
         // For pre-fetching we'll be acting asynchronously typically, but we're forced to act synchronously in software, so we'll just redirect to read.
-        (void) m_L0Caches[coreIndex].Read(address);
+        (void) m_L0Caches[coreIndex].Read(address, external);
     }
 
     void Flush(const u32 coreIndex) noexcept
@@ -158,59 +160,59 @@ public:
         m_L0Caches[coreIndex].Flush();
     }
 
-    bool ReadCacheLine(const u32 requestorLine, const u64 address, u32* const cacheLine) noexcept
+    bool ReadCacheLine(const u32 requestorLine, const u64 address, const bool external, u32* const cacheLine) noexcept
     {
-        bool didWrite = m_L0Caches[0].SnoopBusRead(requestorLine, address, cacheLine);
-        didWrite = m_L0Caches[1].SnoopBusRead(requestorLine, address, didWrite ? nullptr : cacheLine);
-        didWrite = m_L0Caches[2].SnoopBusRead(requestorLine, address, didWrite ? nullptr : cacheLine);
-        didWrite = m_L0Caches[3].SnoopBusRead(requestorLine, address, didWrite ? nullptr : cacheLine);
+        bool didWrite = m_L0Caches[0].SnoopBusRead(requestorLine, address, external, cacheLine);
+        didWrite = m_L0Caches[1].SnoopBusRead(requestorLine, address, external, didWrite ? nullptr : cacheLine);
+        didWrite = m_L0Caches[2].SnoopBusRead(requestorLine, address, external, didWrite ? nullptr : cacheLine);
+        didWrite = m_L0Caches[3].SnoopBusRead(requestorLine, address, external, didWrite ? nullptr : cacheLine);
 
         if(!didWrite)
         {
             // The memory granularity is 32 bits, thus we'll adjust to an 8 bit granularity for x86.
-            const uintptr_t addressX86 = address << 2;
-            ::std::memcpy(cacheLine, reinterpret_cast<void*>(addressX86), sizeof(u32[8]));
+            ReadCacheLine(address, cacheLine, external);
             return false;
         }
 
         return true;
     }
 
-    bool ReadXCacheLine(const u32 requestorLine, const u64 address, u32* const cacheLine) noexcept
+    bool ReadXCacheLine(const u32 requestorLine, const u64 address, const bool external, u32* const cacheLine) noexcept
     {
-        bool didWrite = m_L0Caches[0].SnoopBusReadX(requestorLine, address, cacheLine);
-        didWrite = m_L0Caches[1].SnoopBusReadX(requestorLine, address, didWrite ? nullptr : cacheLine);
-        didWrite = m_L0Caches[2].SnoopBusReadX(requestorLine, address, didWrite ? nullptr : cacheLine);
-        didWrite = m_L0Caches[3].SnoopBusReadX(requestorLine, address, didWrite ? nullptr : cacheLine);
+        bool didWrite = m_L0Caches[0].SnoopBusReadX(requestorLine, address, external, cacheLine);
+        didWrite = m_L0Caches[1].SnoopBusReadX(requestorLine, address, external, didWrite ? nullptr : cacheLine);
+        didWrite = m_L0Caches[2].SnoopBusReadX(requestorLine, address, external, didWrite ? nullptr : cacheLine);
+        didWrite = m_L0Caches[3].SnoopBusReadX(requestorLine, address, external, didWrite ? nullptr : cacheLine);
 
         if(!didWrite)
         {
             // The memory granularity is 32 bits, thus we'll adjust to an 8 bit granularity for x86.
-            const uintptr_t addressX86 = address << 2;
-            ::std::memcpy(cacheLine, reinterpret_cast<void*>(addressX86), sizeof(u32[8]));
+            ReadCacheLine(address, cacheLine, external);
             return false;
         }
 
         return true;
     }
 
-    void UpgradeCacheLine(const u32 requestorLine, const u64 address) noexcept
+    void UpgradeCacheLine(const u32 requestorLine, const u64 address, const bool external) noexcept
     {
-        m_L0Caches[0].SnoopBusUpgrade(requestorLine, address);
-        m_L0Caches[1].SnoopBusUpgrade(requestorLine, address);
-        m_L0Caches[2].SnoopBusUpgrade(requestorLine, address);
-        m_L0Caches[3].SnoopBusUpgrade(requestorLine, address);
+        m_L0Caches[0].SnoopBusUpgrade(requestorLine, address, external);
+        m_L0Caches[1].SnoopBusUpgrade(requestorLine, address, external);
+        m_L0Caches[2].SnoopBusUpgrade(requestorLine, address, external);
+        m_L0Caches[3].SnoopBusUpgrade(requestorLine, address, external);
     }
 
-    void WriteBackCacheLine(const u32 requestorLine, const u64 address, const u32* cacheLine) noexcept
+    void WriteBackCacheLine(const u32 requestorLine, const u64 address, const bool external, const u32* cacheLine) noexcept
     {
         // if(requestorLine == 4)
         {
             // The memory granularity is 32 bits, thus we'll adjust to an 8 bit granularity for x86.
-            const uintptr_t addressX86 = address << 2;
-            ::std::memcpy(reinterpret_cast<void*>(addressX86), cacheLine, sizeof(u32[8]));
+            WriteCacheLine(address, cacheLine, external);
         }
     }
+private:
+    void ReadCacheLine(u64 address, u32 data[8], bool external) noexcept;
+    void WriteCacheLine(u64 address, const u32 data[8], bool external) noexcept;
 private:
     Processor* m_Processor;
     Cache<8, 4> m_L0Caches[4];

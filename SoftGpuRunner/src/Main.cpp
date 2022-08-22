@@ -2,10 +2,17 @@
 #include <ConPrinter.hpp>
 #include "DebugManager.hpp"
 #include "InputAssembler.hpp"
+#include "MMU.hpp"
 
 static Processor processor;
 
 DebugManager GlobalDebug;
+
+static PageEntry* PageDirectory;
+static PageEntry* PageTable0;
+static void* RawBuffer;
+static void* ExecutableBuffer;
+static inline constexpr u64 ExecutableStart = 0x10000;
 
 [[maybe_unused]] static void TestMove() noexcept;
 [[maybe_unused]] static void TestAdd1F() noexcept;
@@ -24,6 +31,68 @@ int main(int argCount, char* args[])
         ConPrinter::Print("Debug not enabled.\n");
     }
 
+    // Two blocks, 1 block of usable memory, 1 block of executable memory, plus enough slack to align to the 64K boundary.
+    constexpr u64 pageCount = (GpuPageSize * 5) / (4096) - 1;
+
+    void* const virtualAllocation = VirtualAlloc(nullptr, pageCount * 4096, MEM_RESERVE, PAGE_READWRITE);
+
+    if(!virtualAllocation)
+    {
+        ConPrinter::Print("Failed to reserve virtual pages.\n");
+        return -1;
+    }
+
+    const u64 virtualAllocAddress = reinterpret_cast<u64>(virtualAllocation);
+    const u64 alignedVirtualAddress = virtualAllocAddress + (-virtualAllocAddress & (GpuPageSize - 1));
+
+    u8* alignedVirtualAllocation = reinterpret_cast<u8*>(alignedVirtualAddress);
+
+    if(!VirtualAlloc(alignedVirtualAllocation, GpuPageSize * 4, MEM_COMMIT, PAGE_READWRITE))
+    {
+        ConPrinter::Print("Failed to commit virtual pages.\n");
+        return -2;
+    }
+
+    PageDirectory = reinterpret_cast<PageEntry*>(alignedVirtualAddress);
+    PageTable0 = reinterpret_cast<PageEntry*>(alignedVirtualAddress + GpuPageSize);
+    RawBuffer = reinterpret_cast<PageEntry*>(alignedVirtualAddress + GpuPageSize * 2);
+    ExecutableBuffer = reinterpret_cast<PageEntry*>(alignedVirtualAddress + GpuPageSize * 3);
+
+    ::std::memset(alignedVirtualAllocation, 0, sizeof(GpuPageSize) * 4);
+
+    PageTable0[0].Present = true;
+    PageTable0[0].ReadWrite = true;
+    PageTable0[0].Execute = false;
+    PageTable0[0].WriteThrough = false;
+    PageTable0[0].CacheDisable = false;
+    PageTable0[0].Accessed = false;
+    PageTable0[0].Dirty = false;
+    PageTable0[0].External = false;
+    PageTable0[0].PhysicalAddress = (alignedVirtualAddress >> 16) + 2;
+    PageTable0[0].Reserved1 = 0;
+
+    PageTable0[1].Present = true;
+    PageTable0[1].ReadWrite = false;
+    PageTable0[1].Execute = true;
+    PageTable0[1].WriteThrough = false;
+    PageTable0[1].CacheDisable = false;
+    PageTable0[1].Accessed = false;
+    PageTable0[1].Dirty = false;
+    PageTable0[1].External = false;
+    PageTable0[1].PhysicalAddress = (alignedVirtualAddress >> 16) + 3;
+    PageTable0[1].Reserved1 = 0;
+
+    PageDirectory[0].Present = true;
+    PageDirectory[0].ReadWrite = true;
+    PageDirectory[0].Execute = false;
+    PageDirectory[0].WriteThrough = false;
+    PageDirectory[0].CacheDisable = false;
+    PageDirectory[0].Accessed = false;
+    PageDirectory[0].Dirty = false;
+    PageDirectory[0].External = false;
+    PageDirectory[0].PhysicalAddress = (alignedVirtualAddress >> 16) + 1;
+    PageDirectory[0].Reserved1 = 0;
+
     // TestMove();
     // TestAdd1F();
     // TestAdd2F();
@@ -31,72 +100,74 @@ int main(int argCount, char* args[])
     // TestMul2FReplicated();
     TestMul2FReplicatedDualDispatch();
 
+    VirtualFree(virtualAllocation, pageCount * 4096, MEM_RELEASE);
+
     return 0;
 }
 
 static void TestMove() noexcept
 {
-    u32 initialValue = 42;
-    u32 storageLocation = 0xCDCDCDCD;
+    processor.LoadPageDirectoryPointer(0, PageDirectory);
 
-    const uintptr_t initialValuePtr = reinterpret_cast<uintptr_t>(&initialValue) >> 2;
-    u8 initialValuePtrBytes[8];
-    (void) ::std::memcpy(initialValuePtrBytes, &initialValuePtr, sizeof(initialValuePtr));
+    u32* const dataBuffer = reinterpret_cast<u32*>(RawBuffer);
 
-    const uintptr_t storageLocationPtr = reinterpret_cast<uintptr_t>(&storageLocation) >> 2;
-    u8 storageLocationPtrBytes[8];
-    (void) ::std::memcpy(storageLocationPtrBytes, &storageLocationPtr, sizeof(storageLocationPtr));
+    u32* const pInitialValue = &dataBuffer[0];
+    u32* const pStorageLocation = &dataBuffer[1];
 
-    u8 program[] =
+    *pInitialValue = 42;
+    *pStorageLocation = 0xCDCDCDCD;
+    
+    constexpr u8 program[] =
     {
-        static_cast<u8>(EInstruction::LoadImmediate), 0, initialValuePtrBytes[0], initialValuePtrBytes[1], initialValuePtrBytes[2], initialValuePtrBytes[3],
-        static_cast<u8>(EInstruction::LoadImmediate), 1, initialValuePtrBytes[4], initialValuePtrBytes[5], initialValuePtrBytes[6], initialValuePtrBytes[7],
-        static_cast<u8>(EInstruction::LoadImmediate), 2, storageLocationPtrBytes[0], storageLocationPtrBytes[1], storageLocationPtrBytes[2], storageLocationPtrBytes[3],
-        static_cast<u8>(EInstruction::LoadImmediate), 3, storageLocationPtrBytes[4], storageLocationPtrBytes[5], storageLocationPtrBytes[6], storageLocationPtrBytes[7],
+        static_cast<u8>(EInstruction::LoadImmediate), 0, 0, 0, 0, 0,
+        static_cast<u8>(EInstruction::LoadImmediate), 1, 0, 0, 0, 0,
+        static_cast<u8>(EInstruction::LoadImmediate), 2, 1, 0, 0, 0,
+        static_cast<u8>(EInstruction::LoadImmediate), 3, 0, 0, 0, 0,
         static_cast<u8>(EInstruction::LoadStore), 0b00111000, 0, 4, 0, 0,
         static_cast<u8>(EInstruction::LoadStore), 0b01111000, 2, 4, 0, 0,
         static_cast<u8>(EInstruction::FlushCache),
         static_cast<u8>(EInstruction::Hlt)
     };
 
-    ConPrinter::Print("Value to copy: {}\n", initialValue);
-    ConPrinter::Print("Value at storage location: {}\n", storageLocation);
+    (void) ::std::memcpy(ExecutableBuffer, program, sizeof(program));
+    
+    ConPrinter::PrintLn("Value to copy: {}", *pInitialValue);
+    ConPrinter::PrintLn("Value at storage location: {}", *pStorageLocation);
 
-    processor.TestLoadProgram(0, 0, 0x1, program);
+    processor.TestLoadProgram(0, 0, 0x1, ExecutableStart);
 
     for(int i = 0; i < 20; ++i)
     {
         processor.Clock();
     }
-
-    ConPrinter::Print("Value to copy: {}\n", initialValue);
-    ConPrinter::Print("Value at storage location: {}\n", storageLocation);
-
+    
+    ConPrinter::PrintLn("Value to copy: {}", *pInitialValue);
+    ConPrinter::PrintLn("Value at storage location: {}", *pStorageLocation);
 }
 
 static void TestAdd1F() noexcept
 {
-    f32 valueA = 1.5f;
-    const f32 valueB = 2.5f;
-    f32 storageValue = ::std::numeric_limits<f32>::quiet_NaN();
+    processor.LoadPageDirectoryPointer(0, PageDirectory);
 
-    const uintptr_t valueAPtr = reinterpret_cast<uintptr_t>(&valueA) >> 2;
-    u8 valueAPtrBytes[8];
-    (void) ::std::memcpy(valueAPtrBytes, &valueAPtr, sizeof(valueAPtr));
+    f32* const dataBuffer = reinterpret_cast<f32*>(RawBuffer);
+
+    f32* const pValueA = &dataBuffer[0];
+    f32* const pStorageValue = &dataBuffer[1];
+
+    *pValueA = 1.5f;
+    *pStorageValue = ::std::numeric_limits<f32>::quiet_NaN();
+    
+    constexpr f32 valueB = 2.5f;
 
     u8 valueBBytes[8];
     (void) ::std::memcpy(valueBBytes, &valueB, sizeof(valueB));
 
-    const uintptr_t storageLocationPtr = reinterpret_cast<uintptr_t>(&storageValue) >> 2;
-    u8 storageLocationPtrBytes[8];
-    (void) ::std::memcpy(storageLocationPtrBytes, &storageLocationPtr, sizeof(storageLocationPtr));
-
-    u8 program[] =
+    const u8 program[] =
     {
-        static_cast<u8>(EInstruction::LoadImmediate), 0, valueAPtrBytes[0], valueAPtrBytes[1], valueAPtrBytes[2], valueAPtrBytes[3],
-        static_cast<u8>(EInstruction::LoadImmediate), 1, valueAPtrBytes[4], valueAPtrBytes[5], valueAPtrBytes[6], valueAPtrBytes[7],
-        static_cast<u8>(EInstruction::LoadImmediate), 2, storageLocationPtrBytes[0], storageLocationPtrBytes[1], storageLocationPtrBytes[2], storageLocationPtrBytes[3],
-        static_cast<u8>(EInstruction::LoadImmediate), 3, storageLocationPtrBytes[4], storageLocationPtrBytes[5], storageLocationPtrBytes[6], storageLocationPtrBytes[7],
+        static_cast<u8>(EInstruction::LoadImmediate), 0, 0, 0, 0, 0,
+        static_cast<u8>(EInstruction::LoadImmediate), 1, 0, 0, 0, 0,
+        static_cast<u8>(EInstruction::LoadImmediate), 2, 1, 0, 0, 0,
+        static_cast<u8>(EInstruction::LoadImmediate), 3, 0, 0, 0, 0,
         static_cast<u8>(EInstruction::LoadImmediate), 4, valueBBytes[0], valueBBytes[1], valueBBytes[2], valueBBytes[3],
         static_cast<u8>(EInstruction::LoadStore), 0b00111000, 0, 5, 0, 0,
         static_cast<u8>(EInstruction::AddF), 5, 4, 6,
@@ -105,44 +176,46 @@ static void TestAdd1F() noexcept
         static_cast<u8>(EInstruction::Hlt)
     };
 
-    ConPrinter::Print("{} + {} = {}\n", valueA, valueB, storageValue);
+    (void) ::std::memcpy(ExecutableBuffer, program, sizeof(program));
 
-    processor.TestLoadProgram(0, 0, 0x1, program);
+    ConPrinter::PrintLn("{} + {} = {}",*pValueA, valueB, *pStorageValue);
+
+    processor.TestLoadProgram(0, 0, 0x1, ExecutableStart);
 
     for(int i = 0; i < 40; ++i)
     {
         processor.Clock();
     }
 
-    ConPrinter::Print("{} + {} = {}\n", valueA, valueB, storageValue);
+    // Should print 4.0
+    ConPrinter::PrintLn("{} + {} = {}", *pValueA, valueB, *pStorageValue);
 }
 
 static void TestAdd2F() noexcept
 {
-    f32 valueA[2] = { 1.5f, 1.0f };
-    const f32 valueB[2] = { 2.5f, -2.5f };
-    f32 storageValue[2] = { ::std::numeric_limits<f32>::quiet_NaN(), ::std::numeric_limits<f32>::quiet_NaN() };
+    processor.LoadPageDirectoryPointer(0, PageDirectory);
 
-    const uintptr_t valueAPtr = reinterpret_cast<uintptr_t>(&valueA) >> 2;
-    u8 valueAPtrBytes[8];
-    (void) ::std::memcpy(valueAPtrBytes, &valueAPtr, sizeof(valueAPtr));
+    f32* const dataBuffer = reinterpret_cast<f32*>(RawBuffer);
 
-    const uintptr_t valueBPtr = reinterpret_cast<uintptr_t>(&valueB) >> 2;
-    u8 valueBPtrBytes[8];
-    (void) ::std::memcpy(valueBPtrBytes, &valueBPtr, sizeof(valueBPtr));
+    f32* const pValueA = &dataBuffer[0];
+    f32* const pValueB = &dataBuffer[2];
+    f32* const pStorageValue = &dataBuffer[4];
 
-    const uintptr_t storageLocationPtr = reinterpret_cast<uintptr_t>(&storageValue) >> 2;
-    u8 storageLocationPtrBytes[8];
-    (void) ::std::memcpy(storageLocationPtrBytes, &storageLocationPtr, sizeof(storageLocationPtr));
-
-    u8 program[] =
+    pValueA[0] = 1.5f;
+    pValueA[1] = 1.0f;
+    pValueB[0] = 2.5f;
+    pValueB[1] = -2.5f;
+    pStorageValue[0] = ::std::numeric_limits<f32>::quiet_NaN();
+    pStorageValue[1] = ::std::numeric_limits<f32>::quiet_NaN();
+    
+    constexpr u8 program[] =
     {
-        static_cast<u8>(EInstruction::LoadImmediate), 0, valueAPtrBytes[0], valueAPtrBytes[1], valueAPtrBytes[2], valueAPtrBytes[3],
-        static_cast<u8>(EInstruction::LoadImmediate), 1, valueAPtrBytes[4], valueAPtrBytes[5], valueAPtrBytes[6], valueAPtrBytes[7],
-        static_cast<u8>(EInstruction::LoadImmediate), 2, valueBPtrBytes[0], valueBPtrBytes[1], valueBPtrBytes[2], valueBPtrBytes[3],
-        static_cast<u8>(EInstruction::LoadImmediate), 3, valueBPtrBytes[4], valueBPtrBytes[5], valueBPtrBytes[6], valueBPtrBytes[7],
-        static_cast<u8>(EInstruction::LoadImmediate), 4, storageLocationPtrBytes[0], storageLocationPtrBytes[1], storageLocationPtrBytes[2], storageLocationPtrBytes[3],
-        static_cast<u8>(EInstruction::LoadImmediate), 5, storageLocationPtrBytes[4], storageLocationPtrBytes[5], storageLocationPtrBytes[6], storageLocationPtrBytes[7],
+        static_cast<u8>(EInstruction::LoadImmediate), 0, 0, 0, 0, 0,
+        static_cast<u8>(EInstruction::LoadImmediate), 1, 0, 0, 0, 0,
+        static_cast<u8>(EInstruction::LoadImmediate), 2, 2, 0, 0, 0,
+        static_cast<u8>(EInstruction::LoadImmediate), 3, 0, 0, 0, 0,
+        static_cast<u8>(EInstruction::LoadImmediate), 4, 4, 0, 0, 0,
+        static_cast<u8>(EInstruction::LoadImmediate), 5, 0, 0, 0, 0,
         static_cast<u8>(EInstruction::LoadStore), 0b00111001, 0, 6, 0, 0,
         static_cast<u8>(EInstruction::LoadStore), 0b00111001, 2, 8, 0, 0,
         static_cast<u8>(EInstruction::AddVec2F), 6, 8, 10,
@@ -151,20 +224,25 @@ static void TestAdd2F() noexcept
         static_cast<u8>(EInstruction::Hlt)
     };
 
-    ConPrinter::Print("[{}, {}] + [{}, {}] = [{}, {}]\n", valueA[0], valueA[1], valueB[0], valueB[1], storageValue[0], storageValue[1]);
+    (void) ::std::memcpy(ExecutableBuffer, program, sizeof(program));
 
-    processor.TestLoadProgram(0, 0, 0x1, program);
+    ConPrinter::PrintLn("[{}, {}] + [{}, {}] = [{}, {}]", pValueA[0], pValueA[1], pValueB[0], pValueB[1], pStorageValue[0], pStorageValue[1]);
+
+    processor.TestLoadProgram(0, 0, 0x1, ExecutableStart);
 
     for(int i = 0; i < 20; ++i)
     {
         processor.Clock();
     }
 
-    ConPrinter::Print("[{}, {}] + [{}, {}] = [{}, {}]\n", valueA[0], valueA[1], valueB[0], valueB[1], storageValue[0], storageValue[1]);
+    // Should print [4.0, -1.5]
+    ConPrinter::PrintLn("[{}, {}] + [{}, {}] = [{}, {}]", pValueA[0], pValueA[1], pValueB[0], pValueB[1], pStorageValue[0], pStorageValue[1]);
 }
 
 static void TestAdd2FReplicated() noexcept
 {
+    processor.LoadPageDirectoryPointer(0, PageDirectory);
+
     struct InputData
     {
         f32 ValueA[2];
@@ -176,8 +254,8 @@ static void TestAdd2FReplicated() noexcept
         f32 ValueResult[2];
     };
 
-    InputData inData[2];
-    OutputData outData[2];
+    InputData* const inData = reinterpret_cast<InputData*>(RawBuffer);
+    OutputData* const outData = reinterpret_cast<OutputData*>(inData + 2);
 
     inData[0].ValueA[0] = 1.5f;
     inData[0].ValueA[1] = 1.0f;
@@ -193,24 +271,8 @@ static void TestAdd2FReplicated() noexcept
     outData[0].ValueResult[1] = ::std::numeric_limits<f32>::quiet_NaN();
     outData[1].ValueResult[0] = ::std::numeric_limits<f32>::quiet_NaN();
     outData[1].ValueResult[1] = ::std::numeric_limits<f32>::quiet_NaN();
-
-    const uintptr_t inData0Ptr = reinterpret_cast<uintptr_t>(&inData[0]) >> 2;
-    u32 inData0Words[2];
-    (void) ::std::memcpy(inData0Words, &inData0Ptr, sizeof(inData0Ptr));
-
-    const uintptr_t inData1Ptr = reinterpret_cast<uintptr_t>(&inData[1]) >> 2;
-    u32 inData1Words[2];
-    (void) ::std::memcpy(inData1Words, &inData1Ptr, sizeof(inData1Ptr));
-
-    const uintptr_t outData0Ptr = reinterpret_cast<uintptr_t>(&outData[0]) >> 2;
-    u32 outData0Words[2];
-    (void) ::std::memcpy(outData0Words, &outData0Ptr, sizeof(outData0Ptr));
-
-    const uintptr_t outData1Ptr = reinterpret_cast<uintptr_t>(&outData[1]) >> 2;
-    u32 outData1Words[2];
-    (void) ::std::memcpy(outData1Words, &outData1Ptr, sizeof(outData1Ptr));
-
-    u8 program[] =
+    
+    constexpr u8 program[] =
     {
         static_cast<u8>(EInstruction::LoadStore), 0b00111011, 0, 6, 0, 0, // Load inData.ValueA and inData.ValueB
         static_cast<u8>(EInstruction::AddVec2F), 6, 8, 10,
@@ -219,31 +281,38 @@ static void TestAdd2FReplicated() noexcept
         static_cast<u8>(EInstruction::Hlt)
     };
 
-    ConPrinter::Print("[{}, {}] + [{}, {}] = [{}, {}]\n", inData[0].ValueA[0], inData[0].ValueA[1], inData[0].ValueB[0], inData[0].ValueB[1], outData[0].ValueResult[0], outData[0].ValueResult[1]);
-    ConPrinter::Print("[{}, {}] + [{}, {}] = [{}, {}]\n", inData[1].ValueA[0], inData[1].ValueA[1], inData[1].ValueB[0], inData[1].ValueB[1], outData[1].ValueResult[0], outData[1].ValueResult[1]);
+    (void) ::std::memcpy(ExecutableBuffer, program, sizeof(program));
 
-    processor.TestLoadProgram(0, 0, 0x3, program);
+    ConPrinter::PrintLn("[{}, {}] + [{}, {}] = [{}, {}]", inData[0].ValueA[0], inData[0].ValueA[1], inData[0].ValueB[0], inData[0].ValueB[1], outData[0].ValueResult[0], outData[0].ValueResult[1]);
+    ConPrinter::PrintLn("[{}, {}] + [{}, {}] = [{}, {}]", inData[1].ValueA[0], inData[1].ValueA[1], inData[1].ValueB[0], inData[1].ValueB[1], outData[1].ValueResult[0], outData[1].ValueResult[1]);
 
-    processor.TestLoadRegister(0, 0, 0, 0, inData0Words[0]);
-    processor.TestLoadRegister(0, 0, 0, 1, inData0Words[1]);
-    processor.TestLoadRegister(0, 0, 1, 0, inData1Words[0]);
-    processor.TestLoadRegister(0, 0, 1, 1, inData1Words[1]);
-    processor.TestLoadRegister(0, 0, 0, 2, outData0Words[0]);
-    processor.TestLoadRegister(0, 0, 0, 3, outData0Words[1]);
-    processor.TestLoadRegister(0, 0, 1, 2, outData1Words[0]);
-    processor.TestLoadRegister(0, 0, 1, 3, outData1Words[1]);
+    processor.TestLoadProgram(0, 0, 0x3, ExecutableStart);
+
+    processor.TestLoadRegister(0, 0, 0, 0, 0);
+    processor.TestLoadRegister(0, 0, 0, 1, 0);
+    processor.TestLoadRegister(0, 0, 1, 0, 4);
+    processor.TestLoadRegister(0, 0, 1, 1, 0);
+    processor.TestLoadRegister(0, 0, 0, 2, 8);
+    processor.TestLoadRegister(0, 0, 0, 3, 0);
+    processor.TestLoadRegister(0, 0, 1, 2, 10);
+    processor.TestLoadRegister(0, 0, 1, 3, 0);
 
     for(int i = 0; i < 100; ++i)
     {
         processor.Clock();
     }
 
-    ConPrinter::Print("[{}, {}] + [{}, {}] = [{}, {}]\n", inData[0].ValueA[0], inData[0].ValueA[1], inData[0].ValueB[0], inData[0].ValueB[1], outData[0].ValueResult[0], outData[0].ValueResult[1]);
-    ConPrinter::Print("[{}, {}] + [{}, {}] = [{}, {}]\n", inData[1].ValueA[0], inData[1].ValueA[1], inData[1].ValueB[0], inData[1].ValueB[1], outData[1].ValueResult[0], outData[1].ValueResult[1]);
+    // Should print
+    //   [4.0, -1.5]
+    //   [5.5, -3.5]
+    ConPrinter::PrintLn("[{}, {}] + [{}, {}] = [{}, {}]", inData[0].ValueA[0], inData[0].ValueA[1], inData[0].ValueB[0], inData[0].ValueB[1], outData[0].ValueResult[0], outData[0].ValueResult[1]);
+    ConPrinter::PrintLn("[{}, {}] + [{}, {}] = [{}, {}]", inData[1].ValueA[0], inData[1].ValueA[1], inData[1].ValueB[0], inData[1].ValueB[1], outData[1].ValueResult[0], outData[1].ValueResult[1]);
 }
 
 static void TestMul2FReplicated() noexcept
 {
+    processor.LoadPageDirectoryPointer(0, PageDirectory);
+
     struct InputData
     {
         f32 ValueA[2];
@@ -261,153 +330,9 @@ static void TestMul2FReplicated() noexcept
         u64 LdStTotals;
     };
 
-    InputData inData[4];
-    OutputData outData[4];
-
-    inData[0].ValueA[0] = 1.5f;
-    inData[0].ValueA[1] = 1.0f;
-    inData[0].ValueB[0] = 2.5f;
-    inData[0].ValueB[1] = -2.5f;
-
-    inData[1].ValueA[0] = 3.0f;
-    inData[1].ValueA[1] = -1.0f;
-    inData[1].ValueB[0] = 2.5f;
-    inData[1].ValueB[1] = -2.5f;
-
-    inData[2].ValueA[0] = 0.5f;
-    inData[2].ValueA[1] = 2.0f;
-    inData[2].ValueB[0] = 2.5f;
-    inData[2].ValueB[1] = -2.5f;
-
-    inData[3].ValueA[0] = 5.3f;
-    inData[3].ValueA[1] = 0.0f;
-    inData[3].ValueB[0] = 0.1f;
-    inData[3].ValueB[1] = -2.5f;
-
-    outData[0].ValueResult[0] = ::std::numeric_limits<f32>::quiet_NaN();
-    outData[0].ValueResult[1] = ::std::numeric_limits<f32>::quiet_NaN();
-    outData[1].ValueResult[0] = ::std::numeric_limits<f32>::quiet_NaN();
-    outData[1].ValueResult[1] = ::std::numeric_limits<f32>::quiet_NaN();
-    outData[2].ValueResult[0] = ::std::numeric_limits<f32>::quiet_NaN();
-    outData[2].ValueResult[1] = ::std::numeric_limits<f32>::quiet_NaN();
-    outData[3].ValueResult[0] = ::std::numeric_limits<f32>::quiet_NaN();
-    outData[3].ValueResult[1] = ::std::numeric_limits<f32>::quiet_NaN();
-
-    const uintptr_t inData0Ptr = reinterpret_cast<uintptr_t>(&inData[0]) >> 2;
-    u32 inData0Words[2];
-    (void) ::std::memcpy(inData0Words, &inData0Ptr, sizeof(inData0Ptr));
-
-    const uintptr_t inData1Ptr = reinterpret_cast<uintptr_t>(&inData[1]) >> 2;
-    u32 inData1Words[2];
-    (void) ::std::memcpy(inData1Words, &inData1Ptr, sizeof(inData1Ptr));
-
-    const uintptr_t inData2Ptr = reinterpret_cast<uintptr_t>(&inData[2]) >> 2;
-    u32 inData2Words[2];
-    (void) ::std::memcpy(inData2Words, &inData2Ptr, sizeof(inData2Ptr));
-
-    const uintptr_t inData3Ptr = reinterpret_cast<uintptr_t>(&inData[3]) >> 2;
-    u32 inData3Words[2];
-    (void) ::std::memcpy(inData3Words, &inData3Ptr, sizeof(inData3Ptr));
-
-    const uintptr_t outData0Ptr = reinterpret_cast<uintptr_t>(&outData[0]) >> 2;
-    u32 outData0Words[2];
-    (void) ::std::memcpy(outData0Words, &outData0Ptr, sizeof(outData0Ptr));
-
-    const uintptr_t outData1Ptr = reinterpret_cast<uintptr_t>(&outData[1]) >> 2;
-    u32 outData1Words[2];
-    (void) ::std::memcpy(outData1Words, &outData1Ptr, sizeof(outData1Ptr));
-
-    const uintptr_t outData2Ptr = reinterpret_cast<uintptr_t>(&outData[2]) >> 2;
-    u32 outData2Words[2];
-    (void) ::std::memcpy(outData2Words, &outData2Ptr, sizeof(outData2Ptr));
-
-    const uintptr_t outData3Ptr = reinterpret_cast<uintptr_t>(&outData[3]) >> 2;
-    u32 outData3Words[2];
-    (void) ::std::memcpy(outData3Words, &outData3Ptr, sizeof(outData3Ptr));
-
-    u8 program[] =
-    {
-        static_cast<u8>(EInstruction::LoadStore), 0b00111011, 0, 6, 0, 0, // Load inData.ValueA and inData.ValueB
-        static_cast<u8>(EInstruction::MulVec2F), 6, 8, 10,
-        static_cast<u8>(EInstruction::LoadStore), 0b01111001, 2, 10, 0, 0, // Store inData.ValueA + inData.ValueB in outData.ValueResult
-        static_cast<u8>(EInstruction::WriteStatistics), 0, 12, 14,
-        static_cast<u8>(EInstruction::WriteStatistics), 1, 16, 18,
-        static_cast<u8>(EInstruction::WriteStatistics), 2, 20, 22,
-        static_cast<u8>(EInstruction::LoadStore), 0b01111001, 2, 12, 2, 0,
-        static_cast<u8>(EInstruction::LoadStore), 0b01111001, 2, 16, 4, 0,
-        static_cast<u8>(EInstruction::LoadStore), 0b01111001, 2, 20, 6, 0,
-        static_cast<u8>(EInstruction::LoadStore), 0b01111001, 2, 14, 8, 0,
-        static_cast<u8>(EInstruction::LoadStore), 0b01111001, 2, 18, 10, 0,
-        static_cast<u8>(EInstruction::LoadStore), 0b01111001, 2, 22, 12, 0,
-        static_cast<u8>(EInstruction::FlushCache),
-        static_cast<u8>(EInstruction::Hlt)
-    };
-
-    for(u32 i = 0; i < 4; ++i)
-    {
-        ConPrinter::Print("[{}, {}] * [{}, {}] = [{}, {}]\n", inData[i].ValueA[0], inData[i].ValueA[1], inData[i].ValueB[0], inData[i].ValueB[1], outData[i].ValueResult[0], outData[i].ValueResult[1]);
-    }
-
-    processor.TestLoadProgram(0, 0, 0xF, program);
-
-    processor.TestLoadRegister(0, 0, 0, 0, inData0Words[0]);
-    processor.TestLoadRegister(0, 0, 0, 1, inData0Words[1]);
-    processor.TestLoadRegister(0, 0, 1, 0, inData1Words[0]);
-    processor.TestLoadRegister(0, 0, 1, 1, inData1Words[1]);
-    processor.TestLoadRegister(0, 0, 2, 0, inData2Words[0]);
-    processor.TestLoadRegister(0, 0, 2, 1, inData2Words[1]);
-    processor.TestLoadRegister(0, 0, 3, 0, inData3Words[0]);
-    processor.TestLoadRegister(0, 0, 3, 1, inData3Words[1]);
-    processor.TestLoadRegister(0, 0, 0, 2, outData0Words[0]);
-    processor.TestLoadRegister(0, 0, 0, 3, outData0Words[1]);
-    processor.TestLoadRegister(0, 0, 1, 2, outData1Words[0]);
-    processor.TestLoadRegister(0, 0, 1, 3, outData1Words[1]);
-    processor.TestLoadRegister(0, 0, 2, 2, outData2Words[0]);
-    processor.TestLoadRegister(0, 0, 2, 3, outData2Words[1]);
-    processor.TestLoadRegister(0, 0, 3, 2, outData3Words[0]);
-    processor.TestLoadRegister(0, 0, 3, 3, outData3Words[1]);
-
-    for(int i = 0; i < 80; ++i)
-    {
-        processor.Clock();
-    }
-
-    for(u32 i = 0; i < 4; ++i)
-    {
-        ConPrinter::Print("[{}, {}] * [{}, {}] = [{}, {}]\n", inData[i].ValueA[0], inData[i].ValueA[1], inData[i].ValueB[0], inData[i].ValueB[1], outData[i].ValueResult[0], outData[i].ValueResult[1]);
-    }
-
-    const f64 fpSaturation = static_cast<f64>(outData[0].FpSaturation) / static_cast<f64>(outData[0].FpTotals);
-    const f64 intFpSaturation = static_cast<f64>(outData[0].IntFpSaturation) / static_cast<f64>(outData[0].IntFpTotals);
-    const f64 ldStSaturation = static_cast<f64>(outData[0].LdStSaturation) / static_cast<f64>(outData[0].LdStTotals);
-
-    ConPrinter::Print("FP Saturation: {}:{} ({})\n", outData[0].FpSaturation, outData[0].FpTotals, fpSaturation);
-    ConPrinter::Print("Int/FP Saturation: {}:{} ({})\n", outData[0].IntFpSaturation, outData[0].IntFpTotals, intFpSaturation);
-    ConPrinter::Print("LD/ST Saturation: {}:{} ({})\n", outData[0].LdStSaturation, outData[0].LdStTotals, ldStSaturation);
-}
-
-static void TestMul2FReplicatedDualDispatch() noexcept
-{
-    struct InputData
-    {
-        f32 ValueA[2];
-        f32 ValueB[2];
-    };
-
-    struct OutputData
-    {
-        f32 ValueResult[2];
-        u64 FpSaturation;
-        u64 IntFpSaturation;
-        u64 LdStSaturation;
-        u64 FpTotals;
-        u64 IntFpTotals;
-        u64 LdStTotals;
-    };
-
-    InputData inData[4];
-    OutputData outData[4];
-
+    InputData* const inData = reinterpret_cast<InputData*>(RawBuffer);
+    OutputData* const outData = reinterpret_cast<OutputData*>(inData + 4);
+    
     inData[0].ValueA[0] = 1.5f;
     inData[0].ValueA[1] = 1.0f;
     inData[0].ValueB[0] = 2.5f;
@@ -440,39 +365,158 @@ static void TestMul2FReplicatedDualDispatch() noexcept
         outData[i].LdStTotals = 0;
     }
 
-    const uintptr_t inData0Ptr = reinterpret_cast<uintptr_t>(&inData[0]) >> 2;
-    u32 inData0Words[2];
-    (void) ::std::memcpy(inData0Words, &inData0Ptr, sizeof(inData0Ptr));
+    // const uintptr_t inData0Ptr = reinterpret_cast<uintptr_t>(&inData[0]) >> 2;
+    // u32 inData0Words[2];
+    // (void) ::std::memcpy(inData0Words, &inData0Ptr, sizeof(inData0Ptr));
+    //
+    // const uintptr_t inData1Ptr = reinterpret_cast<uintptr_t>(&inData[1]) >> 2;
+    // u32 inData1Words[2];
+    // (void) ::std::memcpy(inData1Words, &inData1Ptr, sizeof(inData1Ptr));
+    //
+    // const uintptr_t inData2Ptr = reinterpret_cast<uintptr_t>(&inData[2]) >> 2;
+    // u32 inData2Words[2];
+    // (void) ::std::memcpy(inData2Words, &inData2Ptr, sizeof(inData2Ptr));
+    //
+    // const uintptr_t inData3Ptr = reinterpret_cast<uintptr_t>(&inData[3]) >> 2;
+    // u32 inData3Words[2];
+    // (void) ::std::memcpy(inData3Words, &inData3Ptr, sizeof(inData3Ptr));
+    //
+    // const uintptr_t outData0Ptr = reinterpret_cast<uintptr_t>(&outData[0]) >> 2;
+    // u32 outData0Words[2];
+    // (void) ::std::memcpy(outData0Words, &outData0Ptr, sizeof(outData0Ptr));
+    //
+    // const uintptr_t outData1Ptr = reinterpret_cast<uintptr_t>(&outData[1]) >> 2;
+    // u32 outData1Words[2];
+    // (void) ::std::memcpy(outData1Words, &outData1Ptr, sizeof(outData1Ptr));
+    //
+    // const uintptr_t outData2Ptr = reinterpret_cast<uintptr_t>(&outData[2]) >> 2;
+    // u32 outData2Words[2];
+    // (void) ::std::memcpy(outData2Words, &outData2Ptr, sizeof(outData2Ptr));
+    //
+    // const uintptr_t outData3Ptr = reinterpret_cast<uintptr_t>(&outData[3]) >> 2;
+    // u32 outData3Words[2];
+    // (void) ::std::memcpy(outData3Words, &outData3Ptr, sizeof(outData3Ptr));
 
-    const uintptr_t inData1Ptr = reinterpret_cast<uintptr_t>(&inData[1]) >> 2;
-    u32 inData1Words[2];
-    (void) ::std::memcpy(inData1Words, &inData1Ptr, sizeof(inData1Ptr));
+    constexpr u8 program[] =
+    {
+        static_cast<u8>(EInstruction::LoadStore), 0b00111011, 0, 6, 0, 0, // Load inData.ValueA and inData.ValueB
+        static_cast<u8>(EInstruction::MulVec2F), 6, 8, 10,
+        static_cast<u8>(EInstruction::LoadStore), 0b01111001, 2, 10, 0, 0, // Store inData.ValueA + inData.ValueB in outData.ValueResult
+        static_cast<u8>(EInstruction::WriteStatistics), 0, 12, 14,
+        static_cast<u8>(EInstruction::WriteStatistics), 1, 16, 18,
+        static_cast<u8>(EInstruction::WriteStatistics), 2, 20, 22,
+        static_cast<u8>(EInstruction::LoadStore), 0b01111001, 2, 12, 2, 0,
+        static_cast<u8>(EInstruction::LoadStore), 0b01111001, 2, 16, 4, 0,
+        static_cast<u8>(EInstruction::LoadStore), 0b01111001, 2, 20, 6, 0,
+        static_cast<u8>(EInstruction::LoadStore), 0b01111001, 2, 14, 8, 0,
+        static_cast<u8>(EInstruction::LoadStore), 0b01111001, 2, 18, 10, 0,
+        static_cast<u8>(EInstruction::LoadStore), 0b01111001, 2, 22, 12, 0,
+        static_cast<u8>(EInstruction::FlushCache),
+        static_cast<u8>(EInstruction::Hlt)
+    };
 
-    const uintptr_t inData2Ptr = reinterpret_cast<uintptr_t>(&inData[2]) >> 2;
-    u32 inData2Words[2];
-    (void) ::std::memcpy(inData2Words, &inData2Ptr, sizeof(inData2Ptr));
+    (void) ::std::memcpy(ExecutableBuffer, program, sizeof(program));
 
-    const uintptr_t inData3Ptr = reinterpret_cast<uintptr_t>(&inData[3]) >> 2;
-    u32 inData3Words[2];
-    (void) ::std::memcpy(inData3Words, &inData3Ptr, sizeof(inData3Ptr));
+    for(u32 i = 0; i < 4; ++i)
+    {
+        ConPrinter::Print("[{}, {}] * [{}, {}] = [{}, {}]\n", inData[i].ValueA[0], inData[i].ValueA[1], inData[i].ValueB[0], inData[i].ValueB[1], outData[i].ValueResult[0], outData[i].ValueResult[1]);
+    }
 
-    const uintptr_t outData0Ptr = reinterpret_cast<uintptr_t>(&outData[0]) >> 2;
-    u32 outData0Words[2];
-    (void) ::std::memcpy(outData0Words, &outData0Ptr, sizeof(outData0Ptr));
+    processor.TestLoadProgram(0, 0, 0xF, ExecutableStart);
 
-    const uintptr_t outData1Ptr = reinterpret_cast<uintptr_t>(&outData[1]) >> 2;
-    u32 outData1Words[2];
-    (void) ::std::memcpy(outData1Words, &outData1Ptr, sizeof(outData1Ptr));
+    processor.TestLoadRegister(0, 0, 0, 0, 0);
+    processor.TestLoadRegister(0, 0, 0, 1, 0);
+    processor.TestLoadRegister(0, 0, 1, 0, 4);
+    processor.TestLoadRegister(0, 0, 1, 1, 0);
+    processor.TestLoadRegister(0, 0, 2, 0, 8);
+    processor.TestLoadRegister(0, 0, 2, 1, 0);
+    processor.TestLoadRegister(0, 0, 3, 0, 12);
+    processor.TestLoadRegister(0, 0, 3, 1, 0);
+    processor.TestLoadRegister(0, 0, 0, 2, 16);
+    processor.TestLoadRegister(0, 0, 0, 3, 0);
+    processor.TestLoadRegister(0, 0, 1, 2, 30);
+    processor.TestLoadRegister(0, 0, 1, 3, 0);
+    processor.TestLoadRegister(0, 0, 2, 2, 44);
+    processor.TestLoadRegister(0, 0, 2, 3, 0);
+    processor.TestLoadRegister(0, 0, 3, 2, 58);
+    processor.TestLoadRegister(0, 0, 3, 3, 0);
 
-    const uintptr_t outData2Ptr = reinterpret_cast<uintptr_t>(&outData[2]) >> 2;
-    u32 outData2Words[2];
-    (void) ::std::memcpy(outData2Words, &outData2Ptr, sizeof(outData2Ptr));
+    for(int i = 0; i < 80; ++i)
+    {
+        processor.Clock();
+    }
 
-    const uintptr_t outData3Ptr = reinterpret_cast<uintptr_t>(&outData[3]) >> 2;
-    u32 outData3Words[2];
-    (void) ::std::memcpy(outData3Words, &outData3Ptr, sizeof(outData3Ptr));
+    for(u32 i = 0; i < 4; ++i)
+    {
+        ConPrinter::Print("[{}, {}] * [{}, {}] = [{}, {}]\n", inData[i].ValueA[0], inData[i].ValueA[1], inData[i].ValueB[0], inData[i].ValueB[1], outData[i].ValueResult[0], outData[i].ValueResult[1]);
+    }
 
-    u8 program[] =
+    const f64 fpSaturation = static_cast<f64>(outData[0].FpSaturation) / static_cast<f64>(outData[0].FpTotals);
+    const f64 intFpSaturation = static_cast<f64>(outData[0].IntFpSaturation) / static_cast<f64>(outData[0].IntFpTotals);
+    const f64 ldStSaturation = static_cast<f64>(outData[0].LdStSaturation) / static_cast<f64>(outData[0].LdStTotals);
+
+    ConPrinter::Print("FP Saturation: {}:{} ({})\n", outData[0].FpSaturation, outData[0].FpTotals, fpSaturation);
+    ConPrinter::Print("Int/FP Saturation: {}:{} ({})\n", outData[0].IntFpSaturation, outData[0].IntFpTotals, intFpSaturation);
+    ConPrinter::Print("LD/ST Saturation: {}:{} ({})\n", outData[0].LdStSaturation, outData[0].LdStTotals, ldStSaturation);
+}
+
+static void TestMul2FReplicatedDualDispatch() noexcept
+{
+    processor.LoadPageDirectoryPointer(0, PageDirectory);
+
+    struct InputData
+    {
+        f32 ValueA[2];
+        f32 ValueB[2];
+    };
+
+    struct OutputData
+    {
+        f32 ValueResult[2];
+        u64 FpSaturation;
+        u64 IntFpSaturation;
+        u64 LdStSaturation;
+        u64 FpTotals;
+        u64 IntFpTotals;
+        u64 LdStTotals;
+    };
+
+    InputData* const inData = reinterpret_cast<InputData*>(RawBuffer);
+    OutputData* const outData = reinterpret_cast<OutputData*>(inData + 4);
+
+    inData[0].ValueA[0] = 1.5f;
+    inData[0].ValueA[1] = 1.0f;
+    inData[0].ValueB[0] = 2.5f;
+    inData[0].ValueB[1] = -2.5f;
+
+    inData[1].ValueA[0] = 3.0f;
+    inData[1].ValueA[1] = -1.0f;
+    inData[1].ValueB[0] = 2.5f;
+    inData[1].ValueB[1] = -2.5f;
+
+    inData[2].ValueA[0] = 0.5f;
+    inData[2].ValueA[1] = 2.0f;
+    inData[2].ValueB[0] = 2.5f;
+    inData[2].ValueB[1] = -2.5f;
+
+    inData[3].ValueA[0] = 5.3f;
+    inData[3].ValueA[1] = 0.0f;
+    inData[3].ValueB[0] = 0.1f;
+    inData[3].ValueB[1] = -2.5f;
+
+    for(u32 i = 0; i < 4; ++i)
+    {
+        outData[i].ValueResult[0] = ::std::numeric_limits<f32>::quiet_NaN();
+        outData[i].ValueResult[1] = ::std::numeric_limits<f32>::quiet_NaN();
+        outData[i].FpSaturation = 0;
+        outData[i].IntFpSaturation = 0;
+        outData[i].LdStSaturation = 0;
+        outData[i].FpTotals = 0;
+        outData[i].IntFpTotals = 0;
+        outData[i].LdStTotals = 0;
+    }
+    
+    constexpr u8 program[] =
     {
         static_cast<u8>(EInstruction::LoadStore), 0b00111011, 0, 6, 0, 0, // Load inData.ValueA and inData.ValueB
         static_cast<u8>(EInstruction::MulVec2F), 6, 8, 10,
@@ -490,31 +534,33 @@ static void TestMul2FReplicatedDualDispatch() noexcept
         static_cast<u8>(EInstruction::Hlt)
     };
 
+    (void) ::std::memcpy(ExecutableBuffer, program, sizeof(program));
+
     for(u32 i = 0; i < 4; ++i)
     {
-        ConPrinter::Print("[{}, {}] * [{}, {}] = [{}, {}]\n", inData[i].ValueA[0], inData[i].ValueA[1], inData[i].ValueB[0], inData[i].ValueB[1], outData[i].ValueResult[0], outData[i].ValueResult[1]);
+        ConPrinter::PrintLn("[{}, {}] * [{}, {}] = [{}, {}]", inData[i].ValueA[0], inData[i].ValueA[1], inData[i].ValueB[0], inData[i].ValueB[1], outData[i].ValueResult[0], outData[i].ValueResult[1]);
     }
 
     for(u32 i = 0; i < 2; ++i)
     {
-        processor.TestLoadProgram(0, i, 0xF, program);
+        processor.TestLoadProgram(0, i, 0xF, ExecutableStart);
 
-        processor.TestLoadRegister(0, i, 0, 0, inData0Words[0]);
-        processor.TestLoadRegister(0, i, 0, 1, inData0Words[1]);
-        processor.TestLoadRegister(0, i, 1, 0, inData1Words[0]);
-        processor.TestLoadRegister(0, i, 1, 1, inData1Words[1]);
-        processor.TestLoadRegister(0, i, 2, 0, inData2Words[0]);
-        processor.TestLoadRegister(0, i, 2, 1, inData2Words[1]);
-        processor.TestLoadRegister(0, i, 3, 0, inData3Words[0]);
-        processor.TestLoadRegister(0, i, 3, 1, inData3Words[1]);
-        processor.TestLoadRegister(0, i, 0, 2, outData0Words[0]);
-        processor.TestLoadRegister(0, i, 0, 3, outData0Words[1]);
-        processor.TestLoadRegister(0, i, 1, 2, outData1Words[0]);
-        processor.TestLoadRegister(0, i, 1, 3, outData1Words[1]);
-        processor.TestLoadRegister(0, i, 2, 2, outData2Words[0]);
-        processor.TestLoadRegister(0, i, 2, 3, outData2Words[1]);
-        processor.TestLoadRegister(0, i, 3, 2, outData3Words[0]);
-        processor.TestLoadRegister(0, i, 3, 3, outData3Words[1]);
+        processor.TestLoadRegister(0, i, 0, 0, 0);
+        processor.TestLoadRegister(0, i, 0, 1, 0);
+        processor.TestLoadRegister(0, i, 1, 0, 4);
+        processor.TestLoadRegister(0, i, 1, 1, 0);
+        processor.TestLoadRegister(0, i, 2, 0, 8);
+        processor.TestLoadRegister(0, i, 2, 1, 0);
+        processor.TestLoadRegister(0, i, 3, 0, 12);
+        processor.TestLoadRegister(0, i, 3, 1, 0);
+        processor.TestLoadRegister(0, i, 0, 2, 16);
+        processor.TestLoadRegister(0, i, 0, 3, 0);
+        processor.TestLoadRegister(0, i, 1, 2, 30);
+        processor.TestLoadRegister(0, i, 1, 3, 0);
+        processor.TestLoadRegister(0, i, 2, 2, 44);
+        processor.TestLoadRegister(0, i, 2, 3, 0);
+        processor.TestLoadRegister(0, i, 3, 2, 58);
+        processor.TestLoadRegister(0, i, 3, 3, 0);
     }
 
     for(int i = 0; i < 500; ++i)
@@ -524,7 +570,7 @@ static void TestMul2FReplicatedDualDispatch() noexcept
 
     for(u32 i = 0; i < 4; ++i)
     {
-        ConPrinter::Print("[{}, {}] * [{}, {}] = [{}, {}]\n", inData[i].ValueA[0], inData[i].ValueA[1], inData[i].ValueB[0], inData[i].ValueB[1], outData[i].ValueResult[0], outData[i].ValueResult[1]);
+        ConPrinter::PrintLn("[{}, {}] * [{}, {}] = [{}, {}]", inData[i].ValueA[0], inData[i].ValueA[1], inData[i].ValueB[0], inData[i].ValueB[1], outData[i].ValueResult[0], outData[i].ValueResult[1]);
     }
 
     const u64 totalCoreSaturation = outData[0].FpSaturation + outData[0].IntFpSaturation;
@@ -535,8 +581,8 @@ static void TestMul2FReplicatedDualDispatch() noexcept
     const f64 totalCorePercent = static_cast<f64>(totalCoreSaturation) / totalCoreTotals;
     const f64 ldStPercent = static_cast<f64>(outData[0].LdStSaturation) / static_cast<f64>(outData[0].LdStTotals);
 
-    ConPrinter::Print("FP Saturation: {}:{} ({})\n", outData[0].FpSaturation, outData[0].FpTotals, fpPercent);
-    ConPrinter::Print("Int/FP Saturation: {}:{} ({})\n", outData[0].IntFpSaturation, outData[0].IntFpTotals, intFpPercent);
-    ConPrinter::Print("Total Core Saturation: {}:{} ({})\n", totalCoreSaturation, static_cast<u64>(totalCoreTotals), totalCorePercent);
-    ConPrinter::Print("LD/ST Saturation: {}:{} ({})\n", outData[0].LdStSaturation, outData[0].LdStTotals, ldStPercent);
+    ConPrinter::PrintLn("FP Saturation: {}:{} ({})", outData[0].FpSaturation, outData[0].FpTotals, fpPercent);
+    ConPrinter::PrintLn("Int/FP Saturation: {}:{} ({})", outData[0].IntFpSaturation, outData[0].IntFpTotals, intFpPercent);
+    ConPrinter::PrintLn("Total Core Saturation: {}:{} ({})", totalCoreSaturation, static_cast<u64>(totalCoreTotals), totalCorePercent);
+    ConPrinter::PrintLn("LD/ST Saturation: {}:{} ({})", outData[0].LdStSaturation, outData[0].LdStTotals, ldStPercent);
 }

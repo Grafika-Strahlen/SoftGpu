@@ -196,14 +196,14 @@ void DispatchUnit::Clock() noexcept
         case EInstruction::LoadImmediate: DispatchLoadImmediate(replicationIndex); break;
         case EInstruction::LoadZero: DispatchLoadZero(replicationIndex); break;
         case EInstruction::FlushCache:
-            for(u32 i = 0; i < 256; ++i)
-            {
-                if(!CanReadRegister(i, replicationIndex))
-                {
-                    m_IsStalled = true;
-                    return;
-                }
-            }
+            // for(u32 i = 0; i < 256; ++i)
+            // {
+            //     if(!CanReadRegister(i, replicationIndex))
+            //     {
+            //         m_IsStalled = true;
+            //         return;
+            //     }
+            // }
             m_SM->FlushCache();
             break;
         case EInstruction::ResetStatistics:

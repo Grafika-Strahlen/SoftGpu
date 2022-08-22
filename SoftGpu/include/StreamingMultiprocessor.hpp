@@ -5,6 +5,7 @@
 #include "DispatchUnit.hpp"
 #include "Core.hpp"
 #include "DebugManager.hpp"
+#include "MMU.hpp"
 
 class Processor;
 
@@ -15,7 +16,8 @@ class StreamingMultiprocessor final
 public:
     StreamingMultiprocessor(Processor* const processor, const u32 smIndex) noexcept
         : m_Processor(processor)
-        , m_RegisterFile{ }
+        , m_RegisterFile { }
+        , m_Mmu(this)
         , m_LdSt { { this, 0 }, { this, 1 }, { this, 2 }, { this, 3 } }
         , m_FpCores { { this, 0 }, { this, 1 }, { this, 2 }, { this, 3 }, { this, 4 }, { this, 5 }, { this, 6 }, { this, 7 } }
         , m_IntFpCores { { this, 0 }, { this, 1 }, { this, 2 }, { this, 3 }, { this, 4 }, { this, 5 }, { this, 6 }, { this, 7 } }
@@ -26,6 +28,7 @@ public:
     void Reset()
     {
         m_RegisterFile.Reset();
+        m_Mmu.Reset();
         m_LdSt[0].Reset();
         m_LdSt[1].Reset();
         m_LdSt[2].Reset();
@@ -179,6 +182,18 @@ public:
         }
     }
 
+    void LoadPageDirectoryPointer(const u64 pageDirectoryPhysicalAddress) noexcept
+    {
+        m_Mmu.LoadPageDirectoryPointer(pageDirectoryPhysicalAddress);
+    }
+
+    void FlushMmuCache() noexcept
+    {
+        m_Mmu.FlushCache();
+    }
+
+    void WriteMmuPageInfo(u64 physicalAddress, u64 pageTableEntry) noexcept;
+
     void FlushCache() noexcept;
 
     u16 AllocateRegisters(const u32 registerCount) noexcept
@@ -193,6 +208,7 @@ public:
 private:
     Processor* m_Processor;
     RegisterFile m_RegisterFile;
+    Mmu m_Mmu;
     LoadStore m_LdSt[4];
     FpCore m_FpCores[8];
     IntFpCore m_IntFpCores[8];

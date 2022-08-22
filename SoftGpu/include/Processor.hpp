@@ -81,9 +81,14 @@ public:
         m_SMs[3].Clock();
     }
 
+    void TestLoadProgram(const u32 sm, const u32 dispatchPort, const u8 replicationMask, const u64 program)
+    {
+        m_SMs[sm].TestLoadProgram(dispatchPort, replicationMask, program);
+    }
+
     void TestLoadProgram(const u32 sm, const u32 dispatchPort, const u8 replicationMask, void* const program)
     {
-        m_SMs[sm].TestLoadProgram(dispatchPort, replicationMask, static_cast<u64>(reinterpret_cast<uintptr_t>(program)));
+        TestLoadProgram(sm, dispatchPort, replicationMask, reinterpret_cast<u64>(program));
     }
 
     void TestLoadRegister(const u32 sm, const u32 dispatchPort, const u32 replicationIndex, const u8 registerIndex, const u32 registerValue)
@@ -91,24 +96,66 @@ public:
         m_SMs[sm].TestLoadRegister(dispatchPort, replicationIndex, registerIndex, registerValue);
     }
 
-    [[nodiscard]] u32 Read(const u32 coreIndex, const u64 address) noexcept
+    [[nodiscard]] u32 MemReadPhy(const u64 address, const bool external = false) noexcept
     {
-        return m_MemoryManager.Read(coreIndex, address);
+        u32 ret;
+        // The memory granularity is 32 bits, thus we'll adjust to an 8 bit granularity for x86.
+        const uintptr_t addressX86 = address << 2;
+        (void) ::std::memcpy(&ret, reinterpret_cast<void*>(addressX86), sizeof(u32));
+        return ret;
+    }
+    
+    void MemWritePhy(const u64 address, const u32 value, const bool external = false) noexcept
+    {
+        // The memory granularity is 32 bits, thus we'll adjust to an 8 bit granularity for x86.
+        const uintptr_t addressX86 = address << 2;
+        (void) ::std::memcpy(reinterpret_cast<void*>(addressX86), &value, sizeof(u32));
+    }
+    
+    [[nodiscard]] u32 Read(const u32 coreIndex, const u64 address, const bool cacheDisable = false, const bool external = false) noexcept
+    {
+        if(cacheDisable)
+        {
+            return MemReadPhy(address, external);
+        }
+
+        return m_MemoryManager.Read(coreIndex, address, external);
     }
 
-    void Write(const u32 coreIndex, const u64 address, const u32 value) noexcept
+    void Write(const u32 coreIndex, const u64 address, const u32 value, const bool writeThrough = false, const bool cacheDisable = false, const bool external = false) noexcept
     {
-        m_MemoryManager.Write(coreIndex, address, value);
+        if(cacheDisable)
+        {
+            MemWritePhy(address, value, external);
+            return;
+        }
+
+        m_MemoryManager.Write(coreIndex, address, value, external, writeThrough);
     }
 
-    void Prefetch(const u32 coreIndex, const u64 address) noexcept
+    void Prefetch(const u32 coreIndex, const u64 address, const bool external = false) noexcept
     {
-        m_MemoryManager.Prefetch(coreIndex, address);
+        m_MemoryManager.Prefetch(coreIndex, address, external);
     }
 
     void FlushCache(const u32 coreIndex) noexcept
     {
         m_MemoryManager.Flush(coreIndex);
+    }
+
+    void LoadPageDirectoryPointer(const u64 coreIndex, const u64 pageDirectoryPhysicalAddress) noexcept
+    {
+        m_SMs[coreIndex].LoadPageDirectoryPointer(pageDirectoryPhysicalAddress);
+    }
+
+    void LoadPageDirectoryPointer(const u64 coreIndex, const void* const pageDirectoryPhysicalAddress) noexcept
+    {
+        LoadPageDirectoryPointer(coreIndex, reinterpret_cast<u64>(pageDirectoryPhysicalAddress) >> 16);
+    }
+
+    void FlushMmuCache(const u64 coreIndex) noexcept
+    {
+        m_SMs[coreIndex].FlushCache();
     }
 private:
     PCIControlRegisters m_PCIRegisters;

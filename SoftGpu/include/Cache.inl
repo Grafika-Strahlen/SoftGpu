@@ -5,21 +5,21 @@
 #include <cstring>
 
 template<uSys IndexBits, uSys SetLineCount>
-u32 Cache<IndexBits, SetLineCount>::Read(u64 address) noexcept
+u32 Cache<IndexBits, SetLineCount>::Read(u64 address, const bool external) noexcept
 {
     const u64 lineOffset = address & 0x7;
     address >>= 3;
     address <<= 3;
-    CacheLine<IndexBits>* cacheLine = GetCacheLine(address);
+    CacheLine<IndexBits>* cacheLine = GetCacheLine(address, external);
     
     if(!cacheLine || cacheLine->Mesi == MESI::Invalid)
     {
         if(!cacheLine)
         {
-            cacheLine = GetFreeCacheLine(address);
+            cacheLine = GetFreeCacheLine(address, external);
         }
 
-        if(m_MemoryManager->ReadCacheLine(m_LineIndex, address, cacheLine->Data))
+        if(m_MemoryManager->ReadCacheLine(m_LineIndex, address, external, cacheLine->Data))
         {
             cacheLine->Mesi = MESI::Shared;
         }
@@ -33,21 +33,21 @@ u32 Cache<IndexBits, SetLineCount>::Read(u64 address) noexcept
 }
 
 template<uSys IndexBits, uSys SetLineCount>
-void Cache<IndexBits, SetLineCount>::Write(u64 address, const u32 value) noexcept
+void Cache<IndexBits, SetLineCount>::Write(u64 address, const u32 value, const bool external, const bool writeThrough) noexcept
 {
     const u64 lineOffset = address & 0x7;
     address >>= 3;
     address <<= 3;
-    CacheLine<IndexBits>* cacheLine = GetCacheLine(address);
+    CacheLine<IndexBits>* cacheLine = GetCacheLine(address, external);
 
     if(!cacheLine || cacheLine->Mesi == MESI::Invalid)
     {
         if(!cacheLine)
         {
-            cacheLine = GetFreeCacheLine(address);
+            cacheLine = GetFreeCacheLine(address, external);
         }
 
-        (void) m_MemoryManager->ReadXCacheLine(m_LineIndex, address, cacheLine->Data);
+        (void) m_MemoryManager->ReadXCacheLine(m_LineIndex, address, external, cacheLine->Data);
         cacheLine->Mesi = MESI::Modified;
     }
     else if(cacheLine->Mesi == MESI::Exclusive || cacheLine->Mesi == MESI::Modified)
@@ -57,10 +57,14 @@ void Cache<IndexBits, SetLineCount>::Write(u64 address, const u32 value) noexcep
     else if(cacheLine->Mesi == MESI::Shared)
     {
         cacheLine->Mesi = MESI::Modified;
-        m_MemoryManager->UpgradeCacheLine(m_LineIndex, address);
+        m_MemoryManager->UpgradeCacheLine(m_LineIndex, address, external);
     }
 
     cacheLine->Data[lineOffset] = value;
+    if(writeThrough)
+    {
+        m_MemoryManager->WriteBackCacheLine(m_LineIndex, address, external, cacheLine->Data);
+    }
 }
 
 template<uSys IndexBits, uSys SetLineCount>
@@ -78,7 +82,7 @@ void Cache<IndexBits, SetLineCount>::Flush() noexcept
             {
                 const u64 address = (cacheLine.Tag << (IndexBits + 3)) | (i << 3);
 
-                m_MemoryManager->WriteBackCacheLine(m_LineIndex, address, cacheLine.Data);
+                m_MemoryManager->WriteBackCacheLine(m_LineIndex, address, cacheLine.External, cacheLine.Data);
                 cacheLine.Mesi = MESI::Exclusive;
             }
         }
@@ -86,7 +90,7 @@ void Cache<IndexBits, SetLineCount>::Flush() noexcept
 }
 
 template<uSys IndexBits, uSys SetLineCount>
-CacheLine<IndexBits>* Cache<IndexBits, SetLineCount>::GetFreeCacheLine(const u64 address) noexcept
+CacheLine<IndexBits>* Cache<IndexBits, SetLineCount>::GetFreeCacheLine(const u64 address, const bool external) noexcept
 {
     const u64 setIndex = (address >> 3) & ((1 << IndexBits) - 1);
     const u64 tag = address >> (IndexBits + 3);
@@ -98,6 +102,7 @@ CacheLine<IndexBits>* Cache<IndexBits, SetLineCount>::GetFreeCacheLine(const u64
         if(targetSet.SetLines[i].Mesi == MESI::Invalid)
         {
             targetSet.SetLines[i].Tag = tag;
+            targetSet.SetLines[i].External = external;
             return &targetSet.SetLines[i];
         }
     }
@@ -107,6 +112,7 @@ CacheLine<IndexBits>* Cache<IndexBits, SetLineCount>::GetFreeCacheLine(const u64
         if(targetSet.SetLines[i].Mesi == MESI::Exclusive || targetSet.SetLines[i].Mesi == MESI::Shared)
         {
             targetSet.SetLines[i].Tag = tag;
+            targetSet.SetLines[i].External = external;
             return &targetSet.SetLines[i];
         }
     }
@@ -116,21 +122,21 @@ CacheLine<IndexBits>* Cache<IndexBits, SetLineCount>::GetFreeCacheLine(const u64
 
     CacheLine<IndexBits>* const cacheLine = &targetSet.SetLines[rollingSelector];
 
-    m_MemoryManager->WriteBackCacheLine(m_LineIndex, address, cacheLine->Data);
+    m_MemoryManager->WriteBackCacheLine(m_LineIndex, address, external, cacheLine->Data);
     cacheLine->Tag = tag;
 
     return cacheLine;
 }
 
 template<uSys IndexBits, uSys SetLineCount>
-bool Cache<IndexBits, SetLineCount>::SnoopBusRead(const u32 requestorLine, const u64 address, u32* const dataBus) noexcept
+bool Cache<IndexBits, SetLineCount>::SnoopBusRead(const u32 requestorLine, const u64 address, const bool external, u32* const dataBus) noexcept
 {
     if(requestorLine == m_LineIndex)
     {
         return false;
     }
 
-    CacheLine<IndexBits>* cacheLine = GetCacheLine(address);
+    CacheLine<IndexBits>* cacheLine = GetCacheLine(address, external);
 
     if(!cacheLine || cacheLine->Mesi == MESI::Invalid)
     {
@@ -159,21 +165,21 @@ bool Cache<IndexBits, SetLineCount>::SnoopBusRead(const u32 requestorLine, const
         {
             (void) ::std::memcpy(dataBus, cacheLine->Data, sizeof(cacheLine->Data));
         }
-        m_MemoryManager->WriteBackCacheLine(m_LineIndex, address, cacheLine->Data);
+        m_MemoryManager->WriteBackCacheLine(m_LineIndex, address, external, cacheLine->Data);
     }
 
     return true;
 }
 
 template<uSys IndexBits, uSys SetLineCount>
-bool Cache<IndexBits, SetLineCount>::SnoopBusReadX(const u32 requestorLine, const u64 address, u32* const dataBus) noexcept
+bool Cache<IndexBits, SetLineCount>::SnoopBusReadX(const u32 requestorLine, const u64 address, const bool external, u32* const dataBus) noexcept
 {
     if(requestorLine == m_LineIndex)
     {
         return false;
     }
 
-    CacheLine<IndexBits>* cacheLine = GetCacheLine(address);
+    CacheLine<IndexBits>* cacheLine = GetCacheLine(address, external);
 
     if(!cacheLine || cacheLine->Mesi == MESI::Invalid)
     {
@@ -203,21 +209,21 @@ bool Cache<IndexBits, SetLineCount>::SnoopBusReadX(const u32 requestorLine, cons
         {
             (void) ::std::memcpy(dataBus, cacheLine->Data, sizeof(cacheLine->Data));
         }
-        m_MemoryManager->WriteBackCacheLine(m_LineIndex, address, cacheLine->Data);
+        m_MemoryManager->WriteBackCacheLine(m_LineIndex, address, external, cacheLine->Data);
     }
 
     return true;
 }
 
 template<uSys IndexBits, uSys SetLineCount>
-void Cache<IndexBits, SetLineCount>::SnoopBusUpgrade(const u32 requestorLine, const u64 address) noexcept
+void Cache<IndexBits, SetLineCount>::SnoopBusUpgrade(const u32 requestorLine, const u64 address, const bool external) noexcept
 {
     if(requestorLine == m_LineIndex)
     {
         return;
     }
 
-    CacheLine<IndexBits>* cacheLine = GetCacheLine(address);
+    CacheLine<IndexBits>* cacheLine = GetCacheLine(address, external);
 
     if(cacheLine->Mesi == MESI::Shared)
     {
