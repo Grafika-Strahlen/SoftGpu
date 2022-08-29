@@ -1,7 +1,7 @@
 #include "PCIControlRegisters.hpp"
 #include "Processor.hpp"
 
-[[nodiscard]] u32 PCIControlRegisters::Read(const u32 address) noexcept
+[[nodiscard]] u32 PciControlRegisters::Read(const u32 address) noexcept
 {
     switch(address)
     {
@@ -16,7 +16,7 @@
     return 0;
 }
 
-void PCIControlRegisters::Write(const u32 address, const u32 value) noexcept
+void PciControlRegisters::Write(const u32 address, const u32 value) noexcept
 {
     switch(address)
     {

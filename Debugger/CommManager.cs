@@ -17,28 +17,46 @@ namespace Debugger
         public const uint DebugCodeReportBaseRegister = 9;
         public const uint DebugCodeReportRegisterContestion = 10;
 
-        private NamedPipeServerStream? _pipe;
-        private BinaryReader? _reader;
-        private BinaryWriter? _writer;
+        private NamedPipeServerStream? _steppingPipe;
+        private NamedPipeServerStream? _infoPipe;
+        private BinaryReader? _steppingReader;
+        private BinaryWriter? _steppingWriter;
+        private BinaryReader? _infoReader;
+        private BinaryWriter? _infoWriter;
 
-        public BinaryReader Reader => _reader!;
-        public BinaryWriter Writer => _writer!;
+        public BinaryReader SteppingReader => _steppingReader!;
+        public BinaryWriter SteppingWriter => _steppingWriter!;
+
+        public BinaryReader InfoReader => _infoReader!;
+        public BinaryWriter InfoWriter => _infoWriter!;
 
         public bool StartPaused { get; set; }
 
-        private bool _isReady;
-        private volatile bool _connectionClosed;
+        private bool _isSteppingReady;
+        private bool _isInfoReady;
+        private volatile bool _steppingConnectionClosed;
+        private volatile bool _infoConnectionClosed;
 
-        public CommManager(string pipeName)
+        public CommManager(string steppingPipeName, string infoPipeName)
         {
-            _pipe = new NamedPipeServerStream(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte);
-            _isReady = false;
-            _reader = new BinaryReader(_pipe);
-            _writer = new BinaryWriter(_pipe);
-            StartPaused = false;
-            _connectionClosed = false;
+            _steppingPipe = new NamedPipeServerStream(steppingPipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte);
+            _infoPipe = new NamedPipeServerStream(infoPipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte);
 
-            _pipe.BeginWaitForConnection(ConnectCallback, null);
+            _steppingReader = new BinaryReader(_steppingPipe);
+            _steppingWriter = new BinaryWriter(_steppingPipe);
+            _infoReader = new BinaryReader(_infoPipe);
+            _infoWriter = new BinaryWriter(_infoPipe);
+
+            StartPaused = false;
+
+            _isSteppingReady = false;
+            _isInfoReady = false;
+
+            _steppingConnectionClosed = false;
+            _infoConnectionClosed = false;
+
+            _steppingPipe.BeginWaitForConnection(SteppingConnectCallback, null);
+            _infoPipe.BeginWaitForConnection(InfoConnectCallback, null);
         }
 
         ~CommManager()
@@ -48,22 +66,40 @@ namespace Debugger
 
         protected void Dispose(bool disposing)
         {
-            if(_pipe != null)
+            if(_steppingPipe != null)
             {
-                _pipe.Dispose();
-                _pipe = null;
+                _steppingPipe.Dispose();
+                _steppingPipe = null;
             }
 
-            if(_reader != null)
+            if(_infoPipe != null)
             {
-                _reader.Dispose();
-                _reader = null;
+                _infoPipe.Dispose();
+                _infoPipe = null;
             }
 
-            if(_writer != null)
+            if(_steppingReader != null)
             {
-                _writer.Dispose();
-                _reader = null;
+                _steppingReader.Dispose();
+                _steppingReader = null;
+            }
+
+            if(_steppingWriter != null)
+            {
+                _steppingWriter.Dispose();
+                _steppingWriter = null;
+            }
+
+            if(_infoReader != null)
+            {
+                _infoReader.Dispose();
+                _infoReader = null;
+            }
+
+            if(_infoWriter != null)
+            {
+                _infoWriter.Dispose();
+                _infoWriter = null;
             }
         }
 
@@ -73,45 +109,103 @@ namespace Debugger
             GC.SuppressFinalize(this);
         }
 
-        private void ConnectCallback(IAsyncResult result)
+        private void SteppingConnectCallback(IAsyncResult result)
         {
-            _isReady = true;
-            _connectionClosed = false;
-            Writer.Write(DebugCodeStartPaused);
-            Writer.Write(1);
-            Writer.Write(StartPaused);
+            _isSteppingReady = true;
+            _steppingConnectionClosed = false;
+            SteppingWriter.Write(DebugCodeStartPaused);
+            SteppingWriter.Write(1);
+            SteppingWriter.Write(StartPaused);
+        }
+
+        private void InfoConnectCallback(IAsyncResult result)
+        {
+            _isInfoReady = true;
+            _infoConnectionClosed = false;
         }
 
         public bool CheckReady()
         {
-            if(_connectionClosed && _isReady)
+            if(_steppingConnectionClosed && _isSteppingReady)
             {
                 Reset();
                 return false;
             }
 
-            return _isReady;
+            if(_infoConnectionClosed && _isInfoReady)
+            {
+                Reset();
+                return false;
+            }
+
+            return _isSteppingReady && _isInfoReady;
         }
 
-        public async Task<DebugDataHeader> ReadHeaderAsync()
+        public async Task<DebugDataHeader> ReadSteppingHeaderAsync()
         {
             return await Task.Run(() =>
             {
-                if(!_isReady || _pipe == null || !_pipe.IsConnected || _connectionClosed)
+                if(!_isSteppingReady || _steppingPipe == null || !_steppingPipe.IsConnected || _steppingConnectionClosed)
                 {
                     return new DebugDataHeader(DebugCodeError, 0);
                 }
 
                 try
                 {
-                    uint dataCode = Reader.ReadUInt32();
-                    uint dataLength = Reader.ReadUInt32();
+                    uint dataCode = SteppingReader.ReadUInt32();
+                    uint dataLength = SteppingReader.ReadUInt32();
 
                     return new DebugDataHeader(dataCode, dataLength);
                 }
                 catch
                 {
-                    _connectionClosed = true;
+                    _steppingConnectionClosed = true;
+                }
+
+                return new DebugDataHeader(DebugCodeError, 0);
+            });
+        }
+        public DebugDataHeader ReadInfoHeader()
+        {
+            if(!_isInfoReady || _infoPipe == null || !_infoPipe.IsConnected || _infoConnectionClosed)
+            {
+                return new DebugDataHeader(DebugCodeError, 0);
+            }
+
+            try
+            {
+                uint dataCode = InfoReader.ReadUInt32();
+                uint dataLength = InfoReader.ReadUInt32();
+
+                return new DebugDataHeader(dataCode, dataLength);
+            }
+            catch
+            {
+                _steppingConnectionClosed = true;
+            }
+
+            return new DebugDataHeader(DebugCodeError, 0);
+        }
+
+        public async Task<DebugDataHeader> ReadInfoHeaderAsync()
+        {
+            return await Task.Run(() =>
+            {
+                if(!_isInfoReady || _infoPipe == null || !_infoPipe.IsConnected || _infoConnectionClosed)
+                {
+                    return new DebugDataHeader(DebugCodeError, 0);
+                }
+
+                try
+                {
+                    uint dataCode = InfoReader.ReadUInt32();
+                    uint dataLength = InfoReader.ReadUInt32();
+
+                    return new DebugDataHeader(dataCode, dataLength);
+                }
+                catch
+                {
+                    _steppingConnectionClosed = true;
                 }
 
                 return new DebugDataHeader(DebugCodeError, 0);
@@ -120,11 +214,14 @@ namespace Debugger
 
         public void Reset()
         {
-            _pipe?.Disconnect();
+            _steppingPipe?.Disconnect();
+            _infoPipe?.Disconnect();
 
-            _isReady = false;
+            _isSteppingReady = false;
+            _isInfoReady = false;
 
-            _pipe?.BeginWaitForConnection(ConnectCallback, null);
+            _steppingPipe?.BeginWaitForConnection(SteppingConnectCallback, null);
+            _infoPipe?.BeginWaitForConnection(InfoConnectCallback, null);
         }
     }
 

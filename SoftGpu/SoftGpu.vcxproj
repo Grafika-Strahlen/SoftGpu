@@ -237,9 +237,11 @@
     <ClCompile Include="src\PCIControlRegisters.cpp" />
     <ClCompile Include="src\WarpScheduler.cpp" />
     <ClCompile Include="src\StreamingMultiprocessor.cpp" />
+    <ClInclude Include="include\CommandListDispatcher.hpp" />
     <ClInclude Include="include\GraphicsPipeline.hpp" />
     <ClInclude Include="include\InputAssembler.hpp" />
     <ClInclude Include="include\MMU.hpp" />
+    <ClInclude Include="include\PCIController.hpp" />
     <ClInclude Include="include\PCIControlRegisters.hpp" />
     <ClInclude Include="include\RegisterAllocator.hpp" />
     <ClInclude Include="include\WarpScheduler.hpp" />

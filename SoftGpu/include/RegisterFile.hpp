@@ -46,7 +46,7 @@ public:
 
         if(m_RegisterContestationMap[registerIndex] == 0xFF)
         {
-            ConPrinter::Print("Register Unlock {} has underflowed.\n", registerIndex);
+            ConPrinter::PrintLn("Register Unlock {} has underflowed.", registerIndex);
 
             assert(m_RegisterContestationMap[registerIndex] != 0xFF);
         }
@@ -66,6 +66,13 @@ public:
         }
         else
         {
+            if(m_RegisterContestationMap[registerIndex] == 0xFF)
+            {
+                ConPrinter::PrintLn("Register Read Lock {} has overflowed.", registerIndex);
+
+                assert(m_RegisterContestationMap[registerIndex] != 0xFF);
+            }
+
             ++m_RegisterContestationMap[registerIndex];
         }
     }
@@ -80,19 +87,19 @@ public:
         if(GlobalDebug.IsAttached())
         {
             {
-                GlobalDebug.WriteRaw(&DebugCodeReportRegisterFile, sizeof(DebugCodeReportRegisterFile));
+                GlobalDebug.WriteRawInfo(&DebugCodeReportRegisterFile, sizeof(DebugCodeReportRegisterFile));
                 constexpr u32 length = sizeof(smIndex) + sizeof(m_Registers);
-                GlobalDebug.WriteRaw(&length, sizeof(length));
-                GlobalDebug.WriteRaw(&smIndex, sizeof(smIndex));
-                GlobalDebug.WriteRaw(m_Registers, sizeof(m_Registers));
+                GlobalDebug.WriteRawInfo(&length, sizeof(length));
+                GlobalDebug.WriteRawInfo(&smIndex, sizeof(smIndex));
+                GlobalDebug.WriteRawInfo(m_Registers, sizeof(m_Registers));
             }
 
             {
-                GlobalDebug.WriteRaw(&DebugCodeReportRegisterContestion, sizeof(DebugCodeReportRegisterContestion));
+                GlobalDebug.WriteRawInfo(&DebugCodeReportRegisterContestion, sizeof(DebugCodeReportRegisterContestion));
                 constexpr u32 length = sizeof(smIndex) + sizeof(m_RegisterContestationMap);
-                GlobalDebug.WriteRaw(&length, sizeof(length));
-                GlobalDebug.WriteRaw(&smIndex, sizeof(smIndex));
-                GlobalDebug.WriteRaw(m_RegisterContestationMap, sizeof(m_RegisterContestationMap));
+                GlobalDebug.WriteRawInfo(&length, sizeof(length));
+                GlobalDebug.WriteRawInfo(&smIndex, sizeof(smIndex));
+                GlobalDebug.WriteRawInfo(m_RegisterContestationMap, sizeof(m_RegisterContestationMap));
             }
         }
     }

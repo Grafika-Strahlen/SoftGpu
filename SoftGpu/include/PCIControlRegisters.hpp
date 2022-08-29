@@ -29,12 +29,12 @@ struct ControlRegister final
     };
 };
 
-class PCIControlRegisters final
+class PciControlRegisters final
 {
-    DEFAULT_DESTRUCT(PCIControlRegisters);
-    DELETE_CM(PCIControlRegisters);
+    DEFAULT_DESTRUCT(PciControlRegisters);
+    DELETE_CM(PciControlRegisters);
 public:
-    PCIControlRegisters(Processor* const processor) noexcept
+    PciControlRegisters(Processor* const processor) noexcept
         : m_Processor(processor)
         , m_ControlRegister{.Value = 0}
     { }

@@ -7,25 +7,21 @@ namespace Debugger
     public partial class DebuggerUI : Form
     {
         private readonly CommManager _commManager;
+        private readonly GpuDataManager _dataManager;
         private readonly Timer _timer = new Timer();
         private bool _isStepping;
         private bool _stepReady;
-
-        private readonly uint[,] _registers;
-        private readonly byte[,] _registerContestion;
-        private readonly uint[,,] _baseRegisters;
+        
         private uint _registerBaseView;
 
-        public DebuggerUI()
+        public DebuggerUI(CommManager commManager, GpuDataManager dataManager)
         {
             InitializeComponent();
 
-            _commManager = new CommManager("gpu-pipe");
+            _commManager = commManager;
+            _dataManager = dataManager;
             _isStepping = false;
             _stepReady = false;
-            _registers = new uint[4, 4096];
-            _registerContestion = new byte[4, 4096];
-            _baseRegisters = new uint[4, 2, 4];
             _registerBaseView = 0;
 
             _timer.Tick += Tick;
@@ -44,6 +40,13 @@ namespace Debugger
                 return;
             }
 
+            clockCycleDisplay.Text = _dataManager.ClockCycle.ToString();
+
+            if(_dataManager.RegistersDirty)
+            {
+                ReRenderRegisters();
+            }
+
             if(_stepReady)
             {
                 return;
@@ -51,19 +54,14 @@ namespace Debugger
             
             try
             {
-                DebugDataHeader dataHeader = await _commManager.ReadHeaderAsync();
+                DebugDataHeader dataHeader = await _commManager.ReadSteppingHeaderAsync();
 
                 if(dataHeader.DataCode == CommManager.DebugCodeError)
                 {
                     return;
                 }
 
-                if(dataHeader.DataCode == CommManager.DebugCodeReportTiming)
-                {
-                    uint clockCycle = await Task.Run(() => _commManager.Reader.ReadUInt32());
-                    clockCycleDisplay.Text = clockCycle.ToString();
-                }
-                else if(dataHeader.DataCode == CommManager.DebugCodeReportStepReady)
+                if(dataHeader.DataCode == CommManager.DebugCodeReportStepReady)
                 {
                     _stepReady = true;
                     resumeButton.Enabled = true;
@@ -79,56 +77,22 @@ namespace Debugger
                     {
                         if(_isStepping)
                         {
-                            _commManager.Writer.Write(CommManager.DebugCodePause);
-                            _commManager.Writer.Write(0);
+                            _commManager.SteppingWriter.Write(CommManager.DebugCodePause);
+                            _commManager.SteppingWriter.Write(0);
                         }
                         else
                         {
-                            _commManager.Writer.Write(CommManager.DebugCodeNop);
-                            _commManager.Writer.Write(0);
+                            _commManager.SteppingWriter.Write(CommManager.DebugCodeNop);
+                            _commManager.SteppingWriter.Write(0);
                         }
                     });
-                }
-                else if(dataHeader.DataCode == CommManager.DebugCodeReportRegisterFile)
-                {
-                    uint sm = _commManager.Reader.ReadUInt32();
-
-                    for(uint i = 0; i < 4096; ++i)
-                    {
-                        _registers[sm, i] = _commManager.Reader.ReadUInt32();
-                    }
-
-                    ReRenderRegisters();
-                }
-                else if(dataHeader.DataCode == CommManager.DebugCodeReportBaseRegister)
-                {
-                    uint sm = _commManager.Reader.ReadUInt32();
-                    uint dispatchUnit = _commManager.Reader.ReadUInt32();
-
-                    for (uint i = 0; i < 4; ++i)
-                    {
-                        _baseRegisters[sm, dispatchUnit, i] = _commManager.Reader.ReadUInt32();
-                    }
-
-                    ReRenderRegisters();
-                }
-                else if(dataHeader.DataCode == CommManager.DebugCodeReportRegisterContestion)
-                {
-                    uint sm = _commManager.Reader.ReadUInt32();
-
-                    for (uint i = 0; i < 4096; ++i)
-                    {
-                        _registerContestion[sm, i] = _commManager.Reader.ReadByte();
-                    }
-
-                    ReRenderRegisters();
                 }
                 else
                 {
                     if(dataHeader.DataCode != 0)
                     {
                         // If we don't recognize the data code, skip the data.
-                        await Task.Run(() => _commManager.Reader.ReadBytes((int) dataHeader.DataLength));
+                        await Task.Run(() => _commManager.SteppingReader.ReadBytes((int) dataHeader.DataLength));
                     }
                 }
             }
@@ -171,8 +135,8 @@ namespace Debugger
                 
                 await Task.Run(() =>
                 {
-                    _commManager.Writer.Write(CommManager.DebugCodeResume);
-                    _commManager.Writer.Write(0);
+                    _commManager.SteppingWriter.Write(CommManager.DebugCodeResume);
+                    _commManager.SteppingWriter.Write(0);
                 });
             }
         }
@@ -195,8 +159,8 @@ namespace Debugger
                 {
                     if(_commManager.CheckReady())
                     {
-                        _commManager.Writer.Write(CommManager.DebugCodeStep);
-                        _commManager.Writer.Write(0);
+                        _commManager.SteppingWriter.Write(CommManager.DebugCodeStep);
+                        _commManager.SteppingWriter.Write(0);
                     }
                 });
             }
@@ -215,7 +179,7 @@ namespace Debugger
                 return;
             }
 
-            _registerBaseView = _baseRegisters[smSelector.SelectedIndex, dispatchUnitSelector.SelectedIndex, replicationIndexSelector.SelectedIndex];
+            _registerBaseView = _dataManager.BaseRegisters[smSelector.SelectedIndex, dispatchUnitSelector.SelectedIndex, replicationIndexSelector.SelectedIndex];
             baseRegisterDisplay.Text = _registerBaseView.ToString();
 
             registerListView.Items.Clear();
@@ -228,7 +192,7 @@ namespace Debugger
 
                 data[0] = registerIndex.ToString();
 
-                uint registerData = _registers[smSelector.SelectedIndex, registerIndex];
+                uint registerData = _dataManager.Registers[smSelector.SelectedIndex, registerIndex];
 
                 if(displayFpCheckBox.Checked)
                 {
@@ -239,7 +203,7 @@ namespace Debugger
                     data[1] = "0x" + registerData.ToString("X8");
                 }
 
-                data[2] = _registerContestion[smSelector.SelectedIndex, registerIndex].ToString();
+                data[2] = _dataManager.RegisterContestion[smSelector.SelectedIndex, registerIndex].ToString();
 
                 registerListView.Items.Add(new ListViewItem(data));
             }

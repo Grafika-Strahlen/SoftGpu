@@ -2,6 +2,7 @@
 #include <ConPrinter.hpp>
 #include "DebugManager.hpp"
 #include "InputAssembler.hpp"
+#include "PCIControlRegisters.hpp"
 #include "MMU.hpp"
 
 static Processor processor;
@@ -21,12 +22,20 @@ static inline constexpr u64 ExecutableStart = 0x10000;
 [[maybe_unused]] static void TestMul2FReplicated() noexcept;
 [[maybe_unused]] static void TestMul2FReplicatedDualDispatch() noexcept;
 
+namespace tau::test {
+extern void RunTests() noexcept;
+}
+
 int main(int argCount, char* args[])
 {
     UNUSED2(argCount, args);
     Console::Init();
 
-    if(!SUCCEEDED(DebugManager::Create(&GlobalDebug, L"\\\\.\\pipe\\gpu-pipe")))
+#if 0
+    tau::test::RunTests();
+#endif
+
+    if(!SUCCEEDED(DebugManager::Create(&GlobalDebug, L"\\\\.\\pipe\\gpu-pipe-step", L"\\\\.\\pipe\\gpu-pipe-info", true)))
     {
         ConPrinter::Print("Debug not enabled.\n");
     }
@@ -58,7 +67,7 @@ int main(int argCount, char* args[])
     RawBuffer = reinterpret_cast<PageEntry*>(alignedVirtualAddress + GpuPageSize * 2);
     ExecutableBuffer = reinterpret_cast<PageEntry*>(alignedVirtualAddress + GpuPageSize * 3);
 
-    ::std::memset(alignedVirtualAllocation, 0, sizeof(GpuPageSize) * 4);
+    (void) ::std::memset(alignedVirtualAllocation, 0, sizeof(GpuPageSize) * 4);
 
     PageTable0[0].Present = true;
     PageTable0[0].ReadWrite = true;
@@ -93,12 +102,23 @@ int main(int argCount, char* args[])
     PageDirectory[0].PhysicalAddress = (alignedVirtualAddress >> 16) + 1;
     PageDirectory[0].Reserved1 = 0;
 
+    constexpr u32 bar0 = 0;
+
+    u32 resetRead;
+    processor.PciMemRead(bar0 + REGISTER_RESET, 4, &resetRead);
+
     // TestMove();
+    // processor.PciMemRead(bar0 + REGISTER_RESET, 4, &resetRead);
     // TestAdd1F();
+    // processor.PciMemRead(bar0 + REGISTER_RESET, 4, &resetRead);
     // TestAdd2F();
+    // processor.PciMemRead(bar0 + REGISTER_RESET, 4, &resetRead);
     // TestAdd2FReplicated();
+    // processor.PciMemRead(bar0 + REGISTER_RESET, 4, &resetRead);
     // TestMul2FReplicated();
+    // processor.PciMemRead(bar0 + REGISTER_RESET, 4, &resetRead);
     TestMul2FReplicatedDualDispatch();
+    processor.PciMemRead(bar0 + REGISTER_RESET, 4, &resetRead);
 
     VirtualFree(virtualAllocation, pageCount * 4096, MEM_RELEASE);
 

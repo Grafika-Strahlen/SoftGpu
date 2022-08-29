@@ -60,7 +60,7 @@ public:
     }
 };
 
-class MemoryManager;
+class CacheController;
 
 template<uSys IndexBits, uSys SetLineCount>
 class Cache final
@@ -68,7 +68,7 @@ class Cache final
     DEFAULT_DESTRUCT(Cache);
     DELETE_CM(Cache);
 public:
-    Cache(MemoryManager* const memoryManager, const u32 lineIndex) noexcept
+    Cache(CacheController* const memoryManager, const u32 lineIndex) noexcept
         : m_MemoryManager(memoryManager)
         , m_LineIndex(lineIndex)
         , m_Sets{ }
@@ -114,7 +114,7 @@ private:
 
     [[nodiscard]] CacheLine<IndexBits>* GetFreeCacheLine(u64 address, bool external) noexcept;
 private:
-    MemoryManager* m_MemoryManager;
+    CacheController* m_MemoryManager;
     u32 m_LineIndex;
     CacheSet<IndexBits, SetLineCount> m_Sets[1 << IndexBits];
     u32 m_RollingSelector;
@@ -122,10 +122,10 @@ private:
 
 class Processor;
 
-class MemoryManager final
+class CacheController final
 {
 public:
-    MemoryManager(Processor* const processor) noexcept
+    CacheController(Processor* const processor) noexcept
         : m_Processor(processor)
         , m_L0Caches{ { this, 0 }, { this, 1 }, { this, 2 }, { this, 3 } }
         // , L1Cache(this, 4)

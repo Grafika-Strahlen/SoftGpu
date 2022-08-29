@@ -24,102 +24,203 @@ class DebugManager final
 public:
     ~DebugManager() noexcept
     {
-        if(m_Pipe != INVALID_HANDLE_VALUE)
+        if(m_SteppingPipe != INVALID_HANDLE_VALUE)
         {
-            CloseHandle(m_Pipe);
+            CloseHandle(m_SteppingPipe);
+            m_SteppingPipe = INVALID_HANDLE_VALUE;
+        }
+
+        if(m_InfoPipe != INVALID_HANDLE_VALUE)
+        {
+            CloseHandle(m_InfoPipe);
+            m_InfoPipe = INVALID_HANDLE_VALUE;
         }
     }
 
     [[nodiscard]] bool IsAttached() const noexcept { return m_IsAttached; }
     
-    [[nodiscard]] bool Stepping() const noexcept { return m_Stepping; }
+    [[nodiscard]] bool Stepping() const noexcept { return m_Stepping && !m_DisableStepping; }
     [[nodiscard]] bool& Stepping() noexcept { return m_Stepping; }
 
+    [[nodiscard]] bool DisableStepping() const noexcept { return m_DisableStepping; }
+
     template<typename T>
-    void WriteRaw(const T& data) noexcept
+    void WriteRawStepping(const T& data) noexcept
     {
-        if(m_Pipe == INVALID_HANDLE_VALUE)
+        if(m_SteppingPipe == INVALID_HANDLE_VALUE)
         {
             return;
         }
 
-        (void) WriteFile(m_Pipe, &data, sizeof(data), nullptr, nullptr);
+        (void) WriteFile(m_SteppingPipe, &data, sizeof(data), nullptr, nullptr);
     }
 
-    void WriteRaw(const void* data, const u32 dataSize) noexcept
+    void WriteRawStepping(const void* data, const u32 dataSize) noexcept
     {
-        if(m_Pipe == INVALID_HANDLE_VALUE)
+        if(m_SteppingPipe == INVALID_HANDLE_VALUE)
         {
             return;
         }
-        
-        (void) WriteFile(m_Pipe, data, dataSize, nullptr, nullptr);
+
+        (void) WriteFile(m_SteppingPipe, data, dataSize, nullptr, nullptr);
     }
 
     template<typename T>
-    void Write(const u32 dataCode, const T& data) noexcept
+    void WriteStepping(const u32 dataCode, const T& data) noexcept
     {
-        if(m_Pipe == INVALID_HANDLE_VALUE)
+        if(m_SteppingPipe == INVALID_HANDLE_VALUE)
         {
             return;
         }
 
         constexpr u32 dataSize = sizeof(data);
 
-        (void) WriteFile(m_Pipe, &dataCode, sizeof(dataCode), nullptr, nullptr);
-        (void) WriteFile(m_Pipe, &dataSize, sizeof(dataSize), nullptr, nullptr);
-        (void) WriteFile(m_Pipe, &data, dataSize, nullptr, nullptr);
+        (void) WriteFile(m_SteppingPipe, &dataCode, sizeof(dataCode), nullptr, nullptr);
+        (void) WriteFile(m_SteppingPipe, &dataSize, sizeof(dataSize), nullptr, nullptr);
+        (void) WriteFile(m_SteppingPipe, &data, dataSize, nullptr, nullptr);
     }
 
-    void Write(const u32 dataCode, const void* data, const u32 dataSize) noexcept
+    void WriteStepping(const u32 dataCode, const void* data, const u32 dataSize) noexcept
     {
-        if(m_Pipe == INVALID_HANDLE_VALUE)
+        if(m_SteppingPipe == INVALID_HANDLE_VALUE)
         {
             return;
         }
 
-        (void) WriteFile(m_Pipe, &dataCode, sizeof(dataCode), nullptr, nullptr);
-        (void) WriteFile(m_Pipe, &dataSize, sizeof(dataSize), nullptr, nullptr);
-        (void) WriteFile(m_Pipe, data, dataSize, nullptr, nullptr);
+        (void) WriteFile(m_SteppingPipe, &dataCode, sizeof(dataCode), nullptr, nullptr);
+        (void) WriteFile(m_SteppingPipe, &dataSize, sizeof(dataSize), nullptr, nullptr);
+        (void) WriteFile(m_SteppingPipe, data, dataSize, nullptr, nullptr);
     }
 
-    void Write(const u32 dataCode) noexcept
+    void WriteStepping(const u32 dataCode) noexcept
     {
-        if(m_Pipe == INVALID_HANDLE_VALUE)
+        if(m_SteppingPipe == INVALID_HANDLE_VALUE)
         {
             return;
         }
 
         constexpr u32 dataSize = 0;
 
-        (void) WriteFile(m_Pipe, &dataCode, sizeof(dataCode), nullptr, nullptr);
-        (void) WriteFile(m_Pipe, &dataSize, sizeof(dataSize), nullptr, nullptr);
+        (void) WriteFile(m_SteppingPipe, &dataCode, sizeof(dataCode), nullptr, nullptr);
+        (void) WriteFile(m_SteppingPipe, &dataSize, sizeof(dataSize), nullptr, nullptr);
     }
 
     template<typename T>
-    [[nodiscard]] T Read() noexcept
+    [[nodiscard]] T ReadStepping() noexcept
     {
-        if(m_Pipe == INVALID_HANDLE_VALUE)
+        if(m_SteppingPipe == INVALID_HANDLE_VALUE)
         {
             return {};
         }
 
         T ret;
         DWORD numBytesRead;
-        (void) ReadFile(m_Pipe, &ret, sizeof(ret), &numBytesRead, nullptr);
+        (void) ReadFile(m_SteppingPipe, &ret, sizeof(ret), &numBytesRead, nullptr);
 
         return ret;
     }
 
-    i32 Read(void* const buffer, const u32 dataSize) noexcept
+    i32 ReadStepping(void* const buffer, const u32 dataSize) noexcept
     {
-        if(m_Pipe == INVALID_HANDLE_VALUE)
+        if(m_SteppingPipe == INVALID_HANDLE_VALUE)
+        {
+            return {};
+        }
+
+        DWORD numBytesRead;
+        if(!ReadFile(m_SteppingPipe, buffer, dataSize, &numBytesRead, nullptr))
+        {
+            return -1;
+        }
+
+        return static_cast<i32>(numBytesRead);
+    }
+
+    template<typename T>
+    void WriteRawInfo(const T& data) noexcept
+    {
+        if(m_InfoPipe == INVALID_HANDLE_VALUE)
+        {
+            return;
+        }
+
+        (void) WriteFile(m_InfoPipe, &data, sizeof(data), nullptr, nullptr);
+    }
+
+    void WriteRawInfo(const void* data, const u32 dataSize) noexcept
+    {
+        if(m_InfoPipe == INVALID_HANDLE_VALUE)
+        {
+            return;
+        }
+        
+        (void) WriteFile(m_InfoPipe, data, dataSize, nullptr, nullptr);
+    }
+
+    template<typename T>
+    void WriteInfo(const u32 dataCode, const T& data) noexcept
+    {
+        if(m_InfoPipe == INVALID_HANDLE_VALUE)
+        {
+            return;
+        }
+
+        constexpr u32 dataSize = sizeof(data);
+
+        (void) WriteFile(m_InfoPipe, &dataCode, sizeof(dataCode), nullptr, nullptr);
+        (void) WriteFile(m_InfoPipe, &dataSize, sizeof(dataSize), nullptr, nullptr);
+        (void) WriteFile(m_InfoPipe, &data, dataSize, nullptr, nullptr);
+    }
+
+    void WriteInfo(const u32 dataCode, const void* data, const u32 dataSize) noexcept
+    {
+        if(m_InfoPipe == INVALID_HANDLE_VALUE)
+        {
+            return;
+        }
+
+        (void) WriteFile(m_InfoPipe, &dataCode, sizeof(dataCode), nullptr, nullptr);
+        (void) WriteFile(m_InfoPipe, &dataSize, sizeof(dataSize), nullptr, nullptr);
+        (void) WriteFile(m_InfoPipe, data, dataSize, nullptr, nullptr);
+    }
+
+    void WriteInfo(const u32 dataCode) noexcept
+    {
+        if(m_InfoPipe == INVALID_HANDLE_VALUE)
+        {
+            return;
+        }
+
+        constexpr u32 dataSize = 0;
+
+        (void) WriteFile(m_InfoPipe, &dataCode, sizeof(dataCode), nullptr, nullptr);
+        (void) WriteFile(m_InfoPipe, &dataSize, sizeof(dataSize), nullptr, nullptr);
+    }
+
+    template<typename T>
+    [[nodiscard]] T ReadInfo() noexcept
+    {
+        if(m_InfoPipe == INVALID_HANDLE_VALUE)
+        {
+            return {};
+        }
+
+        T ret;
+        DWORD numBytesRead;
+        (void) ReadFile(m_InfoPipe, &ret, sizeof(ret), &numBytesRead, nullptr);
+
+        return ret;
+    }
+
+    i32 ReadInfo(void* const buffer, const u32 dataSize) noexcept
+    {
+        if(m_InfoPipe == INVALID_HANDLE_VALUE)
         {
             return {};
         }
         
         DWORD numBytesRead;
-        if(!ReadFile(m_Pipe, buffer, dataSize, &numBytesRead, nullptr))
+        if(!ReadFile(m_InfoPipe, buffer, dataSize, &numBytesRead, nullptr))
         {
             return -1;
         }
@@ -128,7 +229,7 @@ public:
     }
 public:
     template<typename CharT>
-    static HRESULT Create(DebugManager* const manager, const DynStringT<CharT>& pipeServer) noexcept
+    static HRESULT Create(DebugManager* const manager, const DynStringT<CharT>& steppingPipeServer, const DynStringT<CharT>& infoPipeServer, const bool disableStepping) noexcept
     {
         // Check that the manager is valid.
         if(!manager)
@@ -137,13 +238,15 @@ public:
         }
 
         // Convert the pipe server to wide char.
-        const WDynString wPipeServer = StringCast<CharT>(pipeServer);
+        const WDynString wSteppingPipeServer = StringCast<CharT>(steppingPipeServer);
+        const WDynString wInfoPipeServer = StringCast<CharT>(infoPipeServer);
 
         // Open the file handle.
-        const HANDLE pipeHandle = CreateFileW(wPipeServer.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+        const HANDLE steppingPipeHandle = CreateFileW(wSteppingPipeServer.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
+        const HANDLE infoPipeHandle = CreateFileW(wInfoPipeServer.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
 
         // If we failed to open the file, report.
-        if(pipeHandle == INVALID_HANDLE_VALUE)
+        if(steppingPipeHandle == INVALID_HANDLE_VALUE || infoPipeHandle == INVALID_HANDLE_VALUE)
         {
             return E_FAIL;
         }
@@ -152,21 +255,21 @@ public:
         manager->~DebugManager();
 
         // Initialize the new debug manager.
-        new(reinterpret_cast<void*>(manager)) DebugManager(pipeHandle);
+        new(reinterpret_cast<void*>(manager)) DebugManager(steppingPipeHandle, infoPipeHandle, disableStepping);
 
         {
-            const u32 dataCode = manager->Read<u32>();
-            const u32 dataSize = manager->Read<u32>();
+            const u32 dataCode = manager->ReadStepping<u32>();
+            const u32 dataSize = manager->ReadStepping<u32>();
 
             if(dataCode == DebugCodeStartPaused)
             {
-                const bool startPaused = manager->Read<bool>();
+                const bool startPaused = manager->ReadStepping<bool>();
                 manager->Stepping() = startPaused;
             }
             else
             {
                 void* buffer = operator new(dataSize);
-                (void) manager->Read(buffer, dataSize);
+                (void) manager->ReadStepping(buffer, dataSize);
                 operator delete(buffer);
             }
         }
@@ -174,21 +277,25 @@ public:
         return S_OK;
     }
 
-    template<typename CharT, uSys Len>
-    static HRESULT Create(DebugManager* manager, const CharT(&str)[Len]) noexcept
+    template<typename CharT, uSys SteppingLen, uSys InfoLen>
+    static HRESULT Create(DebugManager* manager, const CharT(&steppingPath)[SteppingLen], const CharT(&infoPath)[InfoLen], const bool disableStepping) noexcept
     {
-        return Create(manager, DynStringT<CharT>::FromStatic(str));
+        return Create(manager, DynStringT<CharT>::FromStatic(steppingPath), DynStringT<CharT>::FromStatic(infoPath), disableStepping);
     }
 private:
-    DebugManager(const HANDLE pipe) noexcept
-        : m_Pipe(pipe)
+    DebugManager(const HANDLE steppingPipe, const HANDLE infoPipe, const bool disableStepping) noexcept
+        : m_SteppingPipe(steppingPipe)
+        , m_InfoPipe(infoPipe)
         , m_IsAttached(true)
         , m_Stepping(false)
+        , m_DisableStepping(disableStepping)
     { }
 private:
-    HANDLE m_Pipe;
+    HANDLE m_SteppingPipe;
+    HANDLE m_InfoPipe;
     bool m_IsAttached = false;
     bool m_Stepping;
+    bool m_DisableStepping;
 };
 
 extern DebugManager GlobalDebug;

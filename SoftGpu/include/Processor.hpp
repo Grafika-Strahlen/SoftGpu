@@ -6,6 +6,7 @@
 #include "PCIControlRegisters.hpp"
 #include "Cache.hpp"
 #include "DebugManager.hpp"
+#include "PCIController.hpp"
 
 class Processor final
 {
@@ -13,7 +14,7 @@ class Processor final
     DELETE_CM(Processor);
 public:
     Processor() noexcept
-        : m_PCIRegisters(this)
+        : m_PciRegisters(this)
         , m_MemoryManager(this)
         , m_SMs { { this, 0 }, { this, 1 }, { this, 2 }, { this, 3 } }
         , m_ClockCycle(0)
@@ -21,7 +22,7 @@ public:
 
     void Reset()
     {
-        m_PCIRegisters.Reset();
+        m_PciRegisters.Reset();
         m_MemoryManager.Reset();
         m_SMs[0].Reset();
         m_SMs[1].Reset();
@@ -35,14 +36,16 @@ public:
         ++m_ClockCycle;
         if(GlobalDebug.IsAttached())
         {
-            GlobalDebug.Write(DebugCodeReportTiming, &m_ClockCycle, sizeof(m_ClockCycle));
+            GlobalDebug.WriteInfo(DebugCodeReportTiming, &m_ClockCycle, sizeof(m_ClockCycle));
 
-            if(!GlobalDebug.Stepping())
+            if(!GlobalDebug.Stepping() && !GlobalDebug.DisableStepping())
             {
-                GlobalDebug.Write(DebugCodeCheckForPause);
+                GlobalDebug.WriteStepping(DebugCodeCheckForPause);
 
-                const u32 dataCode = GlobalDebug.Read<u32>();
-                const u32 dataSize = GlobalDebug.Read<u32>();
+                const u32 dataCode = GlobalDebug.ReadStepping<u32>();
+                const u32 dataSize = GlobalDebug.ReadStepping<u32>();
+
+                (void) dataSize;
 
                 if(dataCode == DebugCodePause)
                 {
@@ -53,12 +56,14 @@ public:
             if(GlobalDebug.Stepping())
             {
                 ConPrinter::Print("Waiting for Step.\n");
-                GlobalDebug.Write(DebugCodeReportStepReady);
+                GlobalDebug.WriteStepping(DebugCodeReportStepReady);
 
                 while(true)
                 {
-                    const u32 dataCode = GlobalDebug.Read<u32>();
-                    const u32 dataSize = GlobalDebug.Read<u32>();
+                    const u32 dataCode = GlobalDebug.ReadStepping<u32>();
+                    const u32 dataSize = GlobalDebug.ReadStepping<u32>();
+
+                    (void) dataSize;
 
                     if(dataCode == DebugCodeStep)
                     {
@@ -98,8 +103,10 @@ public:
 
     [[nodiscard]] u32 MemReadPhy(const u64 address, const bool external = false) noexcept
     {
+        (void) external;
+
         u32 ret;
-        // The memory granularity is 32 bits, thus we'll adjust to an 8 bit granularity for x86.
+        // The memory granularity is 32 bits, thus we'll adjust to an 1 byte granularity for x86.
         const uintptr_t addressX86 = address << 2;
         (void) ::std::memcpy(&ret, reinterpret_cast<void*>(addressX86), sizeof(u32));
         return ret;
@@ -107,11 +114,77 @@ public:
     
     void MemWritePhy(const u64 address, const u32 value, const bool external = false) noexcept
     {
-        // The memory granularity is 32 bits, thus we'll adjust to an 8 bit granularity for x86.
+        (void) external;
+
+        // The memory granularity is 32 bits, thus we'll adjust to an 1 byte granularity for x86.
         const uintptr_t addressX86 = address << 2;
         (void) ::std::memcpy(reinterpret_cast<void*>(addressX86), &value, sizeof(u32));
     }
-    
+
+    [[nodiscard]] u32 PciConfigRead(const u16 address, const u8 size) noexcept
+    {
+        return m_PciController.ConfigRead(address, size);
+    }
+
+    void PciConfigWrite(const u16 address, const u8 size, const u32 value) noexcept
+    {
+        m_PciController.ConfigWrite(address, size, value);
+    }
+
+    u16 PciMemRead(const u64 address, const u16 size, u32* const data) noexcept
+    {
+        const u8 bar = m_PciController.GetBARFromAddress(address);
+
+        if(bar == 0xFF)
+        {
+            return 0;
+        }
+
+        const u64 addressOffset = m_PciController.GetBAROffset(address, bar);
+
+        if(bar == 0)
+        {
+            data[0] = m_PciRegisters.Read(static_cast<u32>(addressOffset));
+            return 1;
+        }
+
+        if(bar == 1)
+        {
+            for(u16 i = 0; i < size; ++i)
+            {
+                data[i] = MemReadPhy(addressOffset + i);
+            }
+
+            return size;
+        }
+
+        return 0;
+    }
+
+    void PciMemWrite(const u64 address, const u16 size, const u32* const data) noexcept
+    {
+        const u8 bar = m_PciController.GetBARFromAddress(address);
+
+        if(bar == 0xFF)
+        {
+            return;
+        }
+
+        const u64 addressOffset = m_PciController.GetBAROffset(address, bar);
+
+        if(bar == 0)
+        {
+            m_PciRegisters.Write(static_cast<u32>(addressOffset), data[0]);
+        }
+        else if(bar == 1)
+        {
+            for(u16 i = 0; i < size; ++i)
+            {
+                MemWritePhy(addressOffset + i, data[i]);
+            }
+        }
+    }
+
     [[nodiscard]] u32 Read(const u32 coreIndex, const u64 address, const bool cacheDisable = false, const bool external = false) noexcept
     {
         if(cacheDisable)
@@ -158,8 +231,9 @@ public:
         m_SMs[coreIndex].FlushCache();
     }
 private:
-    PCIControlRegisters m_PCIRegisters;
-    MemoryManager m_MemoryManager;
+    PciController m_PciController;
+    PciControlRegisters m_PciRegisters;
+    CacheController m_MemoryManager;
     StreamingMultiprocessor m_SMs[4];
     u32 m_ClockCycle;
 };

@@ -203,9 +203,7 @@ public:
         m_TextureSaturationTracker = 0;
         m_TotalIterationsTracker = 0;
     }
-
-    [[nodiscard]] u32 BaseRegister(const u32 index) const noexcept { return m_BaseRegisters[index]; }
-
+    
     void ResetCycle() noexcept;
 
     void Clock() noexcept;
@@ -338,14 +336,14 @@ public:
     {
         if(GlobalDebug.IsAttached())
         {
-            GlobalDebug.WriteRaw(DebugCodeReportBaseRegister);
-            GlobalDebug.WriteRaw(6);
-            GlobalDebug.WriteRaw(smIndex);
-            GlobalDebug.WriteRaw(m_Index);
-            GlobalDebug.WriteRaw(m_BaseRegisters[0]);
-            GlobalDebug.WriteRaw(m_BaseRegisters[1]);
-            GlobalDebug.WriteRaw(m_BaseRegisters[2]);
-            GlobalDebug.WriteRaw(m_BaseRegisters[3]);
+            GlobalDebug.WriteRawInfo(DebugCodeReportBaseRegister);
+            GlobalDebug.WriteRawInfo(6);
+            GlobalDebug.WriteRawInfo(smIndex);
+            GlobalDebug.WriteRawInfo(m_Index);
+            GlobalDebug.WriteRawInfo<u32>(m_BaseRegisters[0]);
+            GlobalDebug.WriteRawInfo<u32>(m_BaseRegisters[1]);
+            GlobalDebug.WriteRawInfo<u32>(m_BaseRegisters[2]);
+            GlobalDebug.WriteRawInfo<u32>(m_BaseRegisters[3]);
         }
     }
 private:

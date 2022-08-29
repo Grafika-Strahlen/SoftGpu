@@ -24,9 +24,9 @@ This emulates the hardware of a GPU entirely in software. To make it easier to c
 
 ## PCI Spec
 
-BAR 0&1 is a 64  bit BAR to access the main graphics memory.
+BAR 0 is a 32 bit BAR to access the device registers.
 
-BAR 2&4 is a 64 bit BAR to access the device registers.
+BAR 1&2 is a 64  bit BAR to access the main graphics memory.
 
 ### Registers
 
@@ -47,9 +47,9 @@ BAR 2&4 is a 64 bit BAR to access the device registers.
 | Processor |
 *--+--------*
    |
-   |  .----------------.
-   +--| Memory Manager |
-   |  *--+-------------*
+   |  .------------------.
+   +--| Cache Controller |
+   |  *--+---------------*
    |     |
    |     |  .--------------------------------.
    |     +--| L1 Cache (Not Implemented Yet) |
@@ -59,25 +59,37 @@ BAR 2&4 is a 64 bit BAR to access the device registers.
    |     \--| L0 Cache 0..3 |
    |        *---------------*
    |
+   |  .----------------.
+   +--| PCI Controller |
+   |  *--+-------------*
+   |     |
+   |     |  .-----------------------.
+   |     \--| PCI Control Registers |
+   |        *-----------------------*
+   |
    |  .-------------------------------.
    \--| Streaming Multiprocessor 0..3 |
       *--+----------------------------*
+         |
+         |  .---------------------------------.
+         +--| Memory Management Unit (Paging) |
+         |  *---------------------------------*
          |
          |  .---------------.
          +--| Register File |
          |  *---------------*
          |
          |  .-----------------------------------------.
-         +--| Instruction Cache (Not implemented yet) |
+         +--| Instruction Cache (Not Implemented Yet) |
          |  *-----------------------------------------*
          |
          |  .-------------------------------------.
-         +--| Texture Cache (Not implemented yet) |
+         +--| Texture Cache (Not Implemented Yet) |
          |  *-------------------------------------*
          |
-         |  .---------------.
-         +--| Dispatch Unit |
-         |  *---------------*
+         |  .--------------------.
+         +--| Dispatch Unit 0..1 |
+         |  *--------------------*
          |
          |  .-----------------.
          +--| Load/Store 0..3 |
