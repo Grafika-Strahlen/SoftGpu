@@ -5,6 +5,7 @@
 #include "DispatchUnit.hpp"
 #include "Core.hpp"
 #include "DebugManager.hpp"
+#include "RegisterAllocator.hpp"
 #include "MMU.hpp"
 
 class Processor;
@@ -196,18 +197,19 @@ public:
 
     void FlushCache() noexcept;
 
-    u16 AllocateRegisters(const u32 registerCount) noexcept
+    u16 AllocateRegisters(const u16 registerCount) noexcept
     {
-        return 0;
+        return m_RegisterAllocator.AllocateRegisterBlock(registerCount);
     }
 
-    void FreeRegisters(const u32 registerCount, const u16 registerId) noexcept
+    void FreeRegisters(const u16 registerBase, const u16 registerCount) noexcept
     {
-        
+        m_RegisterAllocator.FreeRegisterBlock(registerBase, registerCount);
     }
 private:
     Processor* m_Processor;
     RegisterFile m_RegisterFile;
+    RegisterAllocator m_RegisterAllocator;
     Mmu m_Mmu;
     LoadStore m_LdSt[4];
     FpCore m_FpCores[8];

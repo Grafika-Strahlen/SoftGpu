@@ -8,7 +8,7 @@ static void TestAllocSingle() noexcept;
 static void TestStochasticInOrderAlloc() noexcept;
 static void TestStochasticMixedOrderAlloc() noexcept;
 
-namespace tau::test {
+namespace tau::test::register_allocator {
 
 void RunTests() noexcept
 {

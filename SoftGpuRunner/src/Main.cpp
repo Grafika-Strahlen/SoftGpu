@@ -5,15 +5,18 @@
 #include "PCIControlRegisters.hpp"
 #include "MMU.hpp"
 
-static Processor processor;
+#include <numeric>
 
+static Processor processor;
 DebugManager GlobalDebug;
 
-static PageEntry* PageDirectory;
-static PageEntry* PageTable0;
-static void* RawBuffer;
-static void* ExecutableBuffer;
-static inline constexpr u64 ExecutableStart = 0x10000;
+static u32 BAR0 = 0;
+static u64 BAR1 = 0;
+
+static void PreInit() noexcept;
+static int InitBAR() noexcept;
+static int InitMmu() noexcept;
+static void ReleaseMmu() noexcept;
 
 [[maybe_unused]] static void TestMove() noexcept;
 [[maybe_unused]] static void TestAdd1F() noexcept;
@@ -22,119 +25,75 @@ static inline constexpr u64 ExecutableStart = 0x10000;
 [[maybe_unused]] static void TestMul2FReplicated() noexcept;
 [[maybe_unused]] static void TestMul2FReplicatedDualDispatch() noexcept;
 
-namespace tau::test {
+namespace tau::test::register_allocator {
 extern void RunTests() noexcept;
 }
 
 int main(int argCount, char* args[])
 {
     UNUSED2(argCount, args);
-    Console::Init();
+    PreInit();
 
 #if 0
-    tau::test::RunTests();
+    ::tau::test::register_allocator::RunTests();
 #endif
 
-    if(!SUCCEEDED(DebugManager::Create(&GlobalDebug, L"\\\\.\\pipe\\gpu-pipe-step", L"\\\\.\\pipe\\gpu-pipe-info", true)))
     {
-        ConPrinter::Print("Debug not enabled.\n");
+        const int barInit = InitBAR();
+        if(barInit)
+        {
+            return barInit;
+        }
     }
 
-    // Two blocks, 1 block of usable memory, 1 block of executable memory, plus enough slack to align to the 64K boundary.
-    constexpr u64 pageCount = (GpuPageSize * 5) / (4096) - 1;
-
-    void* const virtualAllocation = VirtualAlloc(nullptr, pageCount * 4096, MEM_RESERVE, PAGE_READWRITE);
-
-    if(!virtualAllocation)
     {
-        ConPrinter::Print("Failed to reserve virtual pages.\n");
-        return -1;
+        const int mmuInit = InitMmu();
+        if(mmuInit)
+        {
+            return mmuInit;
+        }
     }
-
-    const u64 virtualAllocAddress = reinterpret_cast<u64>(virtualAllocation);
-    const u64 alignedVirtualAddress = virtualAllocAddress + (-virtualAllocAddress & (GpuPageSize - 1));
-
-    u8* alignedVirtualAllocation = reinterpret_cast<u8*>(alignedVirtualAddress);
-
-    if(!VirtualAlloc(alignedVirtualAllocation, GpuPageSize * 4, MEM_COMMIT, PAGE_READWRITE))
-    {
-        ConPrinter::Print("Failed to commit virtual pages.\n");
-        return -2;
-    }
-
-    PageDirectory = reinterpret_cast<PageEntry*>(alignedVirtualAddress);
-    PageTable0 = reinterpret_cast<PageEntry*>(alignedVirtualAddress + GpuPageSize);
-    RawBuffer = reinterpret_cast<PageEntry*>(alignedVirtualAddress + GpuPageSize * 2);
-    ExecutableBuffer = reinterpret_cast<PageEntry*>(alignedVirtualAddress + GpuPageSize * 3);
-
-    (void) ::std::memset(alignedVirtualAllocation, 0, sizeof(GpuPageSize) * 4);
-
-    PageTable0[0].Present = true;
-    PageTable0[0].ReadWrite = true;
-    PageTable0[0].Execute = false;
-    PageTable0[0].WriteThrough = false;
-    PageTable0[0].CacheDisable = false;
-    PageTable0[0].Accessed = false;
-    PageTable0[0].Dirty = false;
-    PageTable0[0].External = false;
-    PageTable0[0].PhysicalAddress = (alignedVirtualAddress >> 16) + 2;
-    PageTable0[0].Reserved1 = 0;
-
-    PageTable0[1].Present = true;
-    PageTable0[1].ReadWrite = false;
-    PageTable0[1].Execute = true;
-    PageTable0[1].WriteThrough = false;
-    PageTable0[1].CacheDisable = false;
-    PageTable0[1].Accessed = false;
-    PageTable0[1].Dirty = false;
-    PageTable0[1].External = false;
-    PageTable0[1].PhysicalAddress = (alignedVirtualAddress >> 16) + 3;
-    PageTable0[1].Reserved1 = 0;
-
-    PageDirectory[0].Present = true;
-    PageDirectory[0].ReadWrite = true;
-    PageDirectory[0].Execute = false;
-    PageDirectory[0].WriteThrough = false;
-    PageDirectory[0].CacheDisable = false;
-    PageDirectory[0].Accessed = false;
-    PageDirectory[0].Dirty = false;
-    PageDirectory[0].External = false;
-    PageDirectory[0].PhysicalAddress = (alignedVirtualAddress >> 16) + 1;
-    PageDirectory[0].Reserved1 = 0;
-
-    constexpr u32 bar0 = 0;
 
     u32 resetRead;
-    processor.PciMemRead(bar0 + REGISTER_RESET, 4, &resetRead);
+    processor.PciMemRead(BAR0 + REGISTER_RESET, 4, &resetRead);
 
     // TestMove();
-    // processor.PciMemRead(bar0 + REGISTER_RESET, 4, &resetRead);
+    // processor.PciMemRead(BAR0 + REGISTER_RESET, 4, &resetRead);
     // TestAdd1F();
-    // processor.PciMemRead(bar0 + REGISTER_RESET, 4, &resetRead);
+    // processor.PciMemRead(BAR0 + REGISTER_RESET, 4, &resetRead);
     // TestAdd2F();
-    // processor.PciMemRead(bar0 + REGISTER_RESET, 4, &resetRead);
+    // processor.PciMemRead(BAR0 + REGISTER_RESET, 4, &resetRead);
     // TestAdd2FReplicated();
-    // processor.PciMemRead(bar0 + REGISTER_RESET, 4, &resetRead);
+    // processor.PciMemRead(BAR0 + REGISTER_RESET, 4, &resetRead);
     // TestMul2FReplicated();
-    // processor.PciMemRead(bar0 + REGISTER_RESET, 4, &resetRead);
+    // processor.PciMemRead(BAR0 + REGISTER_RESET, 4, &resetRead);
     TestMul2FReplicatedDualDispatch();
-    processor.PciMemRead(bar0 + REGISTER_RESET, 4, &resetRead);
+    processor.PciMemRead(BAR0 + REGISTER_RESET, 4, &resetRead);
 
-    VirtualFree(virtualAllocation, pageCount * 4096, MEM_RELEASE);
+    ReleaseMmu();
 
     return 0;
 }
+
+static PageEntry* PageDirectory = nullptr;
+static PageEntry* PageTable0 = nullptr;
+static void* RawBuffer = nullptr;
+static void* ExecutableBuffer = nullptr;
+
+static inline constexpr u64 ExecutableStart = 0x10000;
 
 static void TestMove() noexcept
 {
     processor.LoadPageDirectoryPointer(0, PageDirectory);
 
+    const u32 initialValue = 42;
+
+    processor.PciMemWrite(BAR1 + GpuPageSize * 2 + 0, 4, &initialValue);
+
     u32* const dataBuffer = reinterpret_cast<u32*>(RawBuffer);
-
-    u32* const pInitialValue = &dataBuffer[0];
+    
     u32* const pStorageLocation = &dataBuffer[1];
-
-    *pInitialValue = 42;
+    
     *pStorageLocation = 0xCDCDCDCD;
     
     constexpr u8 program[] =
@@ -151,8 +110,8 @@ static void TestMove() noexcept
 
     (void) ::std::memcpy(ExecutableBuffer, program, sizeof(program));
     
-    ConPrinter::PrintLn("Value to copy: {}", *pInitialValue);
-    ConPrinter::PrintLn("Value at storage location: {}", *pStorageLocation);
+    ConPrinter::PrintLn("Value to copy: {}", initialValue);
+    ConPrinter::PrintLn("Value at storage location: 0x{X}", *pStorageLocation);
 
     processor.TestLoadProgram(0, 0, 0x1, ExecutableStart);
 
@@ -161,14 +120,14 @@ static void TestMove() noexcept
         processor.Clock();
     }
     
-    ConPrinter::PrintLn("Value to copy: {}", *pInitialValue);
+    ConPrinter::PrintLn("Value to copy: {}", initialValue);
     ConPrinter::PrintLn("Value at storage location: {}", *pStorageLocation);
 }
 
 static void TestAdd1F() noexcept
 {
     processor.LoadPageDirectoryPointer(0, PageDirectory);
-
+    
     f32* const dataBuffer = reinterpret_cast<f32*>(RawBuffer);
 
     f32* const pValueA = &dataBuffer[0];
@@ -605,4 +564,178 @@ static void TestMul2FReplicatedDualDispatch() noexcept
     ConPrinter::PrintLn("Int/FP Saturation: {}:{} ({})", outData[0].IntFpSaturation, outData[0].IntFpTotals, intFpPercent);
     ConPrinter::PrintLn("Total Core Saturation: {}:{} ({})", totalCoreSaturation, static_cast<u64>(totalCoreTotals), totalCorePercent);
     ConPrinter::PrintLn("LD/ST Saturation: {}:{} ({})", outData[0].LdStSaturation, outData[0].LdStTotals, ldStPercent);
+}
+
+static void PreInit() noexcept
+{
+    Console::Init();
+
+    if(SUCCEEDED(DebugManager::Create(&GlobalDebug, L"\\\\.\\pipe\\gpu-pipe-step", L"\\\\.\\pipe\\gpu-pipe-info", true)))
+    {
+        ConPrinter::Print("Debug enabled.\n");
+    }
+}
+
+// Four blocks, 1 block for the Page Directory, 1 block for the Page Table, 1 block of usable memory, 1 block of executable memory, plus enough slack to align to the 64K boundary.
+static inline constexpr u64 MmuPageCount = (GpuPageSize * 5) / (4096) - 1;
+
+static u64 RawGpuMemorySize = 0;
+static void* RawGpuMemory = nullptr;
+static u8* GpuMemory = nullptr;
+
+static int InitBAR() noexcept
+{
+    {
+        const u32 bar0Request = processor.PciConfigRead(0x10, 4);
+        const u32 bar1Request = processor.PciConfigRead(0x14, 4);
+
+        if((bar0Request & 0x1) != 0)
+        {
+            ConPrinter::PrintLn("BAR 0 requesting IO space is not allowed.");
+            return -101;
+        }
+
+        if(((bar0Request >> 1) & 0x3) != 0)
+        {
+            ConPrinter::PrintLn("Expected BAR 0 to request 32 bit memory space.");
+            return -102;
+        }
+
+        if(((bar0Request >> 3) & 0x1) != 0)
+        {
+            ConPrinter::PrintLn("Expected BAR 0 to request non-prefetchable memory.");
+            return -103;
+        }
+
+        if((bar1Request & 0x1) != 0)
+        {
+            ConPrinter::PrintLn("BAR 1 requesting IO space is not allowed.");
+            return -104;
+        }
+
+        if(((bar1Request >> 1) & 0x3) != 2)
+        {
+            ConPrinter::PrintLn("Expected BAR 1 to request 64 bit memory space.");
+            return -105;
+        }
+
+        if(((bar1Request >> 3) & 0x1) != 1)
+        {
+            ConPrinter::PrintLn("Expected BAR 1 to request prefetchable memory.");
+            return -106;
+        }
+    }
+
+    processor.PciConfigWrite(0x10, 4, 0xFFFFFFFF);
+    processor.PciConfigWrite(0x14, 4, 0xFFFFFFFF);
+    processor.PciConfigWrite(0x18, 4, 0xFFFFFFFF);
+
+    const u32 bar0ActiveResponse = processor.PciConfigRead(0x10, 4) & 0xFFFFFFF0;
+    const u32 bar1ActiveResponse = processor.PciConfigRead(0x14, 4) & 0xFFFFFFF0;
+    const u32 bar2ActiveResponse = processor.PciConfigRead(0x18, 4);
+    
+    const u32 bar0InactiveBits = 32 - ::std::popcount(bar0ActiveResponse);
+    const u64 bar1InactiveBits = 64 - (::std::popcount(bar1ActiveResponse) + ::std::popcount(bar2ActiveResponse));
+
+    const u32 bar0Size = 1 << bar0InactiveBits;
+    const u64 bar1Size = 1ull << bar1InactiveBits;
+
+    // Random offsets for testing.
+    BAR0 = bar0Size * 0x03;
+
+    {
+        const u64 gpuPageCount = (bar1Size * 2) / 4096 - 1;
+
+        RawGpuMemorySize = gpuPageCount * 4096;
+
+        RawGpuMemory = VirtualAlloc(nullptr, RawGpuMemorySize, MEM_RESERVE, PAGE_READWRITE);
+
+        if(!RawGpuMemory)
+        {
+            ConPrinter::PrintLn("Failed to reserve GPU memory pages.");
+            return  -107;
+        }
+
+        const u64 virtualAllocAddress = reinterpret_cast<u64>(RawGpuMemory);
+        const u64 alignedVirtualAddress = virtualAllocAddress + (-virtualAllocAddress & (bar1Size - 1));
+
+        GpuMemory = reinterpret_cast<u8*>(alignedVirtualAddress);
+
+        BAR1 = alignedVirtualAddress;
+    }
+
+    processor.PciConfigWrite(0x10, 4, BAR0);
+    processor.PciConfigWrite(0x14, 4, static_cast<u32>(BAR1));
+    processor.PciConfigWrite(0x18, 4, static_cast<u32>(BAR1 >> 32));
+
+    ConPrinter::PrintLn("Loaded BAR0 at 0x{XP0}.", BAR0);
+    ConPrinter::PrintLn("Loaded BAR1 at 0x{XP0}.", BAR1);
+
+    return 0;
+}
+
+static int InitMmu() noexcept
+{
+    const u64 gpuMemoryAddress = reinterpret_cast<u64>(GpuMemory);
+
+    if(!VirtualAlloc(GpuMemory, GpuPageSize * 4, MEM_COMMIT, PAGE_READWRITE))
+    {
+        ConPrinter::PrintLn("Failed to commit virtual pages.");
+        return -202;
+    }
+
+    PageDirectory = reinterpret_cast<PageEntry*>(GpuMemory);
+    PageTable0 = reinterpret_cast<PageEntry*>(GpuMemory + GpuPageSize);
+    RawBuffer = reinterpret_cast<PageEntry*>(GpuMemory + GpuPageSize * 2);
+    ExecutableBuffer = reinterpret_cast<PageEntry*>(GpuMemory + GpuPageSize * 3);
+
+    (void) ::std::memset(GpuMemory, 0, sizeof(GpuPageSize) * 4);
+
+    PageTable0[0].Present = true;
+    PageTable0[0].ReadWrite = true;
+    PageTable0[0].Execute = false;
+    PageTable0[0].WriteThrough = false;
+    PageTable0[0].CacheDisable = false;
+    PageTable0[0].Accessed = false;
+    PageTable0[0].Dirty = false;
+    PageTable0[0].External = false;
+    PageTable0[0].PhysicalAddress = (gpuMemoryAddress >> 16) + 2;
+    PageTable0[0].Reserved1 = 0;
+
+    PageTable0[1].Present = true;
+    PageTable0[1].ReadWrite = false;
+    PageTable0[1].Execute = true;
+    PageTable0[1].WriteThrough = false;
+    PageTable0[1].CacheDisable = false;
+    PageTable0[1].Accessed = false;
+    PageTable0[1].Dirty = false;
+    PageTable0[1].External = false;
+    PageTable0[1].PhysicalAddress = (gpuMemoryAddress >> 16) + 3;
+    PageTable0[1].Reserved1 = 0;
+
+    PageDirectory[0].Present = true;
+    PageDirectory[0].ReadWrite = true;
+    PageDirectory[0].Execute = false;
+    PageDirectory[0].WriteThrough = false;
+    PageDirectory[0].CacheDisable = false;
+    PageDirectory[0].Accessed = false;
+    PageDirectory[0].Dirty = false;
+    PageDirectory[0].External = false;
+    PageDirectory[0].PhysicalAddress = (gpuMemoryAddress >> 16) + 1;
+    PageDirectory[0].Reserved1 = 0;
+
+    return 0;
+}
+
+static void ReleaseMmu() noexcept
+{
+    PageDirectory = nullptr;
+    PageTable0 = nullptr;
+    RawBuffer = nullptr;
+    ExecutableBuffer = nullptr;
+    GpuMemory = nullptr;
+
+    (void) VirtualFree(RawGpuMemory, RawGpuMemorySize, MEM_RELEASE);
+
+    RawGpuMemory = nullptr;
 }

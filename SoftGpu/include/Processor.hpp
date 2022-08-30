@@ -15,7 +15,7 @@ class Processor final
 public:
     Processor() noexcept
         : m_PciRegisters(this)
-        , m_MemoryManager(this)
+        , m_CacheController(this)
         , m_SMs { { this, 0 }, { this, 1 }, { this, 2 }, { this, 3 } }
         , m_ClockCycle(0)
     { }
@@ -23,7 +23,7 @@ public:
     void Reset()
     {
         m_PciRegisters.Reset();
-        m_MemoryManager.Reset();
+        m_CacheController.Reset();
         m_SMs[0].Reset();
         m_SMs[1].Reset();
         m_SMs[2].Reset();
@@ -140,10 +140,9 @@ public:
             return 0;
         }
 
-        const u64 addressOffset = m_PciController.GetBAROffset(address, bar);
-
         if(bar == 0)
         {
+            const u64 addressOffset = m_PciController.GetBAROffset(address, bar);
             data[0] = m_PciRegisters.Read(static_cast<u32>(addressOffset));
             return 1;
         }
@@ -152,7 +151,8 @@ public:
         {
             for(u16 i = 0; i < size; ++i)
             {
-                data[i] = MemReadPhy(addressOffset + i);
+                // Use the real address as that is mapped into the system virtual page.
+                data[i] = MemReadPhy((address >> 2) + i);
             }
 
             return size;
@@ -170,17 +170,17 @@ public:
             return;
         }
 
-        const u64 addressOffset = m_PciController.GetBAROffset(address, bar);
-
         if(bar == 0)
         {
+            const u64 addressOffset = m_PciController.GetBAROffset(address, bar);
             m_PciRegisters.Write(static_cast<u32>(addressOffset), data[0]);
         }
         else if(bar == 1)
         {
             for(u16 i = 0; i < size; ++i)
             {
-                MemWritePhy(addressOffset + i, data[i]);
+                // Use the real address as that is mapped into the system virtual page.
+                MemWritePhy((address >> 2) + i, data[i]);
             }
         }
     }
@@ -192,7 +192,7 @@ public:
             return MemReadPhy(address, external);
         }
 
-        return m_MemoryManager.Read(coreIndex, address, external);
+        return m_CacheController.Read(coreIndex, address, external);
     }
 
     void Write(const u32 coreIndex, const u64 address, const u32 value, const bool writeThrough = false, const bool cacheDisable = false, const bool external = false) noexcept
@@ -203,17 +203,17 @@ public:
             return;
         }
 
-        m_MemoryManager.Write(coreIndex, address, value, external, writeThrough);
+        m_CacheController.Write(coreIndex, address, value, external, writeThrough);
     }
 
     void Prefetch(const u32 coreIndex, const u64 address, const bool external = false) noexcept
     {
-        m_MemoryManager.Prefetch(coreIndex, address, external);
+        m_CacheController.Prefetch(coreIndex, address, external);
     }
 
     void FlushCache(const u32 coreIndex) noexcept
     {
-        m_MemoryManager.Flush(coreIndex);
+        m_CacheController.Flush(coreIndex);
     }
 
     void LoadPageDirectoryPointer(const u64 coreIndex, const u64 pageDirectoryPhysicalAddress) noexcept
@@ -233,7 +233,7 @@ public:
 private:
     PciController m_PciController;
     PciControlRegisters m_PciRegisters;
-    CacheController m_MemoryManager;
+    CacheController m_CacheController;
     StreamingMultiprocessor m_SMs[4];
     u32 m_ClockCycle;
 };

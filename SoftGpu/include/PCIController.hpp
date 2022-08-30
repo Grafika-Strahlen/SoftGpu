@@ -67,7 +67,7 @@ public:
         // Memory, 32 bit, Not Prefetchable.
         m_ConfigHeader.BAR0 = 0x00000000;
         // Memory, 64 bit, Prefetchable.
-        m_ConfigHeader.BAR1 = 0x00001100;
+        m_ConfigHeader.BAR1 = 0x0000000C;
         // Part of BAR1
         m_ConfigHeader.BAR2 = 0x00000000;
         // Unused
@@ -167,15 +167,15 @@ public:
                 {
                     break;
                 }
-                // Mask the command to only the RW bits.
-                m_ConfigHeader.Command = static_cast<u16>(value & 0xFB00);
+                // Mask the status to only the RW bits.
+                m_ConfigHeader.Status = static_cast<u16>(value & 0xFB00);
                 break;
             case 0xC:
                 if(size != 1)
                 {
                     break;
                 }
-                m_ConfigHeader.Command = static_cast<u8>(value);
+                m_ConfigHeader.CacheLineSize = static_cast<u8>(value);
                 break;
             case 0x10:
                 if(size != 4)

@@ -14,6 +14,10 @@
 
 #include <iprt/assert.h>
 
+#include "DebugManager.hpp"
+
+DebugManager GlobalDebug;
+
 /**
  * Playground device per function (sub-device) data.
  */
