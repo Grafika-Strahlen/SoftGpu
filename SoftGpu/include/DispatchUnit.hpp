@@ -143,9 +143,9 @@ class DispatchUnit final
     DEFAULT_DESTRUCT(DispatchUnit);
     DELETE_CM(DispatchUnit);
 public:
-    DispatchUnit(StreamingMultiprocessor* const m_sm, const u32 m_index) noexcept
-        : m_SM(m_sm)
-        , m_Index(m_index)
+    DispatchUnit(StreamingMultiprocessor* const sm, const u32 index) noexcept
+        : m_SM(sm)
+        , m_Index(index)
         , m_BaseRegisters{ 0, 0, 0, 0, 0, 0, 0, 0 }
         , m_ClockIndex(0)
         , m_InstructionPointer(0)
@@ -348,16 +348,12 @@ public:
     }
 private:
     void NextInstruction(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) const noexcept;
-    u16 ReadU16(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) const noexcept;
-    u32 ReadU32(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) const noexcept;
-    u64 ReadU64(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) const noexcept;
 
     [[nodiscard]] bool CanReadRegister(u32 registerIndex, u32 replicationIndex) noexcept;
     [[nodiscard]] bool CanWriteRegister(u32 registerIndex, u32 replicationIndex) noexcept;
     void ReleaseRegisterContestation(u32 registerIndex, u32 replicationIndex) noexcept;
     void LockRegisterRead(u32 registerIndex, u32 replicationIndex) noexcept;
     void LockRegisterWrite(u32 registerIndex, u32 replicationIndex) noexcept;
-
 
     void DecodeLdSt(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) noexcept;
     void DecodeLoadImmediate(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) noexcept;
@@ -370,6 +366,24 @@ private:
     void DispatchLoadZero(u32 replicationIndex) noexcept;
     void DispatchWriteStatistics(u32 replicationIndex) noexcept;
     void DispatchFpuBinOp(u32 replicationIndex) noexcept;
+private:
+    template<typename T>
+    T ReadT(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) const noexcept
+    {
+        u8 bytes[sizeof(T)];
+
+        for(uSys i = 0; i < sizeof(T); ++i)
+        {
+            NextInstruction(localInstructionPointer, wordIndex, instructionBytes);
+
+            bytes[i] = instructionBytes[wordIndex];
+        }
+
+        T ret;
+        (void) ::std::memcpy(&ret, bytes, sizeof(ret));
+
+        return ret;
+    }
 private:
     StreamingMultiprocessor* m_SM;
     u32 m_Index;

@@ -60,7 +60,7 @@ struct FpuInstruction final
     u64 OperandB : 12; // The second operand register.
     u64 OperandC : 12; // The third operand register.
     u64 StorageRegister : 12;  // The storage register. This gives a 256 register window.
-    u64 Reserved1 : 16;  // 26 reserved bits for alignment in x86, these can be removed in hardware.
+    u64 Reserved1 : 16;  // 16 reserved bits for alignment in x86, these can be removed in hardware.
 };
 
 struct LoadedFpuInstruction final

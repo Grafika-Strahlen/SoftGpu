@@ -58,6 +58,12 @@ public:
         m_RegisterWriteLock = { };
     }
 
+    void Clock() noexcept
+    {
+            // TODO: FIX
+        // ReadRegisterA();
+    }
+
     void Clock(u32 clockIndex) noexcept;
 
     void InitiateRegisterRead(bool is64Bit, u8 registerCount, u32 registerA, u32 registerB, u32 registerC) noexcept;
@@ -95,18 +101,18 @@ private:
     u8 m_Pad0 : 4;
 
     // The A register to read.
-    u32 m_RegisterReadA;
+    u16 m_RegisterReadA;
     // The B register to read.
-    u32 m_RegisterReadB;
+    u16 m_RegisterReadB;
     // The C register to read.
-    u32 m_RegisterReadC;
+    u16 m_RegisterReadC;
 
     // The A register to release the read lock on.
-    u32 m_RegisterReadLockA;
+    u16 m_RegisterReadLockA;
     // The B register to release the read lock on.
-    u32 m_RegisterReadLockB;
+    u16 m_RegisterReadLockB;
     // The C register to release the read lock on.
-    u32 m_RegisterReadLockC;
+    u16 m_RegisterReadLockC;
 
     // The register to write to.
     u32 m_RegisterWrite;

@@ -4,6 +4,7 @@
 #include <NumTypes.hpp>
 #include "FPU.hpp"
 #include "CoreRegisterManager.hpp"
+#include "RegisterFile.hpp"
 
 #include <cstring>
 
@@ -16,15 +17,13 @@ class ICore
     DEFAULT_DESTRUCT_VI(ICore);
     DELETE_CM(ICore);
 public:
-    [[nodiscard]] virtual u32 GetRegister(u32 targetRegister) const noexcept = 0;
-    virtual void SetRegister(u32 targetRegister, u32 value) noexcept = 0;
-    
+    virtual void InvokeRegisterFileHigh(RegisterFile::CommandPacket packet) noexcept = 0;
+    virtual void InvokeRegisterFileLow(RegisterFile::CommandPacket packet) noexcept = 0;
+
     virtual void ReportRegisterValues(u64 a, u64 b, u64 c) noexcept = 0;
     virtual void PrepareRegisterWrite(bool is64Bit, u32 storageRegister, u64 value) noexcept = 0;
 
     virtual void ReportReady() const noexcept = 0;
-
-    virtual void ReleaseRegisterContestation(u32 registerIndex) const noexcept = 0;
 };
 
 class FpCore final : public ICore
@@ -76,9 +75,9 @@ public:
             m_Stage0Ready = false;
         }
     }
-
-    [[nodiscard]] u32 GetRegister(u32 targetRegister) const noexcept override;
-    void SetRegister(u32 targetRegister, u32 value) noexcept override;
+    
+    void InvokeRegisterFileHigh(RegisterFile::CommandPacket packet) noexcept override;
+    void InvokeRegisterFileLow(RegisterFile::CommandPacket packet) noexcept override;
 
     void InitiateInstruction(const FpuInstruction fpuInstruction) noexcept
     {
@@ -115,8 +114,6 @@ public:
     }
 
     void ReportReady() const noexcept override;
-
-    void ReleaseRegisterContestation(u32 registerIndex) const noexcept override;
 private:
     StreamingMultiprocessor* m_SM;
     u32 m_UnitIndex;
@@ -182,9 +179,9 @@ public:
             m_Stage0Ready = false;
         }
     }
-
-    [[nodiscard]] u32 GetRegister(u32 targetRegister) const noexcept override;
-    void SetRegister(u32 targetRegister, u32 value) noexcept override;
+    
+    void InvokeRegisterFileHigh(RegisterFile::CommandPacket packet) noexcept override;
+    void InvokeRegisterFileLow(RegisterFile::CommandPacket packet) noexcept override;
     
     void InitiateInstructionFP(const FpuInstruction fpuInstruction) noexcept
     {
@@ -221,8 +218,6 @@ public:
     }
 
     void ReportReady() const noexcept override;
-
-    void ReleaseRegisterContestation(u32 registerIndex) const noexcept override;
 private:
     StreamingMultiprocessor* m_SM;
     u32 m_UnitIndex;

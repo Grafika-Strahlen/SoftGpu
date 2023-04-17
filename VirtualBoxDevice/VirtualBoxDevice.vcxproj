@@ -79,27 +79,27 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtils\include;$(SolutionDir)libs\VBox;$(SolutionDir)SoftGpu\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\VBox;$(SolutionDir)SoftGpu\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(OutDir);$(VC_LibraryPath_x86);$(WindowsSDK_LibraryPath_x86)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtils\include;$(SolutionDir)libs\VBox;$(SolutionDir)SoftGpu\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\VBox;$(SolutionDir)SoftGpu\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(OutDir);$(VC_LibraryPath_x86);$(WindowsSDK_LibraryPath_x86)</LibraryPath>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtils\include;$(SolutionDir)libs\VBox;$(SolutionDir)SoftGpu\include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(OutDir);$(SolutionDir)libs\VBox\bin;$(SolutionDir)libs\TauUtils\bin\debug_win64-x64;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\VBox;$(SolutionDir)SoftGpu\include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(OutDir);$(SolutionDir)libs\VBox\bin;$(SolutionDir)libs\TauUtils\build\TauUtilsDynamic\Debug;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtils\include;$(SolutionDir)libs\VBox;$(SolutionDir)SoftGpu\include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(OutDir);$(SolutionDir)libs\VBox\bin;$(SolutionDir)libs\TauUtils\bin\release_win64-x64;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\VBox;$(SolutionDir)SoftGpu\include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(OutDir);$(SolutionDir)libs\VBox\bin;$(SolutionDir)libs\TauUtils\build\TauUtilsDynamic\Release;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -126,10 +126,13 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(LibraryPath);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>TauUtils.lib;SoftGpu.lib;VBoxVMM.lib;VBoxRT.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>TauUtilsDynamicStatic.lib;SoftGpu.lib;VBoxVMM.lib;VBoxRT.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LargeAddressAware>true</LargeAddressAware>
       <TargetMachine>MachineX86</TargetMachine>
     </Link>
+    <PostBuildEvent>
+      <Command>D:\GPU\SoftGpu\signing\copy_device.bat</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -137,7 +140,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_NO_EXCEPTIONS=1;__SSE__;__SSE2__;__SSE3__;__SSSE3__;__SSE4_1__;__SSE4_2__;__AVX__;__AVX2__;__F16C__;__POPCNT__;__FMA__;IN_RING3;VBOXCOM_NOINCLUDE;LOG_ENABLED;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_NO_EXCEPTIONS=1;__SSE__;__SSE2__;__SSE3__;__SSSE3__;__SSE4_1__;__SSE4_2__;__AVX__;__AVX2__;__F16C__;__POPCNT__;__FMA__;IN_RING3;VBOXCOM_NOINCLUDE;LOG_ENABLED;GC_ARCH_BITS=64;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
@@ -158,13 +161,13 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(LibraryPath);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>TauUtils.lib;SoftGpu.lib;VBoxVMM.lib;VBoxRT.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>TauUtilsDynamicStatic.lib;SoftGpu.lib;VBoxVMM.lib;VBoxRT.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LargeAddressAware>true</LargeAddressAware>
       <TargetMachine>MachineX86</TargetMachine>
       <AdditionalOptions>/INTEGRITYCHECK %(AdditionalOptions)</AdditionalOptions>
     </Link>
     <PostBuildEvent>
-      <Command>signtool sign /v /ph /n CodeSigningCert /t http://timestamp.digicert.com/ /fd SHA256 $(SolutionDir)bin\x64\Release\VirtualBoxDevice.dll</Command>
+      <Command>D:\GPU\SoftGpu\signing\copy_device.bat</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -191,10 +194,13 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(LibraryPath);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>TauUtils.lib;SoftGpu.lib;VBoxVMM.lib;VBoxRT.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>TauUtilsDynamicStatic.lib;SoftGpu.lib;VBoxVMM.lib;VBoxRT.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LargeAddressAware>true</LargeAddressAware>
       <TargetMachine>MachineX64</TargetMachine>
     </Link>
+    <PostBuildEvent>
+      <Command>D:\GPU\SoftGpu\signing\copy_device.bat</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -202,7 +208,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_NO_EXCEPTIONS=1;__SSE__;__SSE2__;__SSE3__;__SSSE3__;__SSE4_1__;__SSE4_2__;__AVX__;__AVX2__;__F16C__;__POPCNT__;__FMA__;IN_RING3;VBOXCOM_NOINCLUDE;LOG_ENABLED;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_NO_EXCEPTIONS=1;__SSE__;__SSE2__;__SSE3__;__SSSE3__;__SSE4_1__;__SSE4_2__;__AVX__;__AVX2__;__F16C__;__POPCNT__;__FMA__;IN_RING3;VBOXCOM_NOINCLUDE;LOG_ENABLED;GC_ARCH_BITS=64;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
@@ -223,17 +229,20 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(LibraryPath);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>TauUtils.lib;SoftGpu.lib;VBoxVMM.lib;VBoxRT.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>TauUtilsDynamicStatic.lib;SoftGpu.lib;VBoxVMM.lib;VBoxRT.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LargeAddressAware>true</LargeAddressAware>
       <TargetMachine>MachineX64</TargetMachine>
       <AdditionalOptions>/INTEGRITYCHECK %(AdditionalOptions)</AdditionalOptions>
     </Link>
     <PostBuildEvent>
-      <Command>signtool sign /v /ph /n CodeSigningCert /t http://timestamp.digicert.com/ /fd SHA256 $(SolutionDir)bin\x64\Release\VirtualBoxDevice.dll</Command>
+      <Command>D:\GPU\SoftGpu\signing\copy_device.bat</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\VBDevice.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\ConLogger.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

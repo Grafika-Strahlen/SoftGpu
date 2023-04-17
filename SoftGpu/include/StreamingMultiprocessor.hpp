@@ -57,17 +57,36 @@ public:
             m_DispatchUnits[1].ReportBaseRegisters(m_SMIndex);
         }
 
-        m_LdSt[0].Clock();
-        m_LdSt[1].Clock();
-        m_LdSt[2].Clock();
-        m_LdSt[3].Clock();
+        for(uSys i = 0; i < LoadStore::MAX_EXECUTION_STAGE; ++i)
+        {
+            m_LdSt[0].Clock();
+            m_LdSt[1].Clock();
+            m_LdSt[2].Clock();
+            m_LdSt[3].Clock();
+            m_RegisterFile.Clock();
+        }
 
         for(u32 subClockIndex = 0; subClockIndex <= 5; ++subClockIndex)
         {
-            for(u32 coreIndex = 0; coreIndex < 8; ++coreIndex)
+            for(u32 coreIndex = 0; coreIndex < 4; ++coreIndex)
             {
                 m_FpCores[coreIndex].Clock(subClockIndex);
+                m_RegisterFile.Clock();
+            }
+            for(u32 coreIndex = 0; coreIndex < 4; ++coreIndex)
+            {
                 m_IntFpCores[coreIndex].Clock(subClockIndex);
+                m_RegisterFile.Clock();
+            }
+            for(u32 coreIndex = 4; coreIndex < 8; ++coreIndex)
+            {
+                m_FpCores[coreIndex].Clock(subClockIndex);
+                m_RegisterFile.Clock();
+            }
+            for(u32 coreIndex = 4; coreIndex < 8; ++coreIndex)
+            {
+                m_IntFpCores[coreIndex].Clock(subClockIndex);
+                m_RegisterFile.Clock();
             }
         }
 
@@ -89,7 +108,42 @@ public:
 
     void TestLoadRegister(const u32 dispatchPort, const u32 replicationIndex, const u8 registerIndex, const u32 registerValue)
     {
-        m_RegisterFile.SetRegister((dispatchPort * 4 + replicationIndex) * 256 + registerIndex, registerValue);
+        u32 value = registerValue;
+        bool successful = false;
+        bool unsuccessful = false;
+
+        RegisterFile::CommandPacket packet;
+        packet.Command = RegisterFile::ECommand::WriteRegister;
+        packet.TargetRegister = replicationIndex & 0x7FF;
+        packet.Value = &value;
+        packet.Successful = &successful;
+        packet.Unsuccessful = &unsuccessful;
+
+        if(replicationIndex & 0x01)
+        {
+            InvokeRegisterFileHigh(0, packet);
+        }
+        else
+        {
+            InvokeRegisterFileLow(0, packet);
+        }
+
+        m_RegisterFile.Clock();
+
+        packet.Command = RegisterFile::ECommand::Reset;
+
+        if(replicationIndex & 0x01)
+        {
+            InvokeRegisterFileHigh(0, packet);
+        }
+        else
+        {
+            InvokeRegisterFileLow(0, packet);
+        }
+
+        m_RegisterFile.Clock();
+
+        // m_RegisterFile.SetRegister((dispatchPort * 4 + replicationIndex) * 256 + registerIndex, registerValue);
     }
 
     void LoadWarp(const u32 dispatchPort, const u8 enabledMask, const u8 completedMask, const u16 baseRegisters[8], const u64 instructionPointer) noexcept
@@ -101,14 +155,34 @@ public:
     void Write(u64 address, u32 value) noexcept;
     void Prefetch(u64 address) noexcept;
 
-    [[nodiscard]] u32 GetRegister(const u32 targetRegister) const noexcept
+    void InvokeRegisterFileHigh(const u32 port, const RegisterFile::CommandPacket packet) noexcept
     {
-        return m_RegisterFile.GetRegister(targetRegister);
+        switch(port)
+        {
+            case 0: m_RegisterFile.InvokePort0High(packet); break;
+            case 1: m_RegisterFile.InvokePort1High(packet); break;
+            case 2: m_RegisterFile.InvokePort2High(packet); break;
+            case 3: m_RegisterFile.InvokePort3High(packet); break;
+            default:
+                ConPrinter::PrintLn("Invalid high port target for register file: {}", port);
+                assert(false);
+                break;
+        }
     }
 
-    void SetRegister(const u32 targetRegister, const u32 value) noexcept
+    void InvokeRegisterFileLow(const u32 port, const RegisterFile::CommandPacket packet) noexcept
     {
-        m_RegisterFile.SetRegister(targetRegister, value);
+        switch(port)
+        {
+            case 0: m_RegisterFile.InvokePort0Low(packet); break;
+            case 1: m_RegisterFile.InvokePort1Low(packet); break;
+            case 2: m_RegisterFile.InvokePort2Low(packet); break;
+            case 3: m_RegisterFile.InvokePort3Low(packet); break;
+            default:
+                ConPrinter::PrintLn("Invalid low port target for register file: {}", port);
+                assert(false);
+                break;
+        }
     }
 
     void ReportFpCoreReady(const u32 unitIndex) noexcept
@@ -128,43 +202,13 @@ public:
         m_DispatchUnits[0].ReportUnitReady(unitIndex + LDST_AVAIL_OFFSET);
         m_DispatchUnits[1].ReportUnitReady(unitIndex + LDST_AVAIL_OFFSET);
     }
-
-    [[nodiscard]] bool CanReadRegister(const u32 registerIndex) noexcept
-    {
-        return m_RegisterFile.CanReadRegister(registerIndex);
-    }
-
-    [[nodiscard]] bool CanWriteRegister(const u32 registerIndex) noexcept
-    {
-        return m_RegisterFile.CanWriteRegister(registerIndex);
-    }
-
-    void ReleaseRegisterContestation(const u32 registerIndex) noexcept
-    {
-        m_RegisterFile.ReleaseRegisterContestation(registerIndex);
-    }
-
-    void LockRegisterRead(const u32 registerIndex) noexcept
-    {
-        m_RegisterFile.LockRegisterRead(registerIndex);
-    }
-
-    void LockRegisterWrite(const u32 registerIndex) noexcept
-    {
-        m_RegisterFile.LockRegisterWrite(registerIndex);
-    }
-
-    // [[deprecated]] void ReleaseRegisterContestation(const u32 dispatchPort, const u32 replicationIndex, const u32 registerIndex)
-    // {
-    //     m_DispatchUnits[dispatchPort].ReleaseRegisterContestation(registerIndex, replicationIndex);
-    // }
-
+    
     void DispatchLdSt(const u32 ldStIndex, const LoadStoreInstruction instructionInfo) noexcept
     {
         m_DispatchUnits[0].ReportUnitBusy(ldStIndex + LDST_AVAIL_OFFSET);
         m_DispatchUnits[1].ReportUnitBusy(ldStIndex + LDST_AVAIL_OFFSET);
 
-        m_LdSt[ldStIndex].Execute(instructionInfo);
+        m_LdSt[ldStIndex].PrepareExecution(instructionInfo);
     }
 
     void DispatchFpu(const u32 fpIndex, const FpuInstruction instructionInfo) noexcept

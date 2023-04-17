@@ -4,6 +4,7 @@
 #include "InputAssembler.hpp"
 #include "PCIControlRegisters.hpp"
 #include "MMU.hpp"
+#include <allocator/PageAllocator.hpp>
 
 #include <numeric>
 
@@ -86,7 +87,7 @@ static void TestMove() noexcept
 {
     processor.LoadPageDirectoryPointer(0, PageDirectory);
 
-    const u32 initialValue = 42;
+    constexpr u32 initialValue = 42;
 
     processor.PciMemWrite(BAR1 + GpuPageSize * 2 + 0, 4, &initialValue);
 
@@ -576,10 +577,6 @@ static void PreInit() noexcept
     }
 }
 
-// Four blocks, 1 block for the Page Directory, 1 block for the Page Table, 1 block of usable memory, 1 block of executable memory, plus enough slack to align to the 64K boundary.
-static inline constexpr u64 MmuPageCount = (GpuPageSize * 5) / (4096) - 1;
-
-static u64 RawGpuMemorySize = 0;
 static void* RawGpuMemory = nullptr;
 static u8* GpuMemory = nullptr;
 
@@ -644,12 +641,11 @@ static int InitBAR() noexcept
     BAR0 = bar0Size * 0x03;
 
     {
-        const u64 gpuPageCount = (bar1Size * 2) / 4096 - 1;
+        // Enough pages to ensure that the data is aligned.
+        const u64 gpuPageCount = (bar1Size * 2) / PageAllocator::PageSize() - 1;
 
-        RawGpuMemorySize = gpuPageCount * 4096;
-
-        RawGpuMemory = VirtualAlloc(nullptr, RawGpuMemorySize, MEM_RESERVE, PAGE_READWRITE);
-
+        RawGpuMemory = PageAllocator::Reserve(gpuPageCount);
+        
         if(!RawGpuMemory)
         {
             ConPrinter::PrintLn("Failed to reserve GPU memory pages.");
@@ -678,7 +674,8 @@ static int InitMmu() noexcept
 {
     const u64 gpuMemoryAddress = reinterpret_cast<u64>(GpuMemory);
 
-    if(!VirtualAlloc(GpuMemory, GpuPageSize * 4, MEM_COMMIT, PAGE_READWRITE))
+    // Four blocks, 1 block for the Page Directory, 1 block for the Page Table, 1 block of usable memory, 1 block of executable memory.
+    if(!PageAllocator::CommitPages(GpuMemory, GpuPageSize * 4))
     {
         ConPrinter::PrintLn("Failed to commit virtual pages.");
         return -202;
@@ -735,7 +732,7 @@ static void ReleaseMmu() noexcept
     ExecutableBuffer = nullptr;
     GpuMemory = nullptr;
 
-    (void) VirtualFree(RawGpuMemory, RawGpuMemorySize, MEM_RELEASE);
+    PageAllocator::Free(RawGpuMemory);
 
     RawGpuMemory = nullptr;
 }

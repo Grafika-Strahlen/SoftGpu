@@ -71,52 +71,85 @@ void CoreRegisterManager::RegisterRead() noexcept
     {
         return;
     }
-
-    if(m_Read64Bit)
-    {
-        const u32 aLow = m_Core->GetRegister(m_RegisterReadA);
-        const u32 aHigh = m_Core->GetRegister(m_RegisterReadA + 1);
-
-        const u64 a = (static_cast<u64>(aHigh) << 32) | aLow;
-        u64 b = 0;
-        u64 c = 0;
-
-        if(m_RegisterReadEnabledCount >= 1u)
-        {
-            const u32 bLow = m_Core->GetRegister(m_RegisterReadB);
-            const u32 bHigh = m_Core->GetRegister(m_RegisterReadB + 1);
-
-            b = (static_cast<u64>(bHigh) << 32) | bLow;
-
-            if(m_RegisterReadEnabledCount >= 2u)
-            {
-                const u32 cLow = m_Core->GetRegister(m_RegisterReadC);
-                const u32 cHigh = m_Core->GetRegister(m_RegisterReadC + 1);
-
-                c = (static_cast<u64>(cHigh) << 32) | cLow;
-            }
-        }
-
-        m_Core->ReportRegisterValues(a, b, c);
-    }
-    else
-    {
-        const u64 a = m_Core->GetRegister(m_RegisterReadA);
-        u64 b = 0;
-        u64 c = 0;
-
-        if(m_RegisterReadEnabledCount >= 1u)
-        {
-            b = m_Core->GetRegister(m_RegisterReadB);
-
-            if(m_RegisterReadEnabledCount >= 2u)
-            {
-                c = m_Core->GetRegister(m_RegisterReadC);
-            }
-        }
-
-        m_Core->ReportRegisterValues(a, b, c);
-    }
+            // TODO: FIX
+    //
+    // if(m_Read64Bit)
+    // {
+    //     RegisterFile::CommandPacket packetHigh;
+    //     packetHigh.Command = RegisterFile::ECommand::ReadRegister;
+    //     packetHigh.Successful = &m_SuccessfulHigh;
+    //     packetHigh.Unsuccessful = &m_UnsuccessfulHigh;
+    //
+    //     RegisterFile::CommandPacket packetLow;
+    //     packetLow.Command = RegisterFile::ECommand::ReadRegister;
+    //     packetLow.Successful = &m_SuccessfulLow;
+    //     packetLow.Unsuccessful = &m_UnsuccessfulLow;
+    //
+    //     // Does the base register start at high?
+    //     if(m_RegisterReadA & 0x1)
+    //     {
+    //         packetHigh.TargetRegister = (m_RegisterReadA + 1u) >> 1u;
+    //         packetLow.TargetRegister = (m_RegisterReadA + 1u) >> 1u;
+    //
+    //         packetHigh.Value = &m_BaseAddressLow;
+    //         packetLow.Value = &m_BaseAddressHigh;
+    //     }
+    //     // The base register starts at low
+    //     else
+    //     {
+    //         packetHigh.TargetRegister = m_RegisterReadA >> 1u;
+    //         packetLow.TargetRegister = m_RegisterReadA >> 1u;
+    //
+    //         packetHigh.Value = &m_BaseAddressHigh;
+    //         packetLow.Value = &m_BaseAddressLow;
+    //     }
+    //
+    //     m_Core->InvokeRegisterFileHigh(packetHigh);
+    //     m_Core->InvokeRegisterFileLow(packetLow);
+    //
+    //     const u32 aLow = m_Core->GetRegister(m_RegisterReadA);
+    //     const u32 aHigh = m_Core->GetRegister(m_RegisterReadA + 1);
+    //
+    //     const u64 a = (static_cast<u64>(aHigh) << 32) | aLow;
+    //     u64 b = 0;
+    //     u64 c = 0;
+    //
+    //     if(m_RegisterReadEnabledCount >= 1u)
+    //     {
+    //         const u32 bLow = m_Core->GetRegister(m_RegisterReadB);
+    //         const u32 bHigh = m_Core->GetRegister(m_RegisterReadB + 1);
+    //
+    //         b = (static_cast<u64>(bHigh) << 32) | bLow;
+    //
+    //         if(m_RegisterReadEnabledCount >= 2u)
+    //         {
+    //             const u32 cLow = m_Core->GetRegister(m_RegisterReadC);
+    //             const u32 cHigh = m_Core->GetRegister(m_RegisterReadC + 1);
+    //
+    //             c = (static_cast<u64>(cHigh) << 32) | cLow;
+    //         }
+    //     }
+    //
+    //     m_Core->ReportRegisterValues(a, b, c);
+    // }
+    // else
+    // {
+    //     const u64 a = m_Core->GetRegister(m_RegisterReadA);
+    //     u64 b = 0;
+    //     u64 c = 0;
+    //
+    //     if(m_RegisterReadEnabledCount >= 1u)
+    //     {
+    //         b = m_Core->GetRegister(m_RegisterReadB);
+    //
+    //         if(m_RegisterReadEnabledCount >= 2u)
+    //         {
+    //             c = m_Core->GetRegister(m_RegisterReadC);
+    //         }
+    //     }
+    //
+    //     m_Core->ReportRegisterValues(a, b, c);
+    // }
 }
 
 void CoreRegisterManager::ReadLockRelease() noexcept
@@ -125,38 +158,39 @@ void CoreRegisterManager::ReadLockRelease() noexcept
     {
         return;
     }
-
-    if(m_ReadLock64Bit)
-    {
-        m_Core->ReleaseRegisterContestation(m_RegisterReadA);
-        m_Core->ReleaseRegisterContestation(m_RegisterReadA + 1);
-
-        if(m_RegisterReadLockEnabledCount >= 1u)
-        {
-            m_Core->ReleaseRegisterContestation(m_RegisterReadB);
-            m_Core->ReleaseRegisterContestation(m_RegisterReadB + 1);
-
-            if(m_RegisterReadLockEnabledCount >= 2u)
-            {
-                m_Core->ReleaseRegisterContestation(m_RegisterReadC);
-                m_Core->ReleaseRegisterContestation(m_RegisterReadC + 1);
-            }
-        }
-    }
-    else
-    {
-        m_Core->ReleaseRegisterContestation(m_RegisterReadA);
-
-        if(m_RegisterReadLockEnabledCount >= 1u)
-        {
-            m_Core->ReleaseRegisterContestation(m_RegisterReadB);
-
-            if(m_RegisterReadLockEnabledCount >= 2u)
-            {
-                m_Core->ReleaseRegisterContestation(m_RegisterReadC);
-            }
-        }
-    }
+            // TODO: FIX
+    //
+    // if(m_ReadLock64Bit)
+    // {
+    //     m_Core->ReleaseRegisterContestation(m_RegisterReadA);
+    //     m_Core->ReleaseRegisterContestation(m_RegisterReadA + 1);
+    //
+    //     if(m_RegisterReadLockEnabledCount >= 1u)
+    //     {
+    //         m_Core->ReleaseRegisterContestation(m_RegisterReadB);
+    //         m_Core->ReleaseRegisterContestation(m_RegisterReadB + 1);
+    //
+    //         if(m_RegisterReadLockEnabledCount >= 2u)
+    //         {
+    //             m_Core->ReleaseRegisterContestation(m_RegisterReadC);
+    //             m_Core->ReleaseRegisterContestation(m_RegisterReadC + 1);
+    //         }
+    //     }
+    // }
+    // else
+    // {
+    //     m_Core->ReleaseRegisterContestation(m_RegisterReadA);
+    //
+    //     if(m_RegisterReadLockEnabledCount >= 1u)
+    //     {
+    //         m_Core->ReleaseRegisterContestation(m_RegisterReadB);
+    //
+    //         if(m_RegisterReadLockEnabledCount >= 2u)
+    //         {
+    //             m_Core->ReleaseRegisterContestation(m_RegisterReadC);
+    //         }
+    //     }
+    // }
 }
 
 void CoreRegisterManager::RegisterWrite() noexcept
@@ -165,19 +199,20 @@ void CoreRegisterManager::RegisterWrite() noexcept
     {
         return;
     }
-
-    if(m_Write64Bit)
-    {
-        u32 words[2];
-        (void) ::std::memcpy(words, &m_RegisterWriteValue, sizeof(m_RegisterWriteValue));
-
-        m_Core->SetRegister(m_RegisterWrite, words[0]);
-        m_Core->SetRegister(m_RegisterWrite + 1, words[1]);
-    }
-    else
-    {
-        m_Core->SetRegister(m_RegisterWrite, static_cast<u32>(m_RegisterWriteValue));
-    }
+            // TODO: FIX
+    //
+    // if(m_Write64Bit)
+    // {
+    //     u32 words[2];
+    //     (void) ::std::memcpy(words, &m_RegisterWriteValue, sizeof(m_RegisterWriteValue));
+    //
+    //     m_Core->SetRegister(m_RegisterWrite, words[0]);
+    //     m_Core->SetRegister(m_RegisterWrite + 1, words[1]);
+    // }
+    // else
+    // {
+    //     m_Core->SetRegister(m_RegisterWrite, static_cast<u32>(m_RegisterWriteValue));
+    // }
 }
 
 void CoreRegisterManager::WriteLockRelease() noexcept
@@ -186,11 +221,12 @@ void CoreRegisterManager::WriteLockRelease() noexcept
     {
         return;
     }
-
-    m_Core->ReleaseRegisterContestation(m_RegisterWrite);
-
-    if(m_WriteLock64Bit)
-    {
-        m_Core->ReleaseRegisterContestation(m_RegisterWrite + 1);
-    }
+            // TODO: FIX
+    //
+    // m_Core->ReleaseRegisterContestation(m_RegisterWrite);
+    //
+    // if(m_WriteLock64Bit)
+    // {
+    //     m_Core->ReleaseRegisterContestation(m_RegisterWrite + 1);
+    // }
 }

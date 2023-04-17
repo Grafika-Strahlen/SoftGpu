@@ -306,81 +306,36 @@ void DispatchUnit::NextInstruction(u64& localInstructionPointer, u32& wordIndex,
     }
 }
 
-u16 DispatchUnit::ReadU16(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) const noexcept
-{
-    u8 bytes[sizeof(u16)];
-
-    NextInstruction(localInstructionPointer, wordIndex, instructionBytes);
-
-    bytes[0] = instructionBytes[wordIndex];
-
-    NextInstruction(localInstructionPointer, wordIndex, instructionBytes);
-
-    bytes[1] = instructionBytes[wordIndex];
-
-    u16 ret;
-    ::std::memcpy(&ret, bytes, sizeof(ret));
-
-    return ret;
-}
-
-u32 DispatchUnit::ReadU32(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) const noexcept
-{
-    u8 bytes[sizeof(u32)];
-
-    for(uSys i = 0; i < sizeof(u32); ++i)
-    {
-        NextInstruction(localInstructionPointer, wordIndex, instructionBytes);
-
-        bytes[i] = instructionBytes[wordIndex];
-    }
-
-    u32 ret;
-    ::std::memcpy(&ret, bytes, sizeof(ret));
-
-    return ret;
-}
-
-u64 DispatchUnit::ReadU64(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) const noexcept
-{
-    u8 bytes[sizeof(u64)];
-
-    for(uSys i = 0; i < sizeof(u64); ++i)
-    {
-        NextInstruction(localInstructionPointer, wordIndex, instructionBytes);
-
-        bytes[i] = instructionBytes[wordIndex];
-    }
-
-    u64 ret;
-    ::std::memcpy(&ret, bytes, sizeof(ret));
-
-    return ret;
-}
-
 bool DispatchUnit::CanReadRegister(const u32 registerIndex, const u32 replicationIndex) noexcept
 {
-    return m_SM->CanReadRegister(m_BaseRegisters[replicationIndex] + registerIndex);
+            // TODO: FIX
+    // return m_SM->CanReadRegister(m_BaseRegisters[replicationIndex] + registerIndex);
+    return false;
 }
 
 bool DispatchUnit::CanWriteRegister(const u32 registerIndex, const u32 replicationIndex) noexcept
 {
-    return m_SM->CanWriteRegister(m_BaseRegisters[replicationIndex] + registerIndex);
+            // TODO: FIX
+    // return m_SM->CanWriteRegister(m_BaseRegisters[replicationIndex] + registerIndex);
+    return false;
 }
 
 void DispatchUnit::ReleaseRegisterContestation(const u32 registerIndex, const u32 replicationIndex) noexcept
 {
-    m_SM->ReleaseRegisterContestation(m_BaseRegisters[replicationIndex] + registerIndex);
+            // TODO: FIX
+    // m_SM->ReleaseRegisterContestation(m_BaseRegisters[replicationIndex] + registerIndex);
 }
 
 void DispatchUnit::LockRegisterRead(const u32 registerIndex, const u32 replicationIndex) noexcept
 {
-    m_SM->LockRegisterRead(m_BaseRegisters[replicationIndex] + registerIndex);
+            // TODO: FIX
+    // m_SM->LockRegisterRead(m_BaseRegisters[replicationIndex] + registerIndex);
 }
 
 void DispatchUnit::LockRegisterWrite(const u32 registerIndex, const u32 replicationIndex) noexcept
 {
-    m_SM->LockRegisterWrite(m_BaseRegisters[replicationIndex] + registerIndex);
+            // TODO: FIX
+    // m_SM->LockRegisterWrite(m_BaseRegisters[replicationIndex] + registerIndex);
 }
 
 void DispatchUnit::DecodeLdSt(u64& localInstructionPointer, u32& wordIndex, u8 instructionBytes[4]) noexcept
@@ -434,7 +389,7 @@ void DispatchUnit::DecodeLoadImmediate(u64& localInstructionPointer, u32& wordIn
 
     const u8 targetRegister = instructionBytes[wordIndex];
     
-    const u32 value = ReadU32(localInstructionPointer, wordIndex, instructionBytes);
+    const u32 value = ReadT<u32>(localInstructionPointer, wordIndex, instructionBytes);
 
     m_DecodedInstructionData.LoadImmediate.Register = targetRegister;
     m_DecodedInstructionData.LoadImmediate.Value = value;
@@ -604,8 +559,9 @@ void DispatchUnit::DispatchLoadImmediate(const u32 replicationIndex) noexcept
         m_IsStalled = true;
         return;
     }
-    
-    m_SM->SetRegister(m_BaseRegisters[replicationIndex] + m_DecodedInstructionData.LoadImmediate.Register, m_DecodedInstructionData.LoadImmediate.Value);
+
+            // TODO: FIX
+    // m_SM->SetRegister(m_BaseRegisters[replicationIndex] + m_DecodedInstructionData.LoadImmediate.Register, m_DecodedInstructionData.LoadImmediate.Value);
     m_ReplicationCompletedMask |= 1 << replicationIndex;
 }
 
@@ -622,7 +578,8 @@ void DispatchUnit::DispatchLoadZero(const u32 replicationIndex) noexcept
 
     for(u32 i = 0; i < m_DecodedInstructionData.LoadZero.RegisterCount + 1u; ++i)
     {
-        m_SM->SetRegister(m_BaseRegisters[replicationIndex] + static_cast<u32>(m_DecodedInstructionData.LoadZero.StartRegister) + i, 0);
+            // TODO: FIX
+        // m_SM->SetRegister(m_BaseRegisters[replicationIndex] + static_cast<u32>(m_DecodedInstructionData.LoadZero.StartRegister) + i, 0);
     }
 
     m_ReplicationCompletedMask |= 1 << replicationIndex;
@@ -657,8 +614,9 @@ void DispatchUnit::DispatchWriteStatistics(const u32 replicationIndex) noexcept
     u32 clockWords[2];
     (void) ::std::memcpy(clockWords, &m_TotalIterationsTracker, sizeof(m_TotalIterationsTracker));
 
-    m_SM->SetRegister(m_BaseRegisters[replicationIndex] + m_DecodedInstructionData.WriteStatistics.ClockStartRegister, clockWords[0]);
-    m_SM->SetRegister(m_BaseRegisters[replicationIndex] + m_DecodedInstructionData.WriteStatistics.ClockStartRegister + 1, clockWords[1]);
+            // TODO: FIX
+    // m_SM->SetRegister(m_BaseRegisters[replicationIndex] + m_DecodedInstructionData.WriteStatistics.ClockStartRegister, clockWords[0]);
+    // m_SM->SetRegister(m_BaseRegisters[replicationIndex] + m_DecodedInstructionData.WriteStatistics.ClockStartRegister + 1, clockWords[1]);
 
     u64 targetStatistic = 0;
     if(m_DecodedInstructionData.WriteStatistics.StatisticIndex == 0)
@@ -681,8 +639,9 @@ void DispatchUnit::DispatchWriteStatistics(const u32 replicationIndex) noexcept
     u32 statisticWords[2];
     (void) ::std::memcpy(statisticWords, &targetStatistic, sizeof(targetStatistic));
 
-    m_SM->SetRegister(m_BaseRegisters[replicationIndex] + m_DecodedInstructionData.WriteStatistics.StartRegister, statisticWords[0]);
-    m_SM->SetRegister(m_BaseRegisters[replicationIndex] + m_DecodedInstructionData.WriteStatistics.StartRegister + 1, statisticWords[1]);
+            // TODO: FIX
+    // m_SM->SetRegister(m_BaseRegisters[replicationIndex] + m_DecodedInstructionData.WriteStatistics.StartRegister, statisticWords[0]);
+    // m_SM->SetRegister(m_BaseRegisters[replicationIndex] + m_DecodedInstructionData.WriteStatistics.StartRegister + 1, statisticWords[1]);
 
     m_ReplicationCompletedMask |= 1 << replicationIndex;
 }

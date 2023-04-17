@@ -17,6 +17,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "VirtualBoxDevice", "Virtual
 		{B22E754B-166F-40EC-A023-FB7147405BC9} = {B22E754B-166F-40EC-A023-FB7147405BC9}
 	EndProjectSection
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "VirtualBoxDeviceLoader", "VirtualBoxDeviceLoader\VirtualBoxDeviceLoader.vcxproj", "{C4E8555E-44C4-4548-A82F-CA8824C675E2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -75,6 +77,18 @@ Global
 		{5CB43D6D-C7B5-4C8C-94CA-E1BBA4550739}.Release|x64.Build.0 = Release|x64
 		{5CB43D6D-C7B5-4C8C-94CA-E1BBA4550739}.Release|x86.ActiveCfg = Release|Win32
 		{5CB43D6D-C7B5-4C8C-94CA-E1BBA4550739}.Release|x86.Build.0 = Release|Win32
+		{C4E8555E-44C4-4548-A82F-CA8824C675E2}.Debug|Any CPU.ActiveCfg = Debug|x64
+		{C4E8555E-44C4-4548-A82F-CA8824C675E2}.Debug|Any CPU.Build.0 = Debug|x64
+		{C4E8555E-44C4-4548-A82F-CA8824C675E2}.Debug|x64.ActiveCfg = Debug|x64
+		{C4E8555E-44C4-4548-A82F-CA8824C675E2}.Debug|x64.Build.0 = Debug|x64
+		{C4E8555E-44C4-4548-A82F-CA8824C675E2}.Debug|x86.ActiveCfg = Debug|Win32
+		{C4E8555E-44C4-4548-A82F-CA8824C675E2}.Debug|x86.Build.0 = Debug|Win32
+		{C4E8555E-44C4-4548-A82F-CA8824C675E2}.Release|Any CPU.ActiveCfg = Release|x64
+		{C4E8555E-44C4-4548-A82F-CA8824C675E2}.Release|Any CPU.Build.0 = Release|x64
+		{C4E8555E-44C4-4548-A82F-CA8824C675E2}.Release|x64.ActiveCfg = Release|x64
+		{C4E8555E-44C4-4548-A82F-CA8824C675E2}.Release|x64.Build.0 = Release|x64
+		{C4E8555E-44C4-4548-A82F-CA8824C675E2}.Release|x86.ActiveCfg = Release|Win32
+		{C4E8555E-44C4-4548-A82F-CA8824C675E2}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

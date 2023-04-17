@@ -17,7 +17,8 @@ void WarpScheduler::NextWarp(const u64 instructionPointer, const u8 threadEnable
 
         for(u32 i = 0; i <= m_Warps[m_CurrentWarp].TotalRequiredRegisterCount; ++i)
         {
-            storagePointer[i] = m_SM->GetRegister(m_Warps[m_CurrentWarp].RegisterFileBase + i);
+            // TODO: FIX
+            // storagePointer[i] = m_SM->GetRegister(m_Warps[m_CurrentWarp].RegisterFileBase + i);
         }
 
         m_SM->FreeRegisters(m_Warps[m_CurrentWarp].RegisterFileBase, m_Warps[m_CurrentWarp].TotalRequiredRegisterCount);
@@ -35,7 +36,8 @@ void WarpScheduler::NextWarp(const u64 instructionPointer, const u8 threadEnable
 
         for(u32 i = 0; i <= m_Warps[m_CurrentWarp].TotalRequiredRegisterCount; ++i)
         {
-            m_SM->SetRegister(m_Warps[nextIndex].RegisterFileBase + i, storagePointer[i]);
+            // TODO: FIX
+            // m_SM->SetRegister(m_Warps[nextIndex].RegisterFileBase + i, storagePointer[i]);
         }
     }
 

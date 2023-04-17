@@ -266,6 +266,11 @@ public:
 
         return address;
     }
+
+    // Intended for use by VBDevice
+    PciConfigHeader& GetConfigHeader() noexcept { return m_ConfigHeader; }
+    u8* GetPciConfig() noexcept { return m_PciConfig; }
+    u8* GetPciExtendedConfig() noexcept { return m_PciExtendedConfig; }
 private:
     PciConfigHeader m_ConfigHeader;
     u8 m_PciConfig[256 - 64];

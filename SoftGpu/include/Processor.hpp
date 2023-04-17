@@ -230,6 +230,9 @@ public:
     {
         m_SMs[coreIndex].FlushCache();
     }
+
+    // Intended only for VBDevice.
+    PciController& GetPciController() noexcept { return m_PciController; }
 private:
     PciController m_PciController;
     PciControlRegisters m_PciRegisters;
