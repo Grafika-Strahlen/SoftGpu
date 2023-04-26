@@ -239,10 +239,14 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\PciConfigHandler.cpp" />
     <ClCompile Include="src\VBDevice.cpp" />
+    <ClCompile Include="src\VBDriver.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\ConLogger.hpp" />
+    <ClInclude Include="include\PciConfigHandler.hpp" />
+    <ClInclude Include="include\VBoxDeviceFunction.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

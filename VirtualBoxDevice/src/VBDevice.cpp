@@ -6,6 +6,7 @@
 #include <VBox/com/defs.h>
 #include <VBox/com/Guid.h>
 #include <VBox/vmm/pdmdev.h>
+#include <VBox/vmm/pdmdrv.h>
 #include <VBox/vmm/pdmapi.h>
 #include <VBox/version.h>
 #include <VBox/err.h>
@@ -18,44 +19,14 @@
 #include <iprt/ctype.h>
 #include <iprt/assert.h>
 
-#include "Processor.hpp"
-#include "DebugManager.hpp"
+#include <Processor.hpp>
+#include <DebugManager.hpp>
 #include <Console.hpp>
-#include <ConPrinter.hpp>
 #include "ConLogger.hpp"
+#include "VBoxDeviceFunction.hpp"
+#include "PciConfigHandler.hpp"
 
 DebugManager GlobalDebug;
-
-/**
- * Playground device per function (sub-device) data.
- */
-struct SoftGpuDeviceFunction final
-{
-    /** The function number. */
-    uint8_t         iFun;
-    /** Device function name. */
-    char            szName[31];
-    /** MMIO region \#0 name. */
-    char            szMmio0[32];
-    /** MMIO region \#1 name. */
-    char            szMmio1[32];
-    /** The MMIO region \#0 handle. */
-    IOMMMIOHANDLE   hMmio0;
-    /** The MMIO region \#1 handle. */
-    IOMMMIOHANDLE   hMmio1;
-    /** Backing storage. */
-    uint8_t         abBacking[4096];
-    Processor processor;
-};
-
-/**
- * Playground device instance data.
- */
-struct SoftGpuDevice final
-{
-    /** PCI device functions. */
-    SoftGpuDeviceFunction pciFunction;
-};
 
 #undef PDMPCIDEV_ASSERT_VALID
 
@@ -73,7 +44,12 @@ struct SoftGpuDevice final
         AssertMsg((a_pPciDev)->u32Magic == PDMPCIDEV_MAGIC, ("%#x\n", (a_pPciDev)->u32Magic)); \
     } while (false)
 
-#define SOFT_GPU_SSM_VERSION 1
+static DECLCALLBACK(void*) softGpuPortQueryInterface(PPDMIBASE pInterface, const char* const iid)
+{
+
+
+    return nullptr;
+}
 
 static DECLCALLBACK(VBOXSTRICTRC) softGpuMMIORead(PPDMDEVINS pDevIns, void* pvUser, RTGCPHYS off, void* pv, unsigned cb)
 {
@@ -81,8 +57,8 @@ static DECLCALLBACK(VBOXSTRICTRC) softGpuMMIORead(PPDMDEVINS pDevIns, void* pvUs
     NOREF(pDevIns);
 
 #ifdef LOG_ENABLED
-    unsigned const cbLog = cb;
-    const RTGCPHYS       offLog = off;
+    // unsigned const cbLog = cb;
+    // const RTGCPHYS       offLog = off;
 #endif
     // uint8_t* pbDst = static_cast<uint8_t*>(pv);
     // while(cb-- > 0)
@@ -120,15 +96,15 @@ static DECLCALLBACK(VBOXSTRICTRC) softGpuMMIOWrite(PPDMDEVINS pDevIns, void* pvU
 
 static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instance, PCFGMNODE cfg)
 {
-    ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: u32Version={XP}, iInstance={}", deviceInstance->u32Version, deviceInstance->iInstance);
-    ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Function Address: {}", reinterpret_cast<void*>(softGpuConstruct));
-
     /*
      * Check that the device instance and device helper structures are compatible.
      * THIS IS ALWAYS THE FIRST STATEMENT IN A CONSTRUCTOR!
      */
     PDMDEV_CHECK_VERSIONS_RETURN(deviceInstance); /* This must come first. */
     Assert(instance == 0); RT_NOREF(instance);
+
+    ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: u32Version={XP}, iInstance={}", deviceInstance->u32Version, deviceInstance->iInstance);
+    ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Function Address: {}", reinterpret_cast<void*>(softGpuConstruct));
 
     /*
      * Initialize the instance data so that the destructor won't mess up.
@@ -172,7 +148,7 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
     }
 
     uint16_t frameBufferBAR1GB;
-    rc = pdmDeviceApi->pfnCFGMQueryU16Def(cfg, "FrameBufferBAR1GB", &frameBufferBAR1GB, 2);  /* Default to nothing 2 GiB. */
+    rc = pdmDeviceApi->pfnCFGMQueryU16Def(cfg, "FrameBufferBAR1GB", &frameBufferBAR1GB, 2);  /* Default to 2 GiB. */
 
     if(RT_FAILURE(rc))
     {
@@ -195,6 +171,9 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
         secondBAR = static_cast<RTGCPHYS>(frameBufferBAR1GB) * _1G64;
     }
 
+    ConLogLn(u8"VBoxSoftGpuEmulator::softGpuConstruct: BAR0 Size: 0x{XP0}", firstBAR);
+    ConLogLn(u8"VBoxSoftGpuEmulator::softGpuConstruct: BAR1 Size: 0x{XP0}", secondBAR);
+
     ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Read config.");
 
     /*
@@ -207,7 +186,6 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
     ::new(&pciFunction->processor) Processor;
 
     PDMPCIDEV_ASSERT_VALID(deviceInstance, pciDevice);
-
     ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Asserted pciDevice as valid.");
 
     if constexpr(false)
@@ -224,18 +202,8 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
         static_assert(sizeof(PciController) == sizeof(pciDevice->abConfig), "SoftGpu PCI config space does not match size of the VBox backing storage.");
 
         ConLogLn("Setting PCI config info by copying the PCIController.");
-        //
-        // for(u16 i = 0; i < 4096; i += 4)
-        // {
-        //     const u32 dword = pciFunction->processor.PciConfigRead(i, 4);
-        //
-        //     PDMPciDevSetDWord(pciDevice, i, dword);
-        // }
 
         (void) ::std::memcpy(pciDevice->abConfig, &pciFunction->processor.GetPciController(), sizeof(pciDevice->abConfig));
-        // (void) ::std::memcpy(pciDevice->abConfig, &pciFunction->processor.GetPciController().GetConfigHeader(), sizeof(PciConfigHeader));
-        // (void) ::std::memcpy(pciDevice->abConfig + sizeof(PciConfigHeader), pciFunction->processor.GetPciController().GetPciConfig(), 256 - 64);
-        // (void) ::std::memcpy(pciDevice->abConfig + 256, pciFunction->processor.GetPciController().GetPciExtendedConfig(), 4096 - 256);
 
         ConLogLn("VBox PCI Vendor ID: {X}", PDMPciDevGetVendorId(pciDevice));
         ConLogLn("SoftGpu PCI Vendor ID: {X}", pciFunction->processor.PciConfigRead(0, 2));
@@ -243,11 +211,37 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
 
     ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Set PCI info.");
 
+    pciFunction->IBase.pfnQueryInterface = nullptr;
+
+    pciFunction->IDisplayPort.pfnUpdateDisplay = nullptr;
+    pciFunction->IDisplayPort.pfnUpdateDisplayAll = nullptr;
+    pciFunction->IDisplayPort.pfnQueryVideoMode = nullptr;
+    pciFunction->IDisplayPort.pfnSetRefreshRate = nullptr;
+    pciFunction->IDisplayPort.pfnTakeScreenshot = nullptr;
+    pciFunction->IDisplayPort.pfnFreeScreenshot = nullptr;
+    pciFunction->IDisplayPort.pfnDisplayBlt = nullptr;
+    pciFunction->IDisplayPort.pfnUpdateDisplayRect = nullptr;
+    pciFunction->IDisplayPort.pfnCopyRect = nullptr;
+    pciFunction->IDisplayPort.pfnSetRenderVRAM = nullptr;
+
+    pciFunction->IDisplayPort.pfnSetViewport = nullptr;
+    pciFunction->IDisplayPort.pfnReportMonitorPositions = nullptr;
+
+    pciFunction->IDisplayPort.pfnSendModeHint = nullptr;
+    pciFunction->IDisplayPort.pfnReportHostCursorCapabilities = nullptr;
+    pciFunction->IDisplayPort.pfnReportHostCursorPosition = nullptr;
+
     rc = PDMDevHlpPCIRegisterEx(deviceInstance, pciDevice, 0 /*fFlags*/, PDMPCIDEVREG_DEV_NO_FIRST_UNUSED, 0, device->pciFunction.szName);
     AssertLogRelRCReturn(rc, rc);
 
     ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Registered PCI device.");
-    
+
+    ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Registering config interceptor.");
+    // Register a interceptor for PCI config reads and writes.
+    rc = PDMDevHlpPCIInterceptConfigAccesses(deviceInstance, pciDevice, SoftGpuConfigRead, SoftGpuConfigWrite);
+    AssertLogRelRCReturn(rc, rc);
+    ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Registered config interceptor.");
+
     /* First region. */
     RTStrPrintf(pciFunction->szMmio0, sizeof(pciFunction->szMmio0), "PG-F%d-BAR0", 0);
     
@@ -286,8 +280,11 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
      * Save state handling.
      */
     rc = PDMDevHlpSSMRegister(deviceInstance, SOFT_GPU_SSM_VERSION, sizeof(*device), nullptr, nullptr);
+    AssertLogRelRCReturn(rc, rc);
 
     ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Registered saves state handler.");
+    
+    // rc = PDMDevHlpDriverAttach(deviceInstance, 0, &pciFunction->IBase, &pciFunction->pDrvBase, "Display Port");
 
     if(RT_FAILURE(rc))
     {
@@ -299,13 +296,18 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
 
 static DECLCALLBACK(int) softGpuDestruct(PPDMDEVINS deviceInstance)
 {
-    ConLogLn(u8"VBoxSoftGpuEmulator::softGpuDestruct: deviceInstance->u32Version={X} deviceInstance->iInstance={}", deviceInstance->u32Version, deviceInstance->iInstance);
-
     /*
      * Check the versions here as well since the destructor is *always* called.
      * THIS IS ALWAYS THE FIRST STATEMENT IN A DESTRUCTOR!
      */
     PDMDEV_CHECK_VERSIONS_RETURN_QUIET(deviceInstance);
+
+    ConLogLn(u8"VBoxSoftGpuEmulator::softGpuDestruct: deviceInstance->u32Version={X} deviceInstance->iInstance={}", deviceInstance->u32Version, deviceInstance->iInstance);
+
+    SoftGpuDevice* device = PDMDEVINS_2_DATA(deviceInstance, SoftGpuDevice*);
+    SoftGpuDeviceFunction& pciFunction = device->pciFunction;
+
+    pciFunction.processor.~Processor();
 
     return VINF_SUCCESS;
 }
@@ -333,26 +335,26 @@ static constexpr PDMDEVREG g_DeviceSoftGpu =
     /* .pszR0Mod = */               "",
     /* .pfnConstruct = */           softGpuConstruct,
     /* .pfnDestruct = */            softGpuDestruct,
-    /* .pfnRelocate = */            NULL,
-    /* .pfnMemSetup = */            NULL,
-    /* .pfnPowerOn = */             NULL,
-    /* .pfnReset = */               NULL,
-    /* .pfnSuspend = */             NULL,
-    /* .pfnResume = */              NULL,
-    /* .pfnAttach = */              NULL,
-    /* .pfnDetach = */              NULL,
-    /* .pfnQueryInterface = */      NULL,
-    /* .pfnInitComplete = */        NULL,
-    /* .pfnPowerOff = */            NULL,
-    /* .pfnSoftReset = */           NULL,
-    /* .pfnReserved0 = */           NULL,
-    /* .pfnReserved1 = */           NULL,
-    /* .pfnReserved2 = */           NULL,
-    /* .pfnReserved3 = */           NULL,
-    /* .pfnReserved4 = */           NULL,
-    /* .pfnReserved5 = */           NULL,
-    /* .pfnReserved6 = */           NULL,
-    /* .pfnReserved7 = */           NULL,
+    /* .pfnRelocate = */            nullptr,
+    /* .pfnMemSetup = */            nullptr,
+    /* .pfnPowerOn = */             nullptr,
+    /* .pfnReset = */               nullptr,
+    /* .pfnSuspend = */             nullptr,
+    /* .pfnResume = */              nullptr,
+    /* .pfnAttach = */              nullptr,
+    /* .pfnDetach = */              nullptr,
+    /* .pfnQueryInterface = */      nullptr,
+    /* .pfnInitComplete = */        nullptr,
+    /* .pfnPowerOff = */            nullptr,
+    /* .pfnSoftReset = */           nullptr,
+    /* .pfnReserved0 = */           nullptr,
+    /* .pfnReserved1 = */           nullptr,
+    /* .pfnReserved2 = */           nullptr,
+    /* .pfnReserved3 = */           nullptr,
+    /* .pfnReserved4 = */           nullptr,
+    /* .pfnReserved5 = */           nullptr,
+    /* .pfnReserved6 = */           nullptr,
+    /* .pfnReserved7 = */           nullptr,
 #elif defined(IN_RING0)
     /* .pfnEarlyConstruct = */      NULL,
     /* .pfnConstruct = */           NULL,
@@ -399,52 +401,54 @@ static bool pdmR3IsValidName(const char* pszName)
 /** The maximum device instance (total) size, ring-3 only devices. */
 #define PDM_MAX_DEVICE_INSTANCE_SIZE_R3 _8M
 
-static DECLCALLBACK(int) preRegisterTest(PPDMDEVREGCB pCallbacks, PCPDMDEVREG pReg)
+[[maybe_unused]] static DECLCALLBACK(int) preRegisterTest(PPDMDEVREGCB pCallbacks, PCPDMDEVREG pReg)
 {
+    (void) pCallbacks;
+
     /*
      * Validate the registration structure.
      */
     Assert(pReg);
-    AssertMsgReturn(pReg->u32Version == PDM_DEVREG_VERSION,
+    AssertLogRelMsgReturn(pReg->u32Version == PDM_DEVREG_VERSION,
         ("Unknown struct version %#x!\n", pReg->u32Version),
         VERR_PDM_UNKNOWN_DEVREG_VERSION);
 
-    AssertMsgReturn(pReg->szName[0]
+    AssertLogRelMsgReturn(pReg->szName[0]
         && strlen(pReg->szName) < sizeof(pReg->szName)
         && pdmR3IsValidName(pReg->szName),
         ("Invalid name '%.*s'\n", sizeof(pReg->szName), pReg->szName),
         VERR_PDM_INVALID_DEVICE_REGISTRATION);
-    AssertMsgReturn(!(pReg->fFlags & PDM_DEVREG_FLAGS_RC)
+    AssertLogRelMsgReturn(!(pReg->fFlags & PDM_DEVREG_FLAGS_RC)
         || (pReg->pszRCMod[0]
             && strlen(pReg->pszRCMod) < RT_SIZEOFMEMB(PDMDEVICECREATEREQ, szModName)),
         ("Invalid GC module name '%s' - (Device %s)\n", pReg->pszRCMod, pReg->szName),
         VERR_PDM_INVALID_DEVICE_REGISTRATION);
-    AssertMsgReturn(!(pReg->fFlags & PDM_DEVREG_FLAGS_R0)
+    AssertLogRelMsgReturn(!(pReg->fFlags & PDM_DEVREG_FLAGS_R0)
         || (pReg->pszR0Mod[0]
             && strlen(pReg->pszR0Mod) < RT_SIZEOFMEMB(PDMDEVICECREATEREQ, szModName)),
         ("Invalid R0 module name '%s' - (Device %s)\n", pReg->pszR0Mod, pReg->szName),
         VERR_PDM_INVALID_DEVICE_REGISTRATION);
-    AssertMsgReturn((pReg->fFlags & PDM_DEVREG_FLAGS_HOST_BITS_MASK) == PDM_DEVREG_FLAGS_HOST_BITS_DEFAULT,
+    AssertLogRelMsgReturn((pReg->fFlags & PDM_DEVREG_FLAGS_HOST_BITS_MASK) == PDM_DEVREG_FLAGS_HOST_BITS_DEFAULT,
         ("Invalid host bits flags! fFlags=%#x (Device %s)\n", pReg->fFlags, pReg->szName),
         VERR_PDM_INVALID_DEVICE_HOST_BITS);
-    AssertMsgReturn((pReg->fFlags & PDM_DEVREG_FLAGS_GUEST_BITS_MASK),
+    AssertLogRelMsgReturn((pReg->fFlags & PDM_DEVREG_FLAGS_GUEST_BITS_MASK),
         ("Invalid guest bits flags! fFlags=%#x (Device %s)\n", pReg->fFlags, pReg->szName),
         VERR_PDM_INVALID_DEVICE_REGISTRATION);
-    AssertMsgReturn(pReg->fClass,
+    AssertLogRelMsgReturn(pReg->fClass,
         ("No class! (Device %s)\n", pReg->szName),
         VERR_PDM_INVALID_DEVICE_REGISTRATION);
-    AssertMsgReturn(pReg->cMaxInstances > 0,
+    AssertLogRelMsgReturn(pReg->cMaxInstances > 0,
         ("Max instances %u! (Device %s)\n", pReg->cMaxInstances, pReg->szName),
         VERR_PDM_INVALID_DEVICE_REGISTRATION);
     uint32_t const cbMaxInstance = pReg->fFlags & (PDM_DEVREG_FLAGS_RC | PDM_DEVREG_FLAGS_R0)
         ? PDM_MAX_DEVICE_INSTANCE_SIZE : PDM_MAX_DEVICE_INSTANCE_SIZE_R3;
-    AssertMsgReturn(pReg->cbInstanceShared <= cbMaxInstance,
+    AssertLogRelMsgReturn(pReg->cbInstanceShared <= cbMaxInstance,
         ("Instance size %u bytes! (Max %u; Device %s)\n", pReg->cbInstanceShared, cbMaxInstance, pReg->szName),
         VERR_PDM_INVALID_DEVICE_REGISTRATION);
-    AssertMsgReturn(pReg->cbInstanceCC <= cbMaxInstance,
+    AssertLogRelMsgReturn(pReg->cbInstanceCC <= cbMaxInstance,
         ("Instance size %d bytes! (Max %u; Device %s)\n", pReg->cbInstanceCC, cbMaxInstance, pReg->szName),
         VERR_PDM_INVALID_DEVICE_REGISTRATION);
-    AssertMsgReturn(pReg->pfnConstruct,
+    AssertLogRelMsgReturn(pReg->pfnConstruct,
         ("No constructor! (Device %s)\n", pReg->szName),
         VERR_PDM_INVALID_DEVICE_REGISTRATION);
     AssertLogRelMsgReturn((pReg->fFlags & PDM_DEVREG_FLAGS_GUEST_BITS_MASK) == PDM_DEVREG_FLAGS_GUEST_BITS_DEFAULT,
@@ -472,7 +476,7 @@ extern "C" DECLEXPORT(int) VBoxDevicesRegister(PPDMDEVREGCB pCallbacks, const ui
     Console::Create();
     Console::Init();
     
-    ConLogLn(u8"VBoxSoftGpuEmulator::VBoxDevicesRegister: u32Version={X} pCallbacks->u32Version={X}", u32Version, pCallbacks->u32Version);
+    ConPrinter::PrintLn(u8"VBoxSoftGpuEmulator::VBoxDevicesRegister: u32Version=0x{X} pCallbacks->u32Version=0x{X}", u32Version, pCallbacks->u32Version);
 
     AssertLogRelMsgReturn(u32Version >= VBOX_VERSION, ("VirtualBox version %#x, expected %#x or higher\n", u32Version, VBOX_VERSION), VERR_VERSION_MISMATCH);
     AssertLogRelMsgReturn(pCallbacks->u32Version == PDM_DEVREG_CB_VERSION, ("Callbacks version %#x, expected %#x or higher\n", pCallbacks->u32Version, PDM_DEVREG_CB_VERSION), VERR_VERSION_MISMATCH);
