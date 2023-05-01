@@ -54,6 +54,9 @@
     <ClCompile Include="src\Cache.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\RomController.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\RegisterFile.hpp">
@@ -111,6 +114,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\CommandListDispatcher.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\RomController.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

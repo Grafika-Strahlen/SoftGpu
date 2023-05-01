@@ -11,17 +11,21 @@
 struct SoftGpuDeviceFunction final
 {
     /** The function number. */
-    uint8_t         iFun;
+    uint8_t         FunctionId;
     /** Device function name. */
-    char            szName[31];
-    /** MMIO region \#0 name. */
-    char            szMmio0[32];
-    /** MMIO region \#1 name. */
-    char            szMmio1[32];
-    /** The MMIO region \#0 handle. */
-    IOMMMIOHANDLE   hMmio0;
-    /** The MMIO region \#1 handle. */
-    IOMMMIOHANDLE   hMmio1;
+    char            FunctionName[31];
+    /** MMIO region BAR0 name. */
+    char            MmioBar0Name[32];
+    /** MMIO region BAR1 name. */
+    char            MmioBar1Name[32];
+    /** MMIO region Expansion ROM name. */
+    char            MmioExpansionRomName[32];
+    /** The MMIO region BAR0 handle. */
+    IOMMMIOHANDLE   hMmioBar0;
+    /** The MMIO region BAR1 handle. */
+    IOMMMIOHANDLE   hMmioBar1;
+    /** The MMIO region Expansion ROM handle. */
+    IOMMMIOHANDLE   hMmioExpansionRom;
     /** Backing storage. */
     uint8_t         abBacking[4096];
     PDMIBASE IBase;

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <VBox/com/Guid.h>
 #include <VBox/msi.h>
 
 #include <VBox/com/VirtualBox.h>

@@ -3,24 +3,34 @@
  */
 
 /*
- * Copyright (C) 2006-2020 Oracle Corporation
+ * Copyright (C) 2006-2023 Oracle and/or its affiliates.
  *
- * This file is part of VirtualBox Open Source Edition (OSE), as
- * available from http://www.virtualbox.org. This file is free software;
- * you can redistribute it and/or modify it under the terms of the GNU
- * General Public License (GPL) as published by the Free Software
- * Foundation, in version 2 as it comes in the "COPYING" file of the
- * VirtualBox OSE distribution. VirtualBox OSE is distributed in the
- * hope that it will be useful, but WITHOUT ANY WARRANTY of any kind.
+ * This file is part of VirtualBox base platform packages, as
+ * available from https://www.virtualbox.org.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation, in version 3 of the
+ * License.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, see <https://www.gnu.org/licenses>.
  *
  * The contents of this file may alternatively be used under the terms
  * of the Common Development and Distribution License Version 1.0
- * (CDDL) only, as it comes in the "COPYING.CDDL" file of the
- * VirtualBox OSE distribution, in which case the provisions of the
+ * (CDDL), a copy of it is provided in the "COPYING.CDDL" file included
+ * in the VirtualBox distribution, in which case the provisions of the
  * CDDL are applicable instead of those of the GPL.
  *
  * You may elect to license modified versions of this file under the
  * terms and conditions of either the GPL or the CDDL or both.
+ *
+ * SPDX-License-Identifier: GPL-3.0-only OR CDDL-1.0
  */
 
 #ifndef IPRT_INCLUDED_utf16_h
@@ -603,6 +613,17 @@ RTDECL(int) RTUtf16NICmpAscii(PCRTUTF16 pwsz1, const char *psz2, size_t cwcMax);
 
 
 /**
+ * Locates a substring, ascii version.
+ *
+ * @returns Offset into @a pwszString of the substring if found, -1 if not.
+ * @param   pwszString  The UTF-16 to search. NULL is allowed (no match).
+ * @param   pszSubStr   The pure ASCII substring to locate. NULL is allowed (not
+ *                      matching anything, just like an empty string).
+ */
+RTDECL(ssize_t) RTUtf16FindAscii(PCRTUTF16 pwszString, const char *pszSubStr);
+
+
+/**
  * Folds a UTF-16 string to lowercase.
  *
  * This is a very simple folding; is uses the simple lowercase
@@ -1169,6 +1190,22 @@ RTDECL(RTUNICP) RTUtf16GetCpInternal(PCRTUTF16 pwsz);
 RTDECL(int) RTUtf16GetCpExInternal(PCRTUTF16 *ppwsz, PRTUNICP pCp);
 
 /**
+ * Get the unicode code point at the given string position with length
+ * restriction.
+ *
+ * @returns iprt status code.
+ * @param   ppwsz       Pointer to the string pointer. This will be updated to
+ *                      point to the char following the current code point.
+ * @param   pcwc        Pointer to the max string length. This will be
+ *                      decremented corrsponding to the advancement of @a ppwsz.
+ * @param   pCp         Where to store the code point.
+ *                      RTUNICP_INVALID is stored here on failure.
+ *
+ * @remark  This is an internal worker for RTUtf16GetCpNEx().
+ */
+RTDECL(int) RTUtf16GetCpNExInternal(PCRTUTF16 *ppwsz, size_t *pcwc, PRTUNICP pCp);
+
+/**
  * Get the unicode code point at the given string position, big endian.
  *
  * @returns iprt status code.
@@ -1239,6 +1276,38 @@ DECLINLINE(int) RTUtf16GetCpEx(PCRTUTF16 *ppwsz, PRTUNICP pCp)
         return VINF_SUCCESS;
     }
     return RTUtf16GetCpExInternal(ppwsz, pCp);
+}
+
+/**
+ * Get the unicode code point at the given string position.
+ *
+ * @returns iprt status code.
+ * @param   ppwsz       Pointer to the string pointer. This will be updated to
+ *                      point to the char following the current code point.
+ * @param   pcwc        Pointer to the max string length. This will be
+ *                      decremented corrsponding to the advancement of @a ppwsz.
+ * @param   pCp         Where to store the code point. RTUNICP_INVALID is stored
+ *                      here on failure.
+ *
+ * @remark  We optimize this operation by using an inline function for
+ *          everything which isn't a surrogate pair or and endian indicator.
+ */
+DECLINLINE(int) RTUtf16GetCpNEx(PCRTUTF16 *ppwsz, size_t *pcwc, PRTUNICP pCp)
+{
+    const size_t cwc = *pcwc;
+    if (cwc > 0)
+    {
+        const PCRTUTF16 pwsz = *ppwsz;
+        const RTUTF16   wc   = *pwsz;
+        if (wc < 0xd800 || (wc > 0xdfff && wc < 0xfffe))
+        {
+            *pCp   = wc;
+            *pcwc  = cwc  - 1;
+            *ppwsz = pwsz + 1;
+            return VINF_SUCCESS;
+        }
+    }
+    return RTUtf16GetCpNExInternal(ppwsz, pcwc, pCp);
 }
 
 /**
@@ -1380,6 +1449,76 @@ DECLINLINE(bool) RTUtf16IsSurrogatePair(RTUTF16 wcHigh, RTUTF16 wcLow)
  * @sa      RTStrPrintHexBytes.
  */
 RTDECL(int) RTUtf16PrintHexBytes(PRTUTF16 pwszBuf, size_t cwcBuf, void const *pv, size_t cb, uint32_t fFlags);
+
+/**
+ * String printf producing UTF-16 output.
+ *
+ * @returns On success, positive count of formatted RTUTF16 units excluding the
+ *          terminator.  On buffer overflow, negative number giving the required
+ *          buffer size (including terminator) in RTUTF16 units.
+ *
+ * @param   pwszBuffer  Output buffer.
+ * @param   cwcBuffer   Size of the output buffer in RTUTF16 units.
+ * @param   pszFormat   Pointer to the format string, @see pg_rt_str_format.
+ * @param   args        The format argument.
+ *
+ * @note    This is similar to RTStrPrintf2V (not RTStrPrintfV)!
+ */
+RTDECL(ssize_t) RTUtf16PrintfV(PRTUTF16 pwszBuffer, size_t cwcBuffer, const char *pszFormat, va_list args) RT_IPRT_FORMAT_ATTR(3, 0);
+
+/**
+ * String printf producing UTF-16 output.
+ *
+ * @returns On success, positive count of formatted RTUTF16 units excluding the
+ *          terminator.  On buffer overflow, negative number giving the required
+ *          buffer size (including terminator) in RTUTF16 units.
+ *
+ * @param   pwszBuffer  Output buffer.
+ * @param   cwcBuffer   Size of the output buffer in RTUTF16 units.
+ * @param   pszFormat   Pointer to the format string, @see pg_rt_str_format.
+ * @param   ...         The format argument.
+ *
+ * @note    This is similar to RTStrPrintf2 (not RTStrPrintf)!
+ */
+RTDECL(ssize_t) RTUtf16Printf(PRTUTF16 pwszBuffer, size_t cwcBuffer, const char *pszFormat, ...) RT_IPRT_FORMAT_ATTR(3, 4);
+
+/**
+ * String printf producing UTF-16 output with custom formatting.
+ *
+ * @returns On success, positive count of formatted RTUTF16 units excluding the
+ *          terminator.  On buffer overflow, negative number giving the required
+ *          buffer size (including terminator) in RTUTF16 units.
+ *
+ * @param   pfnFormat   Pointer to handler function for the custom formats.
+ * @param   pvArg       Argument to the pfnFormat function.
+ * @param   pwszBuffer  Output buffer.
+ * @param   cwcBuffer   Size of the output buffer in RTUTF16 units.
+ * @param   pszFormat   Pointer to the format string, @see pg_rt_str_format.
+ * @param   args        The format argument.
+ *
+ * @note    This is similar to RTStrPrintf2ExV (not RTStrPrintfExV)!
+ */
+RTDECL(ssize_t) RTUtf16PrintfExV(PFNSTRFORMAT pfnFormat, void *pvArg, PRTUTF16 pwszBuffer, size_t cwcBuffer,
+                                 const char *pszFormat, va_list args)  RT_IPRT_FORMAT_ATTR(5, 0);
+
+/**
+ * String printf producing UTF-16 output with custom formatting.
+ *
+ * @returns On success, positive count of formatted RTUTF16 units excluding the
+ *          terminator.  On buffer overflow, negative number giving the required
+ *          buffer size (including terminator) in RTUTF16 units.
+ *
+ * @param   pfnFormat   Pointer to handler function for the custom formats.
+ * @param   pvArg       Argument to the pfnFormat function.
+ * @param   pwszBuffer  Output buffer.
+ * @param   cwcBuffer   Size of the output buffer in RTUTF16 units.
+ * @param   pszFormat   Pointer to the format string, @see pg_rt_str_format.
+ * @param   ...         The format argument.
+ *
+ * @note    This is similar to RTStrPrintf2Ex (not RTStrPrintfEx)!
+ */
+RTDECL(ssize_t) RTUtf16PrintfEx(PFNSTRFORMAT pfnFormat, void *pvArg, PRTUTF16 pwszBuffer, size_t cwcBuffer,
+                                const char *pszFormat, ...)  RT_IPRT_FORMAT_ATTR(5, 6);
 
 /** @} */
 RT_C_DECLS_END

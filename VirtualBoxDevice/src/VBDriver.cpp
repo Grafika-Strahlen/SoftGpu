@@ -4,7 +4,6 @@
 #define RT_STRICT
 #include <VBox/com/assert.h>
 #include <VBox/com/defs.h>
-#include <VBox/com/Guid.h>
 #include <VBox/vmm/pdmdrv.h>
 #include <VBox/vmm/pdmapi.h>
 #include <VBox/version.h>
@@ -28,7 +27,7 @@
 /**
  * The driver registration structure.
  */
-static constexpr PDMDRVREG g_DriverSoftGpu =
+[[maybe_unused]] static constexpr PDMDRVREG g_DriverSoftGpu =
 {
     /* .u32Version = */             PDM_DRVREG_VERSION,
     /* .szName = */                 "softgpudriver",
@@ -67,6 +66,8 @@ static bool pdmR3IsValidName(const char* pszName)
 
 [[maybe_unused]] static DECLCALLBACK(int) preRegisterTest(PCPDMDRVREGCB pCallbacks, PCPDMDRVREG pReg)
 {
+    (void) pCallbacks;
+
     /*
      * Validate the registration structure.
      */
@@ -90,7 +91,7 @@ static bool pdmR3IsValidName(const char* pszName)
             && RTStrEnd(pReg->szRCMod, sizeof(pReg->szRCMod))),
         ("%s: %.*s\n", pReg->szName, sizeof(pReg->szRCMod), pReg->szRCMod),
         VERR_PDM_INVALID_DRIVER_REGISTRATION);
-    AssertLogRelMsgReturn(VALID_PTR(pReg->pszDescription),
+    AssertLogRelMsgReturn(RT_VALID_PTR(pReg->pszDescription),
         ("%s: %p\n", pReg->szName, pReg->pszDescription),
         VERR_PDM_INVALID_DRIVER_REGISTRATION);
     AssertLogRelMsgReturn(!(pReg->fFlags & ~(PDM_DRVREG_FLAGS_HOST_BITS_MASK | PDM_DRVREG_FLAGS_R0 | PDM_DRVREG_FLAGS_RC)),
@@ -105,10 +106,10 @@ static bool pdmR3IsValidName(const char* pszName)
     AssertLogRelMsgReturn(pReg->cbInstance <= _1M,
         ("%s: %#x\n", pReg->szName, pReg->cbInstance),
         VERR_PDM_INVALID_DRIVER_REGISTRATION);
-    AssertLogRelMsgReturn(VALID_PTR(pReg->pfnConstruct),
+    AssertLogRelMsgReturn(RT_VALID_PTR(pReg->pfnConstruct),
         ("%s: %p\n", pReg->szName, pReg->pfnConstruct),
         VERR_PDM_INVALID_DRIVER_REGISTRATION);
-    AssertLogRelMsgReturn(VALID_PTR(pReg->pfnRelocate) || !(pReg->fFlags & PDM_DRVREG_FLAGS_RC),
+    AssertLogRelMsgReturn(RT_VALID_PTR(pReg->pfnRelocate) || !(pReg->fFlags & PDM_DRVREG_FLAGS_RC),
         ("%s: %#x\n", pReg->szName, pReg->cbInstance),
         VERR_PDM_INVALID_DRIVER_REGISTRATION);
     AssertLogRelMsgReturn(pReg->pfnSoftReset == NULL,

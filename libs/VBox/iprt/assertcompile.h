@@ -3,24 +3,34 @@
  */
 
 /*
- * Copyright (C) 2006-2020 Oracle Corporation
+ * Copyright (C) 2006-2023 Oracle and/or its affiliates.
  *
- * This file is part of VirtualBox Open Source Edition (OSE), as
- * available from http://www.virtualbox.org. This file is free software;
- * you can redistribute it and/or modify it under the terms of the GNU
- * General Public License (GPL) as published by the Free Software
- * Foundation, in version 2 as it comes in the "COPYING" file of the
- * VirtualBox OSE distribution. VirtualBox OSE is distributed in the
- * hope that it will be useful, but WITHOUT ANY WARRANTY of any kind.
+ * This file is part of VirtualBox base platform packages, as
+ * available from https://www.virtualbox.org.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation, in version 3 of the
+ * License.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, see <https://www.gnu.org/licenses>.
  *
  * The contents of this file may alternatively be used under the terms
  * of the Common Development and Distribution License Version 1.0
- * (CDDL) only, as it comes in the "COPYING.CDDL" file of the
- * VirtualBox OSE distribution, in which case the provisions of the
+ * (CDDL), a copy of it is provided in the "COPYING.CDDL" file included
+ * in the VirtualBox distribution, in which case the provisions of the
  * CDDL are applicable instead of those of the GPL.
  *
  * You may elect to license modified versions of this file under the
  * terms and conditions of either the GPL or the CDDL or both.
+ *
+ * SPDX-License-Identifier: GPL-3.0-only OR CDDL-1.0
  */
 
 #ifndef IPRT_INCLUDED_assertcompile_h
@@ -55,13 +65,21 @@ typedef int RTASSERTTYPE[1];
 /**
  * RTASSERTVAR is the type the AssertCompile() macro redefines.
  * It has no other function and shouldn't be used.
- * GCC uses this.
+ *
+ * GCC and IBM VisualAge C/C++ uses this.  GCC doesn't technicaly need this
+ * global scope one as it declares it for each use, however things get
+ * complicated in C++ code where most GCC and clang versions gets upset by mixed
+ * "C" and "C++" versions of the symbol when using inside and outside
+ * RT_C_DECLS_BEGIN/END.  The GCC 3.3.x and 3.4.x versions we use, OTOH will
+ * always complain about unused RTASSERTVAR for each AssertCompileNS use in a
+ * function if we declare it globally, so we don't do it for those, but we do
+ * for 4.x+ to prevent linkage confusion.
  */
-#ifdef __GNUC__
-RT_C_DECLS_BEGIN
-#endif
+#if !defined(__cplusplus) || !defined(__GNUC__)
 extern int RTASSERTVAR[1];
-#ifdef __GNUC__
+#elif RT_GNUC_PREREQ(4, 0) || defined(__clang_major__) /* Not sure when they fixed the global scoping __unused__/whatever problem. */
+RT_C_DECLS_BEGIN
+extern int RTASSERTVAR[1];
 RT_C_DECLS_END
 #endif
 
@@ -94,7 +112,9 @@ RT_C_DECLS_END
  * @param   expr    Expression which should be true.
  */
 #ifdef __GNUC__
-# define AssertCompileNS(expr)  extern int RTASSERTVAR[1] __attribute__((__unused__)), RTASSERTVAR[(expr) ? 1 : 0] __attribute__((__unused__))
+# define AssertCompileNS(expr)  AssertCompileNS2(expr,RTASSERTVAR)
+# define AssertCompileNS2(expr,a_VarName)   extern int a_VarName[         1    ] __attribute__((__unused__)), \
+                                                       a_VarName[(expr) ? 1 : 0] __attribute__((__unused__))
 #elif defined(__IBMC__) || defined(__IBMCPP__)
 # define AssertCompileNS(expr)  extern int RTASSERTVAR[(expr) ? 1 : 0]
 #else

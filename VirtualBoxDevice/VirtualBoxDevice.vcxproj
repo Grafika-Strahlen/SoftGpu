@@ -129,6 +129,7 @@
       <AdditionalDependencies>TauUtilsDynamicStatic.lib;SoftGpu.lib;VBoxVMM.lib;VBoxRT.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LargeAddressAware>true</LargeAddressAware>
       <TargetMachine>MachineX86</TargetMachine>
+      <FixedBaseAddress>false</FixedBaseAddress>
     </Link>
     <PostBuildEvent>
       <Command>D:\GPU\SoftGpu\signing\copy_device.bat</Command>
@@ -165,6 +166,7 @@
       <LargeAddressAware>true</LargeAddressAware>
       <TargetMachine>MachineX86</TargetMachine>
       <AdditionalOptions>/INTEGRITYCHECK %(AdditionalOptions)</AdditionalOptions>
+      <FixedBaseAddress>false</FixedBaseAddress>
     </Link>
     <PostBuildEvent>
       <Command>D:\GPU\SoftGpu\signing\copy_device.bat</Command>
@@ -197,6 +199,7 @@
       <AdditionalDependencies>TauUtilsDynamicStatic.lib;SoftGpu.lib;VBoxVMM.lib;VBoxRT.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LargeAddressAware>true</LargeAddressAware>
       <TargetMachine>MachineX64</TargetMachine>
+      <FixedBaseAddress>false</FixedBaseAddress>
     </Link>
     <PostBuildEvent>
       <Command>D:\GPU\SoftGpu\signing\copy_device.bat</Command>
@@ -233,12 +236,14 @@
       <LargeAddressAware>true</LargeAddressAware>
       <TargetMachine>MachineX64</TargetMachine>
       <AdditionalOptions>/INTEGRITYCHECK %(AdditionalOptions)</AdditionalOptions>
+      <FixedBaseAddress>false</FixedBaseAddress>
     </Link>
     <PostBuildEvent>
       <Command>D:\GPU\SoftGpu\signing\copy_device.bat</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\DllMain.c" />
     <ClCompile Include="src\PciConfigHandler.cpp" />
     <ClCompile Include="src\VBDevice.cpp" />
     <ClCompile Include="src\VBDriver.cpp" />

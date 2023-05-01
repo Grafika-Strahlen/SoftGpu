@@ -235,6 +235,7 @@
     <ClCompile Include="src\Main.cpp" />
     <ClCompile Include="src\MMU.cpp" />
     <ClCompile Include="src\PCIControlRegisters.cpp" />
+    <ClCompile Include="src\RomController.cpp" />
     <ClCompile Include="src\WarpScheduler.cpp" />
     <ClCompile Include="src\StreamingMultiprocessor.cpp" />
     <ClInclude Include="include\CommandListDispatcher.hpp" />
@@ -244,6 +245,7 @@
     <ClInclude Include="include\PCIController.hpp" />
     <ClInclude Include="include\PCIControlRegisters.hpp" />
     <ClInclude Include="include\RegisterAllocator.hpp" />
+    <ClInclude Include="include\RomController.hpp" />
     <ClInclude Include="include\WarpScheduler.hpp" />
   </ItemGroup>
   <ItemGroup>

@@ -4,9 +4,7 @@
 #define RT_STRICT
 #include <VBox/com/assert.h>
 #include <VBox/com/defs.h>
-#include <VBox/com/Guid.h>
 #include <VBox/vmm/pdmdev.h>
-#include <VBox/vmm/pdmdrv.h>
 #include <VBox/vmm/pdmapi.h>
 #include <VBox/version.h>
 #include <VBox/err.h>
@@ -44,9 +42,10 @@ DebugManager GlobalDebug;
         AssertMsg((a_pPciDev)->u32Magic == PDMPCIDEV_MAGIC, ("%#x\n", (a_pPciDev)->u32Magic)); \
     } while (false)
 
-static DECLCALLBACK(void*) softGpuPortQueryInterface(PPDMIBASE pInterface, const char* const iid)
+[[maybe_unused]] static DECLCALLBACK(void*) softGpuPortQueryInterface(PPDMIBASE pInterface, const char* const iid)
 {
-
+    (void) pInterface;
+    (void) iid;
 
     return nullptr;
 }
@@ -68,7 +67,7 @@ static DECLCALLBACK(VBOXSTRICTRC) softGpuMMIORead(PPDMDEVINS pDevIns, void* pvUs
     //     off++;
     // }
     
-    ConLogLn("SoftGpu/[{}]: READ off={} cb={}: {}\n", pFun->iFun, off, cb, cb, pv);
+    // ConLogLn("SoftGpu/[{}]: READ off=0x{XP0} cb={}: 0x{XP0}\n", pFun->FunctionId, off, cb, cb, pv);
 
     pFun->processor.PciMemRead(off, static_cast<u16>(cb), reinterpret_cast<u32*>(pv));
 
@@ -79,7 +78,7 @@ static DECLCALLBACK(VBOXSTRICTRC) softGpuMMIOWrite(PPDMDEVINS pDevIns, void* pvU
 {
     SoftGpuDeviceFunction* pFun = static_cast<SoftGpuDeviceFunction*>(pvUser);
     NOREF(pDevIns);
-    ConLogLn("SoftGpu/[{}]: WRITE off={} cb={}: {}\n", pFun->iFun, off, cb, cb, pv);
+    // ConLogLn("SoftGpu/[{}]: WRITE off=0x{XP0} cb={}: 0x{XP0}\n", pFun->FunctionId, off, cb, cb, pv);
 
     // uint8_t const* pbSrc = static_cast<uint8_t const*>(pv);
     // while(cb-- > 0)
@@ -90,6 +89,25 @@ static DECLCALLBACK(VBOXSTRICTRC) softGpuMMIOWrite(PPDMDEVINS pDevIns, void* pvU
     // }
 
     pFun->processor.PciMemWrite(off, static_cast<u16>(cb), reinterpret_cast<const u32*>(pv));
+
+    return VINF_SUCCESS;
+}
+
+static DECLCALLBACK(int) softGpuMMIOMapUnmap(PPDMDEVINS pDevIns, PPDMPCIDEV pPciDev, uint32_t iRegion, RTGCPHYS GCPhysAddress, RTGCPHYS cb, PCIADDRESSSPACE enmType)
+{
+    (void) pPciDev;
+
+    const SoftGpuDevice* device = PDMDEVINS_2_DATA(pDevIns, SoftGpuDevice*);
+    const SoftGpuDeviceFunction& pciFunction = device->pciFunction;
+
+    if(GCPhysAddress != NIL_RTGCPHYS)
+    {
+        ConLogLn(u8"SoftGpu/[{}]: Mapping MMIO Region {}: Address = 0x{XP0}, Size = 0x{XP0}, BAR Flags: 0x{XP0}", pciFunction.FunctionId, iRegion, GCPhysAddress, cb, static_cast<u8>(enmType));
+    }
+    else
+    {
+        ConLogLn(u8"SoftGpu/[{}]: Unmapping MMIO Region {}: Address = 0x{XP0}, Size = 0x{XP0}, BAR Flags: 0x{XP0}", pciFunction.FunctionId, iRegion, GCPhysAddress, cb, static_cast<u8>(enmType));
+    }
 
     return VINF_SUCCESS;
 }
@@ -165,11 +183,11 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
         return PDMDEV_SET_ERROR(deviceInstance, rc, N_("Configuration error: Invalid \"FrameBufferBAR1GB\" value (must be 16 or less)"));
     }
 
-    RTGCPHYS secondBAR = 2ull * _1G64;
-    if(frameBufferBAR1GB)
-    {
-        secondBAR = static_cast<RTGCPHYS>(frameBufferBAR1GB) * _1G64;
-    }
+    RTGCPHYS secondBAR = 256ull * _1M;
+    // if(frameBufferBAR1GB)
+    // {
+    //     secondBAR = static_cast<RTGCPHYS>(frameBufferBAR1GB) * _1G64;
+    // }
 
     ConLogLn(u8"VBoxSoftGpuEmulator::softGpuConstruct: BAR0 Size: 0x{XP0}", firstBAR);
     ConLogLn(u8"VBoxSoftGpuEmulator::softGpuConstruct: BAR1 Size: 0x{XP0}", secondBAR);
@@ -181,8 +199,8 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
      */
     PPDMPCIDEV pciDevice = deviceInstance->apPciDevs[0];
     SoftGpuDeviceFunction* pciFunction = &device->pciFunction;
-    RTStrPrintf(pciFunction->szName, sizeof(pciFunction->szName), "soft_gpu%u", 0);
-    pciFunction->iFun = 0;
+    RTStrPrintf(pciFunction->FunctionName, sizeof(pciFunction->FunctionName), "soft_gpu%u", 0);
+    pciFunction->FunctionId = 0;
     ::new(&pciFunction->processor) Processor;
 
     PDMPCIDEV_ASSERT_VALID(deviceInstance, pciDevice);
@@ -195,7 +213,7 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
         PDMPciDevSetDeviceId(pciDevice, 0x0001);
         PDMPciDevSetClassBase(pciDevice, 0x03);  /* display controller device */
         PDMPciDevSetClassSub(pciDevice, 0x00);  /* VGA compatible controller device */
-        PDMPciDevSetHeaderType(pciDevice, 0x00);  /* normal, multifunction device */
+        PDMPciDevSetHeaderType(pciDevice, 0x00);  /* normal, single function device */
     }
     else
     {
@@ -211,27 +229,27 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
 
     ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Set PCI info.");
 
-    pciFunction->IBase.pfnQueryInterface = nullptr;
+    // pciFunction->IBase.pfnQueryInterface = nullptr;
+    //
+    // pciFunction->IDisplayPort.pfnUpdateDisplay = nullptr;
+    // pciFunction->IDisplayPort.pfnUpdateDisplayAll = nullptr;
+    // pciFunction->IDisplayPort.pfnQueryVideoMode = nullptr;
+    // pciFunction->IDisplayPort.pfnSetRefreshRate = nullptr;
+    // pciFunction->IDisplayPort.pfnTakeScreenshot = nullptr;
+    // pciFunction->IDisplayPort.pfnFreeScreenshot = nullptr;
+    // pciFunction->IDisplayPort.pfnDisplayBlt = nullptr;
+    // pciFunction->IDisplayPort.pfnUpdateDisplayRect = nullptr;
+    // pciFunction->IDisplayPort.pfnCopyRect = nullptr;
+    // pciFunction->IDisplayPort.pfnSetRenderVRAM = nullptr;
+    //
+    // pciFunction->IDisplayPort.pfnSetViewport = nullptr;
+    // pciFunction->IDisplayPort.pfnReportMonitorPositions = nullptr;
+    //
+    // pciFunction->IDisplayPort.pfnSendModeHint = nullptr;
+    // pciFunction->IDisplayPort.pfnReportHostCursorCapabilities = nullptr;
+    // pciFunction->IDisplayPort.pfnReportHostCursorPosition = nullptr;
 
-    pciFunction->IDisplayPort.pfnUpdateDisplay = nullptr;
-    pciFunction->IDisplayPort.pfnUpdateDisplayAll = nullptr;
-    pciFunction->IDisplayPort.pfnQueryVideoMode = nullptr;
-    pciFunction->IDisplayPort.pfnSetRefreshRate = nullptr;
-    pciFunction->IDisplayPort.pfnTakeScreenshot = nullptr;
-    pciFunction->IDisplayPort.pfnFreeScreenshot = nullptr;
-    pciFunction->IDisplayPort.pfnDisplayBlt = nullptr;
-    pciFunction->IDisplayPort.pfnUpdateDisplayRect = nullptr;
-    pciFunction->IDisplayPort.pfnCopyRect = nullptr;
-    pciFunction->IDisplayPort.pfnSetRenderVRAM = nullptr;
-
-    pciFunction->IDisplayPort.pfnSetViewport = nullptr;
-    pciFunction->IDisplayPort.pfnReportMonitorPositions = nullptr;
-
-    pciFunction->IDisplayPort.pfnSendModeHint = nullptr;
-    pciFunction->IDisplayPort.pfnReportHostCursorCapabilities = nullptr;
-    pciFunction->IDisplayPort.pfnReportHostCursorPosition = nullptr;
-
-    rc = PDMDevHlpPCIRegisterEx(deviceInstance, pciDevice, 0 /*fFlags*/, PDMPCIDEVREG_DEV_NO_FIRST_UNUSED, 0, device->pciFunction.szName);
+    rc = PDMDevHlpPCIRegisterEx(deviceInstance, pciDevice, 0 /*fFlags*/, PDMPCIDEVREG_DEV_NO_FIRST_UNUSED, 0, device->pciFunction.FunctionName);
     AssertLogRelRCReturn(rc, rc);
 
     ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Registered PCI device.");
@@ -242,39 +260,56 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
     AssertLogRelRCReturn(rc, rc);
     ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Registered config interceptor.");
 
-    /* First region. */
-    RTStrPrintf(pciFunction->szMmio0, sizeof(pciFunction->szMmio0), "PG-F%d-BAR0", 0);
-    
+    /* BAR0 region. */
+    RTStrPrintf(pciFunction->MmioBar0Name, sizeof(pciFunction->MmioBar0Name), "SG-F%d-BAR0", 0);
+
     rc = PDMDevHlpMmioCreate(deviceInstance, firstBAR, pciDevice, 0 /*iPciRegion*/,
         softGpuMMIOWrite, softGpuMMIORead, pciFunction,
-        IOMMMIO_FLAGS_READ_DWORD | IOMMMIO_FLAGS_WRITE_DWORD_ZEROED | IOMMMIO_FLAGS_ABS, pciFunction->szMmio0, &pciFunction->hMmio0);
+        IOMMMIO_FLAGS_READ_DWORD | IOMMMIO_FLAGS_WRITE_DWORD_ZEROED | IOMMMIO_FLAGS_ABS, pciFunction->MmioBar0Name, &pciFunction->hMmioBar0);
     AssertLogRelRCReturn(rc, rc);
     
-    ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Created first region.");
+    ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Created BAR0 region.");
     
     rc = PDMDevHlpPCIIORegionRegisterMmioEx(deviceInstance, pciDevice, 0, firstBAR,
         static_cast<PCIADDRESSSPACE>(PCI_ADDRESS_SPACE_MEM | PCI_ADDRESS_SPACE_BAR32),
-        pciFunction->hMmio0, nullptr);
+        pciFunction->hMmioBar0, softGpuMMIOMapUnmap);
     AssertLogRelRCReturn(rc, rc);
     
-    ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Registered MMIO function for first region.");
+    ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Registered MMIO function for BAR0 region.");
 
+    /* BAR1 region. */
+    RTStrPrintf(pciFunction->MmioBar1Name, sizeof(pciFunction->MmioBar1Name), "SG-F%d-BAR1", 0);
 
-    /* Second region. */
-    RTStrPrintf(pciFunction->szMmio1, sizeof(pciFunction->szMmio1), "PG-F%d-BAR1", 0);
-    rc = PDMDevHlpMmioCreate(deviceInstance, secondBAR, pciDevice, 2 << 16 /*iPciRegion*/,
+    rc = PDMDevHlpMmioCreate(deviceInstance, secondBAR, pciDevice, 1 << 16 /*iPciRegion*/,
         softGpuMMIOWrite, softGpuMMIORead, pciFunction,
-        IOMMMIO_FLAGS_READ_DWORD | IOMMMIO_FLAGS_WRITE_DWORD_ZEROED | IOMMMIO_FLAGS_ABS, pciFunction->szMmio1, &pciFunction->hMmio1);
+        IOMMMIO_FLAGS_READ_DWORD | IOMMMIO_FLAGS_WRITE_DWORD_ZEROED | IOMMMIO_FLAGS_ABS, pciFunction->MmioBar1Name, &pciFunction->hMmioBar1);
     AssertLogRelRCReturn(rc, rc);
     
-    ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Created second region.");
-    
+    ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Created BAR1 region.");
+
     rc = PDMDevHlpPCIIORegionRegisterMmioEx(deviceInstance, pciDevice, 1, secondBAR,
         static_cast<PCIADDRESSSPACE>(PCI_ADDRESS_SPACE_MEM | PCI_ADDRESS_SPACE_BAR64 | PCI_ADDRESS_SPACE_MEM_PREFETCH),
-        pciFunction->hMmio1, nullptr);
+        pciFunction->hMmioBar1, softGpuMMIOMapUnmap);
     AssertLogRelRCReturn(rc, rc);
     
-    ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Registered MMIO function second region.");
+    ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Registered MMIO function BAR1 region.");
+
+    /* Expansion ROM region. */
+    RTStrPrintf(pciFunction->MmioExpansionRomName, sizeof(pciFunction->MmioExpansionRomName), "SG-F%d-ROM", 0);
+
+    rc = PDMDevHlpMmioCreate(deviceInstance, 32ull * 1024, pciDevice, 6 << 16 /*iPciRegion*/,
+        softGpuMMIOWrite, softGpuMMIORead, pciFunction,
+        IOMMMIO_FLAGS_WRITE_PASSTHRU | IOMMMIO_FLAGS_READ_PASSTHRU | IOMMMIO_FLAGS_ABS, pciFunction->MmioExpansionRomName, &pciFunction->hMmioExpansionRom);
+    AssertLogRelRCReturn(rc, rc);
+    
+    ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Created Expansion ROM region.");
+    
+    rc = PDMDevHlpPCIIORegionRegisterMmioEx(deviceInstance, pciDevice, 6, 32ull * 1024,
+        static_cast<PCIADDRESSSPACE>(PCI_ADDRESS_SPACE_MEM | PCI_ADDRESS_SPACE_MEM_PREFETCH),
+        pciFunction->hMmioExpansionRom, softGpuMMIOMapUnmap);
+    AssertLogRelRCReturn(rc, rc);
+    
+    ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Registered MMIO function Expansion ROM region.");
 
     /*
      * Save state handling.
@@ -484,10 +519,9 @@ extern "C" DECLEXPORT(int) VBoxDevicesRegister(PPDMDEVREGCB pCallbacks, const ui
     // preRegisterTest(pCallbacks, &g_DeviceSoftGpu);
 
     const int registerRC = pCallbacks->pfnRegister(pCallbacks, &g_DeviceSoftGpu);
-
-    const PCRTSTATUSMSG msg = RTErrGet(registerRC);
-
-    ConLogLn(u8"VBoxSoftGpuEmulator::VBoxDevicesRegister: pfnRegister: [{}] {}, {}", registerRC, msg->pszDefine, msg->pszMsgFull);
+    
+    ConLogLn(u8"VBoxSoftGpuEmulator::VBoxDevicesRegister: pfnRegister: [{}] {}, {}", registerRC, ConLogRCDefine<c8>(registerRC), ConLogRCMsgFull<c8>(registerRC));
 
     return registerRC;
 }
+

@@ -3,24 +3,34 @@
  */
 
 /*
- * Copyright (C) 2006-2020 Oracle Corporation
+ * Copyright (C) 2006-2023 Oracle and/or its affiliates.
  *
- * This file is part of VirtualBox Open Source Edition (OSE), as
- * available from http://www.virtualbox.org. This file is free software;
- * you can redistribute it and/or modify it under the terms of the GNU
- * General Public License (GPL) as published by the Free Software
- * Foundation, in version 2 as it comes in the "COPYING" file of the
- * VirtualBox OSE distribution. VirtualBox OSE is distributed in the
- * hope that it will be useful, but WITHOUT ANY WARRANTY of any kind.
+ * This file is part of VirtualBox base platform packages, as
+ * available from https://www.virtualbox.org.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation, in version 3 of the
+ * License.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, see <https://www.gnu.org/licenses>.
  *
  * The contents of this file may alternatively be used under the terms
  * of the Common Development and Distribution License Version 1.0
- * (CDDL) only, as it comes in the "COPYING.CDDL" file of the
- * VirtualBox OSE distribution, in which case the provisions of the
+ * (CDDL), a copy of it is provided in the "COPYING.CDDL" file included
+ * in the VirtualBox distribution, in which case the provisions of the
  * CDDL are applicable instead of those of the GPL.
  *
  * You may elect to license modified versions of this file under the
  * terms and conditions of either the GPL or the CDDL or both.
+ *
+ * SPDX-License-Identifier: GPL-3.0-only OR CDDL-1.0
  */
 
 #ifndef VBOX_INCLUDED_vmm_hmvmxinline_h
@@ -34,12 +44,8 @@
 
 /* In Visual C++ versions prior to 2012, the vmx intrinsics are only available
    when targeting AMD64. */
-#if RT_INLINE_ASM_USES_INTRIN >= 16 && defined(RT_ARCH_AMD64)
-# pragma warning(push)
-# pragma warning(disable:4668) /* Several incorrect __cplusplus uses. */
-# pragma warning(disable:4255) /* Incorrect __slwpcb prototype. */
-# include <intrin.h>
-# pragma warning(pop)
+#if RT_INLINE_ASM_USES_INTRIN >= RT_MSC_VER_VS2010 && defined(RT_ARCH_AMD64)
+# include <iprt/sanitized/intrin.h>
 /* We always want them as intrinsics, no functions. */
 # pragma intrinsic(__vmx_on)
 # pragma intrinsic(__vmx_off)
@@ -50,6 +56,25 @@
 # define VMX_USE_MSC_INTRINSICS 1
 #else
 # define VMX_USE_MSC_INTRINSICS 0
+#endif
+
+/**
+ * Whether we think the assembler supports VMX instructions.
+ *
+ * Guess that GCC 5 should have sufficient recent enough binutils.
+ */
+#if RT_INLINE_ASM_GNU_STYLE && RT_GNUC_PREREQ(5,0)
+# define VMX_USE_GNU_STYLE_INLINE_VMX_INSTRUCTIONS 1
+#else
+# define VMX_USE_GNU_STYLE_INLINE_VMX_INSTRUCTIONS 0
+#endif
+
+/** Whether we can use the subsection trick to put error handling code
+ *  elsewhere. */
+#if VMX_USE_GNU_STYLE_INLINE_VMX_INSTRUCTIONS && defined(__ELF__)
+# define VMX_USE_GNU_STYLE_INLINE_SECTION_TRICK 1
+#else
+# define VMX_USE_GNU_STYLE_INLINE_SECTION_TRICK 0
 #endif
 
 /* Skip checking VMREAD/VMWRITE failures on non-strict builds. */
@@ -347,17 +372,6 @@ DECLINLINE(const char *) VMXGetIdtVectoringInfoTypeDesc(uint8_t uType)
  * @{
  */
 #if defined(RT_ARCH_AMD64) || defined(RT_ARCH_X86)
-
-/**
- * Restores some host-state fields that need not be done on every VM-exit.
- *
- * @returns VBox status code.
- * @param   fRestoreHostFlags   Flags of which host registers needs to be
- *                              restored.
- * @param   pRestoreHost        Pointer to the host-restore structure.
- */
-DECLASM(int) VMXRestoreHostState(uint32_t fRestoreHostFlags, PVMXRESTOREHOST pRestoreHost);
-
 
 /**
  * Dispatches an NMI to the host.
@@ -889,6 +903,57 @@ DECLINLINE(int) VMXReadVmcs32(uint32_t uFieldEnc, uint32_t *pData)
     return rcMsc == 2 ? VERR_VMX_INVALID_VMCS_PTR : VERR_VMX_INVALID_VMCS_FIELD;
 #  endif
 
+# elif VMX_USE_GNU_STYLE_INLINE_VMX_INSTRUCTIONS
+    RTCCUINTREG uTmp = 0;
+#  ifdef VBOX_WITH_VMREAD_VMWRITE_NOCHECK
+    __asm__ __volatile__("vmread  %[uField],%[uDst]"
+                         : [uDst] "=mr" (uTmp)
+                         : [uField] "r" ((RTCCUINTREG)uFieldEnc));
+    *pData = (uint32_t)uTmp;
+    return VINF_SUCCESS;
+#  else
+#if 0
+    int      rc;
+    __asm__ __volatile__("vmread  %[uField],%[uDst]\n\t"
+                         "movl    %[rcSuccess],%[rc]\n\t"
+#    if VMX_USE_GNU_STYLE_INLINE_SECTION_TRICK
+                         "jna     1f\n\t"
+                         ".section .text.vmread_failures, \"ax?\"\n\t"
+                         "1:\n\t"
+                         "movl    %[rcInvalidVmcsPtr],%[rc]\n\t"
+                         "jnz     2f\n\t"
+                         "movl    %[rcInvalidVmcsField],%[rc]\n\t"
+                         "2:\n\t"
+                         "jmp     3f\n\t"
+                         ".previous\n\t"
+                         "3:\n\t"
+#    else
+                         "ja      1f\n\t"
+                         "movl    %[rcInvalidVmcsPtr],%[rc]\n\t"
+                         "jnz     1f\n\t"
+                         "movl    %[rcInvalidVmcsField],%[rc]\n\t"
+                         "1:\n\t"
+#    endif
+                         : [uDst] "=mr" (uTmp)
+                         , [rc] "=r" (rc)
+                         : [uField] "r" ((RTCCUINTREG)uFieldEnc)
+                         , [rcSuccess] "i" (VINF_SUCCESS)
+                         , [rcInvalidVmcsPtr] "i" (VERR_VMX_INVALID_VMCS_PTR)
+                         , [rcInvalidVmcsField] "i" (VERR_VMX_INVALID_VMCS_FIELD));
+    *pData = uTmp;
+    return rc;
+#else
+    int fSuccess, fFieldError;
+    __asm__ __volatile__("vmread  %[uField],%[uDst]"
+                         : [uDst] "=mr" (uTmp)
+                         , "=@cca" (fSuccess)
+                         , "=@ccnc" (fFieldError)
+                         : [uField] "r" ((RTCCUINTREG)uFieldEnc));
+    *pData = uTmp;
+    return RT_LIKELY(fSuccess) ? VINF_SUCCESS : fFieldError ? VERR_VMX_INVALID_VMCS_FIELD : VERR_VMX_INVALID_VMCS_PTR;
+#endif
+#  endif
+
 # elif RT_INLINE_ASM_GNU_STYLE
 #  ifdef VBOX_WITH_VMREAD_VMWRITE_NOCHECK
     __asm__ __volatile__ (
@@ -979,6 +1044,56 @@ DECLINLINE(int) VMXReadVmcs64(uint32_t uFieldEnc, uint64_t *pData)
     return rcMsc == 2 ? VERR_VMX_INVALID_VMCS_PTR : VERR_VMX_INVALID_VMCS_FIELD;
 #  endif
 
+# elif VMX_USE_GNU_STYLE_INLINE_VMX_INSTRUCTIONS
+    uint64_t uTmp = 0;
+#  ifdef VBOX_WITH_VMREAD_VMWRITE_NOCHECK
+    __asm__ __volatile__("vmreadq %[uField],%[uDst]"
+                         : [uDst] "=m" (uTmp)
+                         : [uField] "r" ((uint64_t)uFieldEnc));
+    *pData = uTmp;
+    return VINF_SUCCESS;
+#  elif 0
+    int      rc;
+    __asm__ __volatile__("vmreadq %[uField],%[uDst]\n\t"
+                         "movl    %[rcSuccess],%[rc]\n\t"
+#    if VMX_USE_GNU_STYLE_INLINE_SECTION_TRICK
+                         "jna     1f\n\t"
+                         ".section .text.vmread_failures, \"ax?\"\n\t"
+                         "1:\n\t"
+                         "movl    %[rcInvalidVmcsPtr],%[rc]\n\t"
+                         "jnz     2f\n\t"
+                         "movl    %[rcInvalidVmcsField],%[rc]\n\t"
+                         "2:\n\t"
+                         "jmp     3f\n\t"
+                         ".previous\n\t"
+                         "3:\n\t"
+#    else
+                         "ja      1f\n\t"
+                         "movl    %[rcInvalidVmcsPtr],%[rc]\n\t"
+                         "jnz     1f\n\t"
+                         "movl    %[rcInvalidVmcsField],%[rc]\n\t"
+                         "1:\n\t"
+#    endif
+                         : [uDst] "=mr" (uTmp)
+                         , [rc] "=r" (rc)
+                         : [uField] "r" ((uint64_t)uFieldEnc)
+                         , [rcSuccess] "i" (VINF_SUCCESS)
+                         , [rcInvalidVmcsPtr] "i" (VERR_VMX_INVALID_VMCS_PTR)
+                         , [rcInvalidVmcsField] "i" (VERR_VMX_INVALID_VMCS_FIELD)
+                         );
+    *pData = uTmp;
+    return rc;
+#  else
+    int fSuccess, fFieldError;
+    __asm__ __volatile__("vmread  %[uField],%[uDst]"
+                         : [uDst] "=mr" (uTmp)
+                         , "=@cca" (fSuccess)
+                         , "=@ccnc" (fFieldError)
+                         : [uField] "r" ((RTCCUINTREG)uFieldEnc));
+    *pData = uTmp;
+    return RT_LIKELY(fSuccess) ? VINF_SUCCESS : fFieldError ? VERR_VMX_INVALID_VMCS_FIELD : VERR_VMX_INVALID_VMCS_PTR;
+#  endif
+
 # elif RT_INLINE_ASM_GNU_STYLE
 #  ifdef VBOX_WITH_VMREAD_VMWRITE_NOCHECK
     __asm__ __volatile__ (
@@ -1007,6 +1122,7 @@ DECLINLINE(int) VMXReadVmcs64(uint32_t uFieldEnc, uint64_t *pData)
        );
     return rc;
 #  endif
+
 # else
 #  error "Shouldn't be here..."
 # endif

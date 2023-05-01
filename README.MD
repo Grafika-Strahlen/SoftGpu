@@ -64,8 +64,12 @@ BAR 1&2 is a 64  bit BAR to access the main graphics memory.
    |  *--+-------------*
    |     |
    |     |  .-----------------------.
-   |     \--| PCI Control Registers |
-   |        *-----------------------*
+   |     +--| PCI Control Registers |
+   |     |  *-----------------------*
+   |     |
+   |	 |  .----------------.
+   |	 \--| ROM Controller |
+   |		*----------------*
    |
    |  .-------------------------------.
    \--| Streaming Multiprocessor 0..3 |

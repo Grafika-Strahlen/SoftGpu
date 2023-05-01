@@ -3,24 +3,34 @@
  */
 
 /*
- * Copyright (C) 2007-2020 Oracle Corporation
+ * Copyright (C) 2007-2023 Oracle and/or its affiliates.
  *
- * This file is part of VirtualBox Open Source Edition (OSE), as
- * available from http://www.virtualbox.org. This file is free software;
- * you can redistribute it and/or modify it under the terms of the GNU
- * General Public License (GPL) as published by the Free Software
- * Foundation, in version 2 as it comes in the "COPYING" file of the
- * VirtualBox OSE distribution. VirtualBox OSE is distributed in the
- * hope that it will be useful, but WITHOUT ANY WARRANTY of any kind.
+ * This file is part of VirtualBox base platform packages, as
+ * available from https://www.virtualbox.org.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation, in version 3 of the
+ * License.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, see <https://www.gnu.org/licenses>.
  *
  * The contents of this file may alternatively be used under the terms
  * of the Common Development and Distribution License Version 1.0
- * (CDDL) only, as it comes in the "COPYING.CDDL" file of the
- * VirtualBox OSE distribution, in which case the provisions of the
+ * (CDDL), a copy of it is provided in the "COPYING.CDDL" file included
+ * in the VirtualBox distribution, in which case the provisions of the
  * CDDL are applicable instead of those of the GPL.
  *
  * You may elect to license modified versions of this file under the
  * terms and conditions of either the GPL or the CDDL or both.
+ *
+ * SPDX-License-Identifier: GPL-3.0-only OR CDDL-1.0
  */
 
 #ifndef IPRT_INCLUDED_cpp_ministring_h
@@ -852,6 +862,18 @@ public:
     int replaceNoThrow(size_t offStart, size_t cchLength, const char *pszReplacement, size_t cchReplacement) RT_NOEXCEPT;
 
     /**
+     * Truncates the string to a max length of @a cchMax.
+     *
+     * If the string is shorter than @a cchMax characters, no change is made.
+     *
+     * If the @a cchMax is not at the start of a UTF-8 sequence, it will be adjusted
+     * down to the start of the UTF-8 sequence.  Thus, after a truncation, the
+     * length() may be smaller than @a cchMax.
+     *
+     */
+    RTCString &truncate(size_t cchMax) RT_NOEXCEPT;
+
+    /**
      * Index operator.
      *
      * Returns the byte at the given index, or a null byte if the index is not
@@ -1082,6 +1104,8 @@ public:
      * @returns 0 based position of pszNeedle. npos if not found.
      */
     size_t find(const char *pszNeedle, size_t offStart = 0) const RT_NOEXCEPT;
+    size_t find_first_of(const char *pszNeedle, size_t offStart = 0) const RT_NOEXCEPT
+    { return find(pszNeedle, offStart); }
 
     /**
      * Find the given substring.
@@ -1114,6 +1138,8 @@ public:
      *          NULL or an empty string.
      */
     size_t find(const RTCString &rStrNeedle, size_t offStart = 0) const RT_NOEXCEPT;
+    size_t find_first_of(const RTCString &rStrNeedle, size_t offStart = 0) const RT_NOEXCEPT
+    { return find(rStrNeedle, offStart); }
 
     /**
      * Find the given character (byte).
@@ -1128,6 +1154,8 @@ public:
      *          string version to locate codepoints above U+7F.
      */
     size_t find(char chNeedle, size_t offStart = 0) const RT_NOEXCEPT;
+    size_t find_first_of(char chNeedle, size_t offStart = 0) const RT_NOEXCEPT
+    { return find(chNeedle, offStart); }
 
     /**
      * Replaces all occurences of cFind with cReplace in the member string.

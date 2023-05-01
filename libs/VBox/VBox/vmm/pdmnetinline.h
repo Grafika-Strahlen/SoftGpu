@@ -6,24 +6,34 @@
  */
 
 /*
- * Copyright (C) 2010-2020 Oracle Corporation
+ * Copyright (C) 2010-2023 Oracle and/or its affiliates.
  *
- * This file is part of VirtualBox Open Source Edition (OSE), as
- * available from http://www.virtualbox.org. This file is free software;
- * you can redistribute it and/or modify it under the terms of the GNU
- * General Public License (GPL) as published by the Free Software
- * Foundation, in version 2 as it comes in the "COPYING" file of the
- * VirtualBox OSE distribution. VirtualBox OSE is distributed in the
- * hope that it will be useful, but WITHOUT ANY WARRANTY of any kind.
+ * This file is part of VirtualBox base platform packages, as
+ * available from https://www.virtualbox.org.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation, in version 3 of the
+ * License.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, see <https://www.gnu.org/licenses>.
  *
  * The contents of this file may alternatively be used under the terms
  * of the Common Development and Distribution License Version 1.0
- * (CDDL) only, as it comes in the "COPYING.CDDL" file of the
- * VirtualBox OSE distribution, in which case the provisions of the
+ * (CDDL), a copy of it is provided in the "COPYING.CDDL" file included
+ * in the VirtualBox distribution, in which case the provisions of the
  * CDDL are applicable instead of those of the GPL.
  *
  * You may elect to license modified versions of this file under the
  * terms and conditions of either the GPL or the CDDL or both.
+ *
+ * SPDX-License-Identifier: GPL-3.0-only OR CDDL-1.0
  */
 
 #ifndef VBOX_INCLUDED_vmm_pdmnetinline_h
@@ -77,45 +87,39 @@ typedef enum PDMNETCSUMTYPE
  */
 DECLINLINE(bool) PDMNetGsoIsValid(PCPDMNETWORKGSO pGso, size_t cbGsoMax, size_t cbFrame)
 {
+#define CHECK_COND_RETURN_FALSE(expr) if (RT_LIKELY(expr)) { /* likely */ } else return false
     PDMNETWORKGSOTYPE enmType;
 
-    if (RT_LIKELY(cbGsoMax >= sizeof(*pGso)))
-    { /* likely */ } else return false;
+    CHECK_COND_RETURN_FALSE(cbGsoMax >= sizeof(*pGso));
 
     enmType = (PDMNETWORKGSOTYPE)pGso->u8Type;
-    if (RT_LIKELY( enmType > PDMNETWORKGSOTYPE_INVALID && enmType < PDMNETWORKGSOTYPE_END ))
-    { /* likely */ } else return false;
+    CHECK_COND_RETURN_FALSE(enmType > PDMNETWORKGSOTYPE_INVALID && enmType < PDMNETWORKGSOTYPE_END);
 
     /* all types requires both headers. */
-    if (RT_LIKELY( pGso->offHdr1 >= sizeof(RTNETETHERHDR) ))
-    { /* likely */ } else return false;
-    if (RT_LIKELY( pGso->offHdr2 > pGso->offHdr1 ))
-    { /* likely */ } else return false;
-    if (RT_LIKELY( pGso->cbHdrsTotal > pGso->offHdr2 ))
-    { /* likely */ } else return false;
+    CHECK_COND_RETURN_FALSE(pGso->offHdr1 >= sizeof(RTNETETHERHDR));
+    CHECK_COND_RETURN_FALSE(pGso->offHdr2 > pGso->offHdr1);
+    CHECK_COND_RETURN_FALSE(pGso->cbHdrsTotal > pGso->offHdr2);
 
     /* min size of the 1st header(s). */
     switch (enmType)
     {
         case PDMNETWORKGSOTYPE_IPV4_TCP:
         case PDMNETWORKGSOTYPE_IPV4_UDP:
-            if (RT_LIKELY( (unsigned)pGso->offHdr2 - pGso->offHdr1 >= RTNETIPV4_MIN_LEN ))
-            { /* likely */ } else return false;
+            CHECK_COND_RETURN_FALSE((unsigned)pGso->offHdr2 - pGso->offHdr1 >= RTNETIPV4_MIN_LEN);
             break;
         case PDMNETWORKGSOTYPE_IPV6_TCP:
         case PDMNETWORKGSOTYPE_IPV6_UDP:
-            if (RT_LIKELY( (unsigned)pGso->offHdr2 - pGso->offHdr1 >= RTNETIPV6_MIN_LEN ))
-            { /* likely */ } else return false;
+            CHECK_COND_RETURN_FALSE((unsigned)pGso->offHdr2 - pGso->offHdr1 >= RTNETIPV6_MIN_LEN);
             break;
         case PDMNETWORKGSOTYPE_IPV4_IPV6_TCP:
         case PDMNETWORKGSOTYPE_IPV4_IPV6_UDP:
-            if (RT_LIKELY( (unsigned)pGso->offHdr2 - pGso->offHdr1 >= RTNETIPV4_MIN_LEN + RTNETIPV6_MIN_LEN ))
-            { /* likely */ } else return false;
+            CHECK_COND_RETURN_FALSE((unsigned)pGso->offHdr2 - pGso->offHdr1 >= RTNETIPV4_MIN_LEN + RTNETIPV6_MIN_LEN);
             break;
+        /* These two have been rejected above already, but we need to include them to avoid gcc warnings. */
         case PDMNETWORKGSOTYPE_INVALID:
         case PDMNETWORKGSOTYPE_END:
             break;
-        /* no default case! want gcc warnings. */
+        /* No default case! Want gcc warnings. */
     }
 
     /* min size of the 2nd header. */
@@ -124,36 +128,32 @@ DECLINLINE(bool) PDMNetGsoIsValid(PCPDMNETWORKGSO pGso, size_t cbGsoMax, size_t 
         case PDMNETWORKGSOTYPE_IPV4_TCP:
         case PDMNETWORKGSOTYPE_IPV6_TCP:
         case PDMNETWORKGSOTYPE_IPV4_IPV6_TCP:
-            if (RT_LIKELY( (unsigned)pGso->cbHdrsTotal - pGso->offHdr2 >= RTNETTCP_MIN_LEN ))
-            { /* likely */ } else return false;
+            CHECK_COND_RETURN_FALSE((unsigned)pGso->cbHdrsTotal - pGso->offHdr2 >= RTNETTCP_MIN_LEN);
             break;
         case PDMNETWORKGSOTYPE_IPV4_UDP:
         case PDMNETWORKGSOTYPE_IPV6_UDP:
         case PDMNETWORKGSOTYPE_IPV4_IPV6_UDP:
-            if (RT_LIKELY( (unsigned)pGso->cbHdrsTotal - pGso->offHdr2 >= RTNETUDP_MIN_LEN ))
-            { /* likely */ } else return false;
+            CHECK_COND_RETURN_FALSE((unsigned)pGso->cbHdrsTotal - pGso->offHdr2 >= RTNETUDP_MIN_LEN);
             break;
+        /* These two have been rejected above already, but we need to include them to avoid gcc warnings. */
         case PDMNETWORKGSOTYPE_INVALID:
         case PDMNETWORKGSOTYPE_END:
             break;
-        /* no default case! want gcc warnings. */
+        /* No default case! Want gcc warnings. */
     }
 
     /* There must be at more than one segment. */
-    if (RT_LIKELY( cbFrame > pGso->cbHdrsTotal ))
-    { /* likely */ } else return false;
-    if (RT_LIKELY( cbFrame - pGso->cbHdrsTotal >= pGso->cbMaxSeg ))
-    { /* likely */ } else return false;
+    CHECK_COND_RETURN_FALSE(cbFrame > pGso->cbHdrsTotal);
+    CHECK_COND_RETURN_FALSE(cbFrame - pGso->cbHdrsTotal >= pGso->cbMaxSeg);
 
     /* Make sure the segment size is enough to fit a UDP header. */
-    if (RT_LIKELY(enmType != PDMNETWORKGSOTYPE_IPV4_UDP || pGso->cbMaxSeg >= RTNETUDP_MIN_LEN))
-    { /* likely */ } else return false;
+    CHECK_COND_RETURN_FALSE(enmType != PDMNETWORKGSOTYPE_IPV4_UDP || pGso->cbMaxSeg >= RTNETUDP_MIN_LEN);
 
     /* Make sure the segment size is not zero. */
-    if (RT_LIKELY(pGso->cbMaxSeg > 0))
-    { /* likely */ } else return false;
+    CHECK_COND_RETURN_FALSE(pGso->cbMaxSeg > 0);
 
     return true;
+#undef CHECK_COND_RETURN_FALSE
 }
 
 

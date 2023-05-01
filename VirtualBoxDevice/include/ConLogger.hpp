@@ -41,3 +41,39 @@ inline u32 ConLogLn(const Char* fmt, CurrArg currArg, const Args&... args) noexc
     LogRel((StringCast<char>(str).String()));
     return ret;
 }
+
+template<typename Char>
+inline DECLCALLBACK(uSys) VBoxConLogRCCallback(void* const userParam, const char* const chars, const uSys count)
+{
+    StringFormatContext<Char> ctx;
+    DynStringT<Char> str = ctx.Builder.Append('\n').ToString();
+    *reinterpret_cast<DynStringT<Char>*>(userParam) = ::std::move(str);
+    return count;
+}
+
+template<typename Char>
+inline DynStringT<Char> ConLogRCDefine(int rc)
+{
+    char buffer[256];
+    DynStringT<Char> str;
+    (void) RTErrFormatDefine(rc, VBoxConLogRCCallback<Char>, &str, buffer, ::std::size(buffer));
+    return str;
+}
+
+template<typename Char>
+inline DynStringT<Char> ConLogRCMsgShort(int rc)
+{
+    char buffer[512];
+    DynStringT<Char> str;
+    (void) RTErrFormatMsgShort(rc, VBoxConLogRCCallback<Char>, &str, buffer, ::std::size(buffer));
+    return str;
+}
+
+template<typename Char>
+inline DynStringT<Char> ConLogRCMsgFull(int rc)
+{
+    char buffer[1024];
+    DynStringT<Char> str;
+    (void) RTErrFormatMsgFull(rc, VBoxConLogRCCallback<Char>, &str, buffer, ::std::size(buffer));
+    return str;
+}

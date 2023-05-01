@@ -4,24 +4,34 @@
  */
 
 /*
- * Copyright (C) 2006-2020 Oracle Corporation
+ * Copyright (C) 2006-2023 Oracle and/or its affiliates.
  *
- * This file is part of VirtualBox Open Source Edition (OSE), as
- * available from http://www.virtualbox.org. This file is free software;
- * you can redistribute it and/or modify it under the terms of the GNU
- * General Public License (GPL) as published by the Free Software
- * Foundation, in version 2 as it comes in the "COPYING" file of the
- * VirtualBox OSE distribution. VirtualBox OSE is distributed in the
- * hope that it will be useful, but WITHOUT ANY WARRANTY of any kind.
+ * This file is part of VirtualBox base platform packages, as
+ * available from https://www.virtualbox.org.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation, in version 3 of the
+ * License.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, see <https://www.gnu.org/licenses>.
  *
  * The contents of this file may alternatively be used under the terms
  * of the Common Development and Distribution License Version 1.0
- * (CDDL) only, as it comes in the "COPYING.CDDL" file of the
- * VirtualBox OSE distribution, in which case the provisions of the
+ * (CDDL), a copy of it is provided in the "COPYING.CDDL" file included
+ * in the VirtualBox distribution, in which case the provisions of the
  * CDDL are applicable instead of those of the GPL.
  *
  * You may elect to license modified versions of this file under the
  * terms and conditions of either the GPL or the CDDL or both.
+ *
+ * SPDX-License-Identifier: GPL-3.0-only OR CDDL-1.0
  */
 
 #ifndef VBOX_INCLUDED_com_Guid_h
@@ -283,14 +293,9 @@ public:
             return Bstr("00000000-0000-0000-0000-00000000000");
         }
 
-        // RTUTF16 buf[RTUUID_STR_LENGTH];
-        // ::memset(buf, '\0', sizeof(buf));
-        // ::RTUuidToUtf16(&mUuid, buf, RT_ELEMENTS(buf));
-        //
-        // return Bstr(buf);
-        char buf[RTUUID_STR_LENGTH];
+        RTUTF16 buf[RTUUID_STR_LENGTH];
         ::memset(buf, '\0', sizeof(buf));
-        ::RTUuidToStr(&mUuid, buf, RT_ELEMENTS(buf));
+        ::RTUuidToUtf16(&mUuid, buf, RT_ELEMENTS(buf));
 
         return Bstr(buf);
     }
@@ -327,6 +332,10 @@ public:
     bool operator<(const Guid &that) const { return ::RTUuidCompare(&mUuid, &that.mUuid)    < 0; }
     bool operator<(const GUID &guid) const { return ::RTUuidCompare(&mUuid, (PRTUUID)&guid) < 0; }
     bool operator<(const RTUUID &guid) const { return ::RTUuidCompare(&mUuid, &guid) < 0; }
+
+    /** Compare with a UUID string representation.
+     * @note Not an operator as that could lead to confusion.  */
+    bool equalsString(const char *pszUuid2) const { return ::RTUuidCompareStr(&mUuid, pszUuid2) == 0; }
 
     /**
      * To directly copy the contents to a GUID, or for passing it as an input
@@ -462,7 +471,7 @@ private:
         }
         else
         {
-            int rc = ::RTUuidFromUtf16(&mUuid, reinterpret_cast<PCRTUTF16>(that));
+            int rc = ::RTUuidFromUtf16(&mUuid, that);
             if (RT_SUCCESS(rc))
                 updateState();
             else

@@ -1,0 +1,101 @@
+#pragma once
+
+#include <Objects.hpp>
+#include <NumTypes.hpp>
+#include <ConPrinter.hpp>
+#include <PCIController.hpp>
+
+class Processor;
+
+class RomController final
+{
+    DEFAULT_DESTRUCT(RomController);
+    DELETE_CM(RomController);
+public:
+    static inline constexpr const char* EXPANSION_ROM_ENV_VAR = "SOFT_GPU_ROM";
+public:
+    RomController(Processor* const processor) noexcept
+        : m_Processor(processor)
+    {
+        InitRom();
+    }
+
+    u16 PciReadExpansionRom(const u64 address, const u16 size, u32* const data) noexcept;
+private:
+    void InitRom() noexcept
+    {
+        ::std::memset(m_ExpansionRom, 0, sizeof(m_ExpansionRom));
+
+        size_t trueLibraryPathLength = 0;
+        if(const errno_t err = getenv_s(&trueLibraryPathLength, nullptr, 0, EXPANSION_ROM_ENV_VAR))
+        {
+            ConPrinter::PrintLn(u8"Initial call to getenv_s failed, Error: {}, Path Length: {}.", err, static_cast<unsigned>(trueLibraryPathLength));
+            return;
+        }
+
+        if(!trueLibraryPathLength)
+        {
+            ConPrinter::PrintLn(u8"Failed to get the path length to a ROM file to load, Path Length: {}.", static_cast<unsigned>(trueLibraryPathLength));
+            return;
+        }
+
+        char* romPathBuffer = new(::std::nothrow) char[trueLibraryPathLength];
+
+        if(!romPathBuffer)
+        {
+            ConPrinter::PrintLn("Failed to allocate space for the device path.");
+            return;
+        }
+
+        if(const errno_t err = getenv_s(&trueLibraryPathLength, romPathBuffer, trueLibraryPathLength, EXPANSION_ROM_ENV_VAR))
+        {
+            delete[] romPathBuffer;
+            ConPrinter::PrintLn("Failed to get the path to ROM file to load with a valid buffer. Error: {}", err);
+            return;
+        }
+
+        ConPrinter::PrintLn(u8"Loading ROM file: {}", romPathBuffer);
+
+        FILE* romFile;
+
+        const errno_t romFileOpenError = fopen_s(&romFile, romPathBuffer, "rb");
+
+        delete[] romPathBuffer;
+
+        if(romFileOpenError)
+        {
+            ConPrinter::PrintLn(u8"Could not open ROM file.");
+            return;
+        }
+
+        if(fseek(romFile, 0, SEEK_END))
+        {
+            (void) fclose(romFile);
+            ConPrinter::PrintLn(u8"Could not load ROM file [seek_end].");
+            return;
+        }
+
+        const long fileSize = ftell(romFile);
+
+        if(static_cast<uSys>(fileSize) > sizeof(m_ExpansionRom))
+        {
+            (void) fclose(romFile);
+            ConPrinter::PrintLn(u8"Could not load ROM file [file size].");
+            return;
+        }
+
+        if(fseek(romFile, 0, SEEK_SET))
+        {
+            (void) fclose(romFile);
+            ConPrinter::PrintLn(u8"Could not load ROM file [seek_set].\n");
+            return;
+        }
+
+        (void) fread(m_ExpansionRom, 1, fileSize, romFile);
+
+        (void) fclose(romFile);
+    }
+private:
+    Processor* m_Processor;
+    u8 m_ExpansionRom[PciController::EXPANSION_ROM_SIZE];
+};

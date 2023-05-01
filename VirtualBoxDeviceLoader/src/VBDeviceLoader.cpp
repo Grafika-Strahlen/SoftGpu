@@ -321,8 +321,9 @@ static int LoadLibraryFromEnv(const char* targetEnv, HMODULE* module)
 
     if(const errno_t err = getenv_s(&trueLibraryPathLength, trueLibraryPathBuffer, trueLibraryPathLength, targetEnv))
     {
+        AssertLogRelMsgFailed(("Failed to get the path to a device to load with a valid buffer. Error: %d\n", err), VERR_NOT_FOUND);
         delete[] trueLibraryPathBuffer;
-        AssertLogRelMsgFailedReturn(("Failed to get the path to a device to load with a valid buffer. Error: %d\n", err), VERR_NOT_FOUND);
+        return VERR_NOT_FOUND;
     }
 
     // Load our real device driver.
@@ -330,9 +331,10 @@ static int LoadLibraryFromEnv(const char* targetEnv, HMODULE* module)
 
     if(!lib)
     {
-        delete[] trueLibraryPathBuffer;
         LogLoadLibraryError();
-        AssertLogRelMsgFailedReturn(("Could not load real %s\n", trueLibraryPathBuffer), VERR_NOT_FOUND);
+        AssertLogRelMsgFailed(("Could not load real %s\n", trueLibraryPathBuffer), VERR_NOT_FOUND);
+        delete[] trueLibraryPathBuffer;
+        return VERR_NOT_FOUND;
     }
 
     ConLogLn(u8"Loaded real {}", trueLibraryPathBuffer);

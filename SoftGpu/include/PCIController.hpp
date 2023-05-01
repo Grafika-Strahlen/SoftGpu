@@ -2,6 +2,7 @@
 
 #include <Objects.hpp>
 #include <NumTypes.hpp>
+#include <ConPrinter.hpp>
 
 #include <cstring>
 
@@ -120,6 +121,54 @@ struct DeviceStatusRegister final
 
 static_assert(sizeof(DeviceStatusRegister) == 2, "Device Status Register is not 2 bytes.");
 
+struct LinkCapabilitiesRegister final
+{
+    u32 MaximumLinkSpeed : 4;
+    u32 MaximumLinkWidth : 6;
+    u32 ASPMSupport : 2;
+    u32 L0sExitLatency : 3;
+    u32 L1ExitLatency : 3;
+    u32 ClockPowerManagement : 1;
+    u32 SurpriseDownErrorReportingCapable : 1;
+    u32 DataLinkLayerActiveReportingCapable : 1;
+    u32 Reserved : 3;
+    u32 PortNumber : 8;
+};
+
+static_assert(sizeof(LinkCapabilitiesRegister) == 4, "Link Capabilities Register is not 4 bytes.");
+
+union LinkControlRegister final
+{
+    u16 Packed;
+    struct
+    {
+        u16 ASPMControl : 2;
+        u16 ReservedP0 : 1;
+        u16 ReadCompletionBoundary : 1;
+        u16 LinkDisable : 1;
+        u16 RetrainLink : 1;
+        u16 CommonClockConfiguration : 1;
+        u16 ExtendedSynch : 1;
+        u16 EnableClockPowerManagement : 1;
+        u16 ReservedP1 : 7;
+    };
+};
+
+static_assert(sizeof(LinkControlRegister) == 2, "Link Control Register is not 2 bytes.");
+
+struct LinkStatusRegister final
+{
+    u16 LinkSpeed : 4;
+    u16 NegotiatedLinkWidth : 6;
+    u16 Undefined : 1;
+    u16 LinkTraining : 1;
+    u16 SlotClockConfiguration : 1;
+    u16 DataLinkLayerActive : 1;
+    u16 ReservedZ : 2;
+};
+
+static_assert(sizeof(LinkStatusRegister) == 2, "Link Status Register is not 2 bytes.");
+
 struct PcieCapabilityStructure final
 {
     PciCapabilityHeader Header;
@@ -127,9 +176,12 @@ struct PcieCapabilityStructure final
     DeviceCapabilitiesRegister DeviceCapabilities;
     DeviceControlRegister DeviceControl;
     DeviceStatusRegister DeviceStatus;
+    LinkCapabilitiesRegister LinkCapabilities;
+    LinkControlRegister LinkControl;
+    LinkStatusRegister LinkStatus;
 };
 
-static_assert(sizeof(PcieCapabilityStructure) == 12, "PCIe Capability Structure is not 12 bytes.");
+static_assert(sizeof(PcieCapabilityStructure) == 0x14, "PCIe Capability Structure is not 20 bytes.");
 
 union PowerManagementCapabilitiesRegister final
 {
@@ -197,6 +249,8 @@ class PciController final
     DEFAULT_DESTRUCT(PciController);
     DELETE_CM(PciController);
 public:
+    static inline constexpr u16 COMMAND_REGISTER_MASK_BITS = 0x0446;
+
     static inline constexpr u32 BAR0_MASK_BITS = 0xFF000000;
     static inline constexpr u32 BAR1_MASK_BITS = 0x80000000;
     static inline constexpr u32 BAR2_MASK_BITS = 0xFFFFFFFF;
@@ -211,11 +265,24 @@ public:
     static inline constexpr u32 BAR4_READ_ONLY_BITS = 0x00000000;
     static inline constexpr u32 BAR5_READ_ONLY_BITS = 0x00000000;
 
+    static inline constexpr u32 EXPANSION_ROM_BAR_MASK_BITS         = 0xFFFF8001;
+    static inline constexpr u32 EXPANSION_ROM_BAR_ADDRESS_MASK_BITS = 0xFFFF8000;
+    static inline constexpr u32 EXPANSION_ROM_BAR_READ_ONLY_BITS    = 0x00000000;
+    static inline constexpr u32 EXPANSION_ROM_BAR_ENABLE_BIT        = 0x00000001;
+    static inline constexpr u32 EXPANSION_ROM_SIZE = 32 * 1024;
+
     static inline constexpr u16 DEVICE_CONTROL_REGISTER_MASK_BITS      = 0x7CFF;
     static inline constexpr u16 DEVICE_CONTROL_REGISTER_READ_ONLY_BITS = 0x0000;
 
+    static inline constexpr u16 LINK_CONTROL_REGISTER_MASK_BITS = 0x01C3;
+    static inline constexpr u16 LINK_CONTROL_REGISTER_READ_ONLY_BITS = 0x0000;
+
     static inline constexpr u16 PM_CONTROL_REGISTER_MASK_BITS      = 0x0003;
     static inline constexpr u16 PM_CONTROL_REGISTER_READ_ONLY_BITS = 0x0000;
+
+    static inline constexpr u16 COMMAND_REGISTER_MEMORY_SPACE_BIT = 0x0002;
+
+    static inline constexpr u8 EXPANSION_ROM_BAR_ID = 0x7F;
 public:
     PciController() noexcept
         : m_PciConfig{ 0 }
@@ -239,7 +306,7 @@ public:
                     break;
                 }
                 // Mask the command to only the RW bits.
-                m_ConfigHeader.Command = static_cast<u16>(value & 0x0A44);
+                m_ConfigHeader.Command = static_cast<u16>(value & COMMAND_REGISTER_MASK_BITS);
                 break;
             case 6:
                 if(size != 2)
@@ -298,6 +365,13 @@ public:
                 }
                 m_ConfigHeader.BAR5 = (value & BAR5_MASK_BITS) | BAR5_READ_ONLY_BITS;
                 break;
+            case 0x30:
+                if(size != 4)
+                {
+                    break;
+                }
+                m_ConfigHeader.ExpansionROMBaseAddress = (value & EXPANSION_ROM_BAR_MASK_BITS) | EXPANSION_ROM_BAR_READ_ONLY_BITS;
+                break;
             case 0x3C:
                 if(size != 1)
                 {
@@ -311,6 +385,13 @@ public:
                     break;
                 }
                 m_PcieCapability.DeviceControl.Packed = (value & DEVICE_CONTROL_REGISTER_MASK_BITS) | DEVICE_CONTROL_REGISTER_READ_ONLY_BITS;
+                break;
+            case offsetof(PciController, m_PcieCapability) + offsetof(PcieCapabilityStructure, LinkControl):
+                if(size != 2)
+                {
+                    break;
+                }
+                m_PcieCapability.LinkControl.Packed = (value & LINK_CONTROL_REGISTER_MASK_BITS) | LINK_CONTROL_REGISTER_READ_ONLY_BITS;
                 break;
             case offsetof(PciController, m_PowerManagementCapability) + offsetof(PowerManagementCapabilityStructure, PowerManagementControlStatusRegister):
                 if(size != 2)
@@ -330,6 +411,11 @@ public:
             if(address >= (m_ConfigHeader.BAR0 & BAR0_MASK_BITS) && address < ((m_ConfigHeader.BAR0 & BAR0_MASK_BITS) + 16 * 1024 * 1024))
             {
                 return 0;
+            }
+
+            if(address >= (m_ConfigHeader.ExpansionROMBaseAddress & EXPANSION_ROM_BAR_ADDRESS_MASK_BITS) && address < ((m_ConfigHeader.ExpansionROMBaseAddress & EXPANSION_ROM_BAR_ADDRESS_MASK_BITS) + EXPANSION_ROM_SIZE))
+            {
+                return EXPANSION_ROM_BAR_ID;
             }
         }
 
@@ -357,8 +443,16 @@ public:
             return address - bar1;
         }
 
+        if(bar == EXPANSION_ROM_BAR_ID)
+        {
+            return address - (m_ConfigHeader.ExpansionROMBaseAddress & EXPANSION_ROM_BAR_ADDRESS_MASK_BITS);
+        }
+
         return address;
     }
+
+    [[nodiscard]] u16 CommandRegister() const noexcept { return m_ConfigHeader.Command; }
+    [[nodiscard]] bool ExpansionRomEnable() const noexcept { return m_ConfigHeader.ExpansionROMBaseAddress & EXPANSION_ROM_BAR_ENABLE_BIT; }
 private:
     void InitConfigHeader() noexcept
     {
@@ -387,7 +481,9 @@ private:
         m_ConfigHeader.CardBusCISPointer = 0x0;
         m_ConfigHeader.SubsystemVendorID = 0x0;
         m_ConfigHeader.SubsystemID = 0x0;
-        m_ConfigHeader.ExpansionROMBaseAddress = 0x0;
+        // 32KiB, Not Enabled
+        m_ConfigHeader.ExpansionROMBaseAddress = 0x00000000;
+        // m_ConfigHeader.CapPointer = 0;
         m_ConfigHeader.CapPointer = offsetof(PciController, m_PcieCapability);
         m_ConfigHeader.Reserved0 = 0x0;
         m_ConfigHeader.Reserved1 = 0x0;
@@ -441,6 +537,35 @@ private:
         m_PcieCapability.DeviceStatus.FatalErrorDetected = 0b0;
         m_PcieCapability.DeviceStatus.UnsupportedRequestDetected = 0b0;
         m_PcieCapability.DeviceStatus.TransactionsPending = 0b0;
+
+        m_PcieCapability.LinkCapabilities.MaximumLinkSpeed = 0b0001;
+        m_PcieCapability.LinkCapabilities.MaximumLinkWidth = 0b001000;
+        m_PcieCapability.LinkCapabilities.ASPMSupport = 0b01;
+        m_PcieCapability.LinkCapabilities.L0sExitLatency = 0b100;
+        m_PcieCapability.LinkCapabilities.L1ExitLatency = 0b010;
+        m_PcieCapability.LinkCapabilities.ClockPowerManagement = 0b1;
+        m_PcieCapability.LinkCapabilities.SurpriseDownErrorReportingCapable = 0b0;
+        m_PcieCapability.LinkCapabilities.DataLinkLayerActiveReportingCapable = 0b0;
+        m_PcieCapability.LinkCapabilities.Reserved = 0x0;
+        m_PcieCapability.LinkCapabilities.PortNumber = 0x00;
+
+        m_PcieCapability.LinkControl.ASPMControl = 0b00;
+        m_PcieCapability.LinkControl.ReservedP0 = 0b0;
+        m_PcieCapability.LinkControl.ReadCompletionBoundary = 0b0;
+        m_PcieCapability.LinkControl.LinkDisable = 0b0;
+        m_PcieCapability.LinkControl.RetrainLink = 0b0;
+        m_PcieCapability.LinkControl.CommonClockConfiguration = 0b0;
+        m_PcieCapability.LinkControl.ExtendedSynch = 0b0;
+        m_PcieCapability.LinkControl.EnableClockPowerManagement = 0b0;
+        m_PcieCapability.LinkControl.ReservedP1 = 0b0000000;
+
+        m_PcieCapability.LinkStatus.LinkSpeed = 0b0001;
+        m_PcieCapability.LinkStatus.NegotiatedLinkWidth = 0b001000;
+        m_PcieCapability.LinkStatus.Undefined = 0b0;
+        m_PcieCapability.LinkStatus.LinkTraining = 0b0;
+        m_PcieCapability.LinkStatus.SlotClockConfiguration = 0b0;
+        m_PcieCapability.LinkStatus.DataLinkLayerActive = 0b0;
+        m_PcieCapability.LinkStatus.ReservedZ = 0x0;
     }
 
     void InitPowerManagementCapabilityStructure() noexcept
@@ -487,6 +612,7 @@ private:
         m_AdvancedErrorReportingCapability.HeaderLogRegister[2] = 0;
         m_AdvancedErrorReportingCapability.HeaderLogRegister[3] = 0;
     }
+
 private:
     PciConfigHeader m_ConfigHeader;
     PcieCapabilityStructure m_PcieCapability;
@@ -527,7 +653,6 @@ public:
     static inline constexpr u16 PciExtendedConfigOffsetBegin = offsetof(PciController, m_PciExtendedConfig);
     static inline constexpr u16 PciExtendedConfigOffsetEnd = PciExtendedConfigOffsetBegin + sizeof(PciController::m_PciExtendedConfig);
 };
-
 
 inline u32 PciController::ConfigRead(const u16 address, const u8 size) noexcept
 {

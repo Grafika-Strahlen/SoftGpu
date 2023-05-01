@@ -7,6 +7,7 @@
 #include "Cache.hpp"
 #include "DebugManager.hpp"
 #include "PCIController.hpp"
+#include "RomController.hpp"
 
 class Processor final
 {
@@ -14,7 +15,8 @@ class Processor final
     DELETE_CM(Processor);
 public:
     Processor() noexcept
-        : m_PciRegisters(this)
+        : m_RomController(this)
+        , m_PciRegisters(this)
         , m_CacheController(this)
         , m_SMs { { this, 0 }, { this, 1 }, { this, 2 }, { this, 3 } }
         , m_ClockCycle(0)
@@ -133,7 +135,25 @@ public:
 
     u16 PciMemRead(const u64 address, const u16 size, u32* const data) noexcept
     {
+        if(!(m_PciController.CommandRegister() & PciController::COMMAND_REGISTER_MEMORY_SPACE_BIT))
+        {
+            ConPrinter::PrintLn("Attempted to Read over PCI while the Memory Space bit was not set.");
+            return 0;
+        }
+
         const u8 bar = m_PciController.GetBARFromAddress(address);
+
+        if constexpr(false)
+        {
+            if(bar == PciController::EXPANSION_ROM_BAR_ID)
+            {
+                ConPrinter::PrintLn("Reading from Expansion ROM {} bytes at 0x{XP0}.", size, address);
+            }
+            else
+            {
+                ConPrinter::PrintLn("Reading from BAR{} {} bytes at 0x{XP0}.", bar, size, address);
+            }
+        }
 
         if(bar == 0xFF)
         {
@@ -158,12 +178,26 @@ public:
             return size;
         }
 
+        if(bar == PciController::EXPANSION_ROM_BAR_ID)
+        {
+            const u64 addressOffset = m_PciController.GetBAROffset(address, bar);
+            return m_RomController.PciReadExpansionRom(addressOffset, size, data);
+        }
+
         return 0;
     }
 
     void PciMemWrite(const u64 address, const u16 size, const u32* const data) noexcept
     {
+        if(!(m_PciController.CommandRegister() & PciController::COMMAND_REGISTER_MEMORY_SPACE_BIT))
+        {
+            ConPrinter::PrintLn("Attempted to Write over PCI while the Memory Space bit was not set.");
+            return;
+        }
+
         const u8 bar = m_PciController.GetBARFromAddress(address);
+
+        ConPrinter::PrintLn("Writing to BAR{} {} bytes at 0x{XP0}.", bar, size, address);
 
         if(bar == 0xFF)
         {
@@ -184,6 +218,9 @@ public:
             }
         }
     }
+
+    u16 CommandRegister() noexcept { return m_PciController.CommandRegister(); }
+    bool ExpansionRomEnable() noexcept { return m_PciController.ExpansionRomEnable(); }
 
     [[nodiscard]] u32 Read(const u32 coreIndex, const u64 address, const bool cacheDisable = false, const bool external = false) noexcept
     {
@@ -235,6 +272,7 @@ public:
     PciController& GetPciController() noexcept { return m_PciController; }
 private:
     PciController m_PciController;
+    RomController m_RomController;
     PciControlRegisters m_PciRegisters;
     CacheController m_CacheController;
     StreamingMultiprocessor m_SMs[4];

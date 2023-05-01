@@ -4,24 +4,34 @@
  */
 
 /*
- * Copyright (C) 2014-2020 Oracle Corporation
+ * Copyright (C) 2014-2023 Oracle and/or its affiliates.
  *
- * This file is part of VirtualBox Open Source Edition (OSE), as
- * available from http://www.virtualbox.org. This file is free software;
- * you can redistribute it and/or modify it under the terms of the GNU
- * General Public License (GPL) as published by the Free Software
- * Foundation, in version 2 as it comes in the "COPYING" file of the
- * VirtualBox OSE distribution. VirtualBox OSE is distributed in the
- * hope that it will be useful, but WITHOUT ANY WARRANTY of any kind.
+ * This file is part of VirtualBox base platform packages, as
+ * available from https://www.virtualbox.org.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation, in version 3 of the
+ * License.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, see <https://www.gnu.org/licenses>.
  *
  * The contents of this file may alternatively be used under the terms
  * of the Common Development and Distribution License Version 1.0
- * (CDDL) only, as it comes in the "COPYING.CDDL" file of the
- * VirtualBox OSE distribution, in which case the provisions of the
+ * (CDDL), a copy of it is provided in the "COPYING.CDDL" file included
+ * in the VirtualBox distribution, in which case the provisions of the
  * CDDL are applicable instead of those of the GPL.
  *
  * You may elect to license modified versions of this file under the
  * terms and conditions of either the GPL or the CDDL or both.
+ *
+ * SPDX-License-Identifier: GPL-3.0-only OR CDDL-1.0
  */
 
 #ifndef VBOX_INCLUDED_GuestHost_DragAndDrop_h
@@ -33,6 +43,8 @@
 #include <iprt/assert.h>
 #include <iprt/fs.h>
 #include <iprt/list.h>
+
+#include <VBox/GuestHost/DragAndDropDefs.h>
 
 /** DnDURIDroppedFiles flags. */
 typedef uint32_t DNDURIDROPPEDFILEFLAGS;
@@ -88,6 +100,12 @@ const char *DnDDroppedFilesGetDirAbs(PDNDDROPPEDFILES pDF);
 int DnDDroppedFilesReopen(PDNDDROPPEDFILES pDF);
 int DnDDroppedFilesReset(PDNDDROPPEDFILES pDF, bool fDelete);
 int DnDDroppedFilesRollback(PDNDDROPPEDFILES pDF);
+
+const char *DnDHostMsgToStr(uint32_t uMsg);
+const char *DnDGuestMsgToStr(uint32_t uMsg);
+const char *DnDActionToStr(VBOXDNDACTION uAction);
+      char *DnDActionListToStrA(VBOXDNDACTIONLIST fActionList);
+const char *DnDStateToStr(VBOXDNDSTATE enmState);
 
 bool DnDMIMEHasFileURLs(const char *pcszFormat, size_t cchFormatMax);
 bool DnDMIMENeedsDropDir(const char *pcszFormat, size_t cchFormatMax);
@@ -192,7 +210,7 @@ typedef DNDTRANSFEROBJECT *PDNDTRANSFEROBJECT;
 int DnDTransferObjectInit(PDNDTRANSFEROBJECT pObj);
 int DnDTransferObjectInitEx(PDNDTRANSFEROBJECT pObj, DNDTRANSFEROBJTYPE enmType, const char *pcszPathSrcAbs, const char *pcszPathDst);
 void DnDTransferObjectDestroy(PDNDTRANSFEROBJECT pObj);
-void DnDTransferObjectClose(PDNDTRANSFEROBJECT pObj);
+int DnDTransferObjectClose(PDNDTRANSFEROBJECT pObj);
 void DnDTransferObjectReset(PDNDTRANSFEROBJECT pObj);
 const char *DnDTransferObjectGetSourcePath(PDNDTRANSFEROBJECT pObj);
 const char *DnDTransferObjectGetDestPath(PDNDTRANSFEROBJECT pObj);

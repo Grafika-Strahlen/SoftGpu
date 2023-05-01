@@ -3,7 +3,7 @@
  */
 
 /*
- * Copyright (C) 2006-2020 Oracle Corporation
+ * Copyright (C) 2006-2023 Oracle and/or its affiliates.
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -104,9 +104,9 @@ typedef uint32_t HGCMCLIENTID;
  * Declare a VBGL ring-0 API with the right calling convention and visibilitiy.
  * @param type      Return type.  */
 # ifdef RT_OS_DARWIN /** @todo probably apply to all, but don't want a forest fire on our hands right now. */
-#  define DECLR0VBGL(type) DECLHIDDEN(type) VBOXCALL
+#  define DECLR0VBGL(type) DECLHIDDEN(DECL_NOTHROW(type)) VBOXCALL
 # else
-#  define DECLR0VBGL(type) type VBOXCALL
+#  define DECLR0VBGL(type) DECL_NOTHROW(type) VBOXCALL
 # endif
 # define DECLVBGL(type) DECLR0VBGL(type)
 
@@ -243,7 +243,7 @@ struct VBGLIOCIDCHGCMFASTCALL;
  * @param   pvData      VBoxGuest pointer to be passed to callback.
  * @param   u32Data     VBoxGuest 32 bit value to be passed to callback.
  */
-typedef DECLCALLBACK(int) FNVBGLHGCMCALLBACK(VMMDevHGCMRequestHeader *pHeader, void *pvData, uint32_t u32Data);
+typedef DECLCALLBACKTYPE(int, FNVBGLHGCMCALLBACK,(VMMDevHGCMRequestHeader *pHeader, void *pvData, uint32_t u32Data));
 /** Pointer to a FNVBGLHGCMCALLBACK. */
 typedef FNVBGLHGCMCALLBACK *PFNVBGLHGCMCALLBACK;
 
@@ -493,9 +493,9 @@ DECLR0VBGL(void)    VbglR0PhysHeapTerminate(void);
  * Allocate a memory block.
  *
  * @returns Virtual address of the allocated memory block.
- * @param cbSize    Size of block to be allocated.
+ * @param   cb      Number of bytes to allocate.
  */
-DECLR0VBGL(void *)  VbglR0PhysHeapAlloc(uint32_t cbSize);
+DECLR0VBGL(void *)  VbglR0PhysHeapAlloc(uint32_t cb);
 
 /**
  * Get physical address of memory block pointed by the virtual address.
@@ -507,9 +507,14 @@ DECLR0VBGL(void *)  VbglR0PhysHeapAlloc(uint32_t cbSize);
  *       if the given pointer is a valid one allocated from the heap.
  *
  * @param   pv      Virtual address of memory block.
- * @returns Physical address of the memory block.
+ * @returns Physical address of the memory block.  Zero is returned if @a pv
+ *          isn't valid.
  */
 DECLR0VBGL(uint32_t) VbglR0PhysHeapGetPhysAddr(void *pv);
+
+# ifdef IN_TESTCASE
+DECLVBGL(size_t)     VbglR0PhysHeapGetFreeSize(void);
+# endif
 
 /**
  * Free a memory block.
@@ -544,10 +549,14 @@ DECLR0VBGL(int)     VbglR0SetMouseStatus(uint32_t fFeatures);
  * Ring 3 VBGL declaration.
  * @param   type    The return type of the function declaration.
  */
-# define VBGLR3DECL(type) DECLHIDDEN(type) VBOXCALL
+# define VBGLR3DECL(type) DECL_HIDDEN_NOTHROW(type) VBOXCALL
 
 /** @name General-purpose functions
  * @{ */
+/** Exit code which is returned by VBoxClient child process to notify
+ * parent to release VBoxGuest driver resources on Unix-like guests. */
+#define VBGLR3EXITCODERELOAD    (2)
+
 VBGLR3DECL(int)     VbglR3Init(void);
 VBGLR3DECL(int)     VbglR3InitUser(void);
 VBGLR3DECL(void)    VbglR3Term(void);
@@ -558,8 +567,12 @@ VBGLR3DECL(int)     VbglR3InterruptEventWaits(void);
 VBGLR3DECL(int)     VbglR3WriteLog(const char *pch, size_t cch);
 VBGLR3DECL(int)     VbglR3CtlFilterMask(uint32_t fOr, uint32_t fNot);
 VBGLR3DECL(int)     VbglR3Daemonize(bool fNoChDir, bool fNoClose, bool fRespawn, unsigned *pcRespawn);
+VBGLR3DECL(int)     VbglR3DaemonizeEx(bool fNoChDir, bool fNoClose, bool fRespawn, unsigned *pcRespawn,
+                                      bool fReturnOnUpdate, bool *pfUpdateStarted, const char *szPidfile,
+                                      RTFILE *phPidfile);
 VBGLR3DECL(int)     VbglR3PidFile(const char *pszPath, PRTFILE phFile);
 VBGLR3DECL(void)    VbglR3ClosePidFile(const char *pszPath, RTFILE hFile);
+VBGLR3DECL(int)     VbglR3PidfileWait(const char *szPidfile, RTFILE *phPidfile, uint64_t u64TimeoutMs);
 VBGLR3DECL(int)     VbglR3SetGuestCaps(uint32_t fOr, uint32_t fNot);
 VBGLR3DECL(int)     VbglR3AcquireGuestCaps(uint32_t fOr, uint32_t fNot, bool fConfig);
 VBGLR3DECL(int)     VbglR3WaitEvent(uint32_t fMask, uint32_t cMillies, uint32_t *pfEvents);
@@ -575,6 +588,25 @@ VBGLR3DECL(int)     VbglR3GetSessionId(uint64_t *pu64IdSession);
 # ifdef VBOX_WITH_SHARED_CLIPBOARD
 /** @name Shared Clipboard
  * @{ */
+
+# ifdef VBOX_WITH_SHARED_CLIPBOARD_TRANSFERS
+/**
+ * Structure for maintaining a VbglR3 Shared Clipboard transfer context.
+ */
+typedef struct VBGLR3SHCLTRANSFERCMDCTX
+{
+    /** Default chunk size (in bytes).
+     * This is set by VbglR3ClipboardConnectEx(). */
+    uint32_t                    cbChunkSize;
+    /** Max chunk size (in bytes).
+     * This is set by VbglR3ClipboardConnectEx(). */
+    uint32_t                    cbMaxChunkSize;
+    /** Optional callbacks to invoke. */
+    SHCLTRANSFERCALLBACKTABLE   Callbacks;
+} VBGLR3SHCLTRANSFERCTX;
+/** Pointer to a Shared Clipboard transfer context. */
+typedef VBGLR3SHCLTRANSFERCMDCTX *PVBGLR3SHCLTRANSFERCMDCTX;
+# endif /* VBOX_WITH_SHARED_CLIPBOARD_TRANSFERS */
 
 /**
  * The context required for either retrieving or sending a HGCM shared clipboard
@@ -599,25 +631,15 @@ typedef struct VBGLR3SHCLCMDCTX
     /** The guest feature flags reported to the host (VBOX_SHCL_GF_XXX).
      * This is set by VbglR3ClipboardConnectEx().  */
     uint64_t                    fGuestFeatures;
-#  ifdef VBOX_WITH_SHARED_CLIPBOARD_TRANSFERS
-    /** Default chunk size (in bytes).
-     * This is set by VbglR3ClipboardConnectEx(). */
-    uint32_t                    cbChunkSize;
-    /** Max chunk size (in bytes).
-     * This is set by VbglR3ClipboardConnectEx(). */
-    uint32_t                    cbMaxChunkSize;
-#  endif
-
     /** The context ID - input or/and output depending on the operation. */
     uint64_t                    idContext;
     /** OUT: Number of parameters retrieved.
      * This is set by ??. */
     uint32_t                    cParmsRecived;
-
-#  ifdef VBOX_WITH_SHARED_CLIPBOARD_TRANSFERS
-    /** Callback table to use for all transfers. */
-    SHCLTRANSFERCALLBACKS       Callbacks;
-#  endif
+# ifdef VBOX_WITH_SHARED_CLIPBOARD_TRANSFERS
+    /** Data related to Shared Clipboard file transfers. */
+    VBGLR3SHCLTRANSFERCMDCTX    Transfers;
+# endif
 } VBGLR3SHCLCMDCTX;
 /** Pointer to a shared clipboard context for Vbgl. */
 typedef VBGLR3SHCLCMDCTX *PVBGLR3SHCLCMDCTX;
@@ -699,6 +721,7 @@ VBGLR3DECL(void)    VbglR3ClipboardEventFree(PVBGLR3CLIPBOARDEVENT pEvent);
 VBGLR3DECL(int)     VbglR3ClipboardWriteError(HGCMCLIENTID idClient, int rcErr);
 
 #  ifdef VBOX_WITH_SHARED_CLIPBOARD_TRANSFERS
+VBGLR3DECL(void)    VbglR3ClipboardTransferSetCallbacks(PSHCLTRANSFERCALLBACKTABLE pCallbacks);
 VBGLR3DECL(int)     VbglR3ClipboardEventGetNextEx(uint32_t idMsg, uint32_t cParms, PVBGLR3SHCLCMDCTX pCtx, PSHCLTRANSFERCTX pTransferCtx, PVBGLR3CLIPBOARDEVENT pEvent);
 
 VBGLR3DECL(int)     VbglR3ClipboardTransferStatusReply(PVBGLR3SHCLCMDCTX pCtx, PSHCLTRANSFER pTransfer, SHCLTRANSFERSTATUS uStatus);
@@ -813,6 +836,21 @@ VBGLR3DECL(int)     VbglR3WriteCoreDump(void);
 
 /** @}  */
 
+/** @name DRM client handling
+ * @{ */
+/** Guest property names pattern which is used by Guest Additions DRM services. */
+# define VBGLR3DRMPROPPTR           "/VirtualBox/GuestAdd/DRM*"
+/** Guest property that defines if the DRM IPC server access should be restricted to a specific user group. */
+# define VBGLR3DRMIPCPROPRESTRICT   "/VirtualBox/GuestAdd/DRMIpcRestricted"
+
+VBGLR3DECL(bool)    VbglR3DrmClientIsNeeded(void);
+VBGLR3DECL(bool)    VbglR3DrmRestrictedIpcAccessIsNeeded(void);
+VBGLR3DECL(bool)    VbglR3DrmClientIsRunning(void);
+VBGLR3DECL(int)     VbglR3DrmClientStart(void);
+VBGLR3DECL(int)     VbglR3DrmLegacyClientStart(void);
+VBGLR3DECL(int)     VbglR3DrmLegacyX11AgentStart(void);
+/** @}  */
+
 # ifdef VBOX_WITH_GUEST_PROPS
 /** @name Guest properties
  * @{ */
@@ -822,6 +860,7 @@ typedef struct VBGLR3GUESTPROPENUM VBGLR3GUESTPROPENUM;
 typedef VBGLR3GUESTPROPENUM *PVBGLR3GUESTPROPENUM;
 VBGLR3DECL(int)     VbglR3GuestPropConnect(uint32_t *pidClient);
 VBGLR3DECL(int)     VbglR3GuestPropDisconnect(HGCMCLIENTID idClient);
+VBGLR3DECL(bool)    VbglR3GuestPropExist(uint32_t idClient, const char *pszPropName);
 VBGLR3DECL(int)     VbglR3GuestPropWrite(HGCMCLIENTID idClient, const char *pszName, const char *pszValue, const char *pszFlags);
 VBGLR3DECL(int)     VbglR3GuestPropWriteValue(HGCMCLIENTID idClient, const char *pszName, const char *pszValue);
 VBGLR3DECL(int)     VbglR3GuestPropWriteValueV(HGCMCLIENTID idClient, const char *pszName,
@@ -830,6 +869,8 @@ VBGLR3DECL(int)     VbglR3GuestPropWriteValueF(HGCMCLIENTID idClient, const char
                                                const char *pszValueFormat, ...) RT_IPRT_FORMAT_ATTR(3, 4);
 VBGLR3DECL(int)     VbglR3GuestPropRead(HGCMCLIENTID idClient, const char *pszName, void *pvBuf, uint32_t cbBuf, char **ppszValue,
                                         uint64_t *pu64Timestamp, char **ppszFlags, uint32_t *pcbBufActual);
+VBGLR3DECL(int)     VbglR3GuestPropReadEx(uint32_t u32ClientId,
+                                          const char *pszPropName, char **ppszValue, char **ppszFlags, uint64_t *puTimestamp);
 VBGLR3DECL(int)     VbglR3GuestPropReadValue(uint32_t ClientId, const char *pszName, char *pszValue, uint32_t cchValue,
                                              uint32_t *pcchValueActual);
 VBGLR3DECL(int)     VbglR3GuestPropReadValueAlloc(HGCMCLIENTID idClient, const char *pszName, char **ppszValue);
@@ -846,7 +887,7 @@ VBGLR3DECL(int)     VbglR3GuestPropDelete(HGCMCLIENTID idClient, const char *psz
 VBGLR3DECL(int)     VbglR3GuestPropDelSet(HGCMCLIENTID idClient, char const * const *papszPatterns, uint32_t cPatterns);
 VBGLR3DECL(int)     VbglR3GuestPropWait(HGCMCLIENTID idClient, const char *pszPatterns, void *pvBuf, uint32_t cbBuf,
                                         uint64_t u64Timestamp, uint32_t cMillies, char ** ppszName, char **ppszValue,
-                                        uint64_t *pu64Timestamp, char **ppszFlags, uint32_t *pcbBufActual);
+                                        uint64_t *pu64Timestamp, char **ppszFlags, uint32_t *pcbBufActual, bool *pfWasDeleted);
 /** @}  */
 
 /** @name Guest user handling / reporting.
@@ -909,8 +950,8 @@ VBGLR3DECL(int)     VbglR3SharedFolderGetMountDir(char **ppszDir);       /**< @t
  * either retrieving or sending a HGCM guest control
  * commands from or to the host.
  *
- * Note: Do not change parameter order without also
- *       adapting all structure initializers.
+ * @note Do not change parameter order without also adapting all structure
+ *       initializers.
  */
 typedef struct VBGLR3GUESTCTRLCMDCTX
 {
@@ -1042,6 +1083,7 @@ VBGLR3DECL(int) VbglR3GuestCtrlPathGetRename(PVBGLR3GUESTCTRLCMDCTX pCtx, char *
                                              uint32_t cbDest, uint32_t *pfFlags);
 VBGLR3DECL(int) VbglR3GuestCtrlPathGetUserDocuments(PVBGLR3GUESTCTRLCMDCTX pCtx);
 VBGLR3DECL(int) VbglR3GuestCtrlPathGetUserHome(PVBGLR3GUESTCTRLCMDCTX pCtx);
+VBGLR3DECL(int) VbglR3GuestCtrlGetShutdown(PVBGLR3GUESTCTRLCMDCTX pCtx, uint32_t *pfAction);
 /* Guest process execution. */
 VBGLR3DECL(int) VbglR3GuestCtrlProcStartupInfoInit(PVBGLR3GUESTCTRLPROCSTARTUPINFO pStartupInfo);
 VBGLR3DECL(int) VbglR3GuestCtrlProcStartupInfoInitEx(PVBGLR3GUESTCTRLPROCSTARTUPINFO pStartupInfo, size_t cbCmd, size_t cbUser, size_t cbPassword, size_t cbDomain, size_t cbArgs, size_t cbEnv);
@@ -1217,19 +1259,21 @@ typedef const PVBGLR3GUESTDNDMETADATA CPVBGLR3GUESTDNDMETADATA;
  */
 typedef enum VBGLR3DNDEVENTTYPE
 {
-    VBGLR3DNDEVENTTYPE_INVALID        = 0,
-    VBGLR3DNDEVENTTYPE_HG_ERROR       = 1,
-    VBGLR3DNDEVENTTYPE_HG_ENTER       = 2,
-    VBGLR3DNDEVENTTYPE_HG_MOVE        = 3,
-    VBGLR3DNDEVENTTYPE_HG_LEAVE       = 4,
-    VBGLR3DNDEVENTTYPE_HG_DROP        = 5,
-    VBGLR3DNDEVENTTYPE_HG_RECEIVE     = 6,
-    VBGLR3DNDEVENTTYPE_HG_CANCEL      = 7,
+    VBGLR3DNDEVENTTYPE_INVALID = 0,
+    VBGLR3DNDEVENTTYPE_CANCEL,
+    VBGLR3DNDEVENTTYPE_HG_ERROR,
+    VBGLR3DNDEVENTTYPE_HG_ENTER,
+    VBGLR3DNDEVENTTYPE_HG_MOVE,
+    VBGLR3DNDEVENTTYPE_HG_LEAVE,
+    VBGLR3DNDEVENTTYPE_HG_DROP,
+    VBGLR3DNDEVENTTYPE_HG_RECEIVE,
 # ifdef VBOX_WITH_DRAG_AND_DROP_GH
-    VBGLR3DNDEVENTTYPE_GH_ERROR       = 100,
-    VBGLR3DNDEVENTTYPE_GH_REQ_PENDING = 101,
-    VBGLR3DNDEVENTTYPE_GH_DROP        = 102,
+    VBGLR3DNDEVENTTYPE_GH_ERROR,
+    VBGLR3DNDEVENTTYPE_GH_REQ_PENDING,
+    VBGLR3DNDEVENTTYPE_GH_DROP,
 # endif
+    /** Tells the caller that it has to quit operation. */
+    VBGLR3DNDEVENTTYPE_QUIT,
     /** Blow the type up to 32-bit. */
     VBGLR3DNDEVENTTYPE_32BIT_HACK = 0x7fffffff
 } VBGLR3DNDEVENTTYPE;
@@ -1304,6 +1348,7 @@ VBGLR3DECL(int)     VbglR3DnDConnect(PVBGLR3GUESTDNDCMDCTX pCtx);
 VBGLR3DECL(int)     VbglR3DnDDisconnect(PVBGLR3GUESTDNDCMDCTX pCtx);
 
 VBGLR3DECL(int)     VbglR3DnDReportFeatures(uint32_t idClient, uint64_t fGuestFeatures, uint64_t *pfHostFeatures);
+VBGLR3DECL(int)     VbglR3DnDSendError(PVBGLR3GUESTDNDCMDCTX pCtx, int rcOp);
 
 VBGLR3DECL(int)     VbglR3DnDEventGetNext(PVBGLR3GUESTDNDCMDCTX pCtx, PVBGLR3DNDEVENT *ppEvent);
 VBGLR3DECL(void)    VbglR3DnDEventFree(PVBGLR3DNDEVENT pEvent);
@@ -1314,7 +1359,6 @@ VBGLR3DECL(int)     VbglR3DnDHGSendProgress(PVBGLR3GUESTDNDCMDCTX pCtx, uint32_t
 #  ifdef VBOX_WITH_DRAG_AND_DROP_GH
 VBGLR3DECL(int)     VbglR3DnDGHSendAckPending(PVBGLR3GUESTDNDCMDCTX pCtx, VBOXDNDACTION dndActionDefault, VBOXDNDACTIONLIST dndLstActionsAllowed, const char* pcszFormats, uint32_t cbFormats);
 VBGLR3DECL(int)     VbglR3DnDGHSendData(PVBGLR3GUESTDNDCMDCTX pCtx, const char *pszFormat, void *pvData, uint32_t cbData);
-VBGLR3DECL(int)     VbglR3DnDGHSendError(PVBGLR3GUESTDNDCMDCTX pCtx, int rcOp);
 #  endif /* VBOX_WITH_DRAG_AND_DROP_GH */
 /** @} */
 # endif /* VBOX_WITH_DRAG_AND_DROP */

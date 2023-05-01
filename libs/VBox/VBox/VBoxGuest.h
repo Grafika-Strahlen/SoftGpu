@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2020 Oracle Corporation
+ * Copyright (C) 2006-2023 Oracle and/or its affiliates.
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -79,7 +79,7 @@
  *
  * @{
  */
-#if !defined(IN_RC) && !defined(IN_RING0_AGNOSTIC) && !defined(IPRT_NO_CRT)
+#if !defined(IN_RC) && !defined(IN_RING0_AGNOSTIC)
 
 /** Fictive start address of the hypervisor physical memory for MmMapIoSpace. */
 #define VBOXGUEST_HYPERVISOR_PHYSICAL_START         UINT32_C(0xf8000000)
@@ -125,7 +125,7 @@
 #elif defined(RT_OS_SOLARIS)
   /* No automatic buffering, size limited to 255 bytes => use VBGLBIGREQ for everything. */
 # include <sys/ioccom.h>
-# define VBGL_IOCTL_CODE_SIZE(Function, Size)       _IOWRN('V', (Function), sizeof(VBGLREQHDR))
+# define VBGL_IOCTL_CODE_SIZE(Function, Size)       ((uintptr_t)(_IOWRN('V', (Function), sizeof(VBGLREQHDR))))
 # define VBGL_IOCTL_CODE_BIG(Function)              _IOWRN('V', (Function), sizeof(VBGLREQHDR))
 # define VBGL_IOCTL_CODE_FAST(Function)             _IO(   'F', (Function))
 # define VBGL_IOCTL_CODE_STRIPPED(a_uIOCtl)         (a_uIOCtl)
@@ -542,7 +542,7 @@ AssertCompileSize(VBGLIOCCHANGEFILTERMASK, 24 + 8);
 /** @} */
 
 
-/** @name VBGL_IOCTL_GUEST_CAPS_ACQUIRE
+/** @name VBGL_IOCTL_ACQUIRE_GUEST_CAPABILITIES
  * IOCTL to for acquiring and releasing guest capabilities.
  *
  * This is used for multiple purposes:
@@ -560,6 +560,7 @@ AssertCompileSize(VBGLIOCCHANGEFILTERMASK, 24 + 8);
  * VERR_RESOURCE_BUSY is returned if any capabilities in the fOrMask are
  * currently acquired by some other VBoxGuest session.
  *
+ * @todo Rename to VBGL_IOCTL_ACQUIRE_GUEST_CAPS
  * @{
  */
 #define VBGL_IOCTL_ACQUIRE_GUEST_CAPABILITIES           VBGL_IOCTL_CODE_SIZE(13, VBGL_IOCTL_ACQUIRE_GUEST_CAPABILITIES_SIZE)
@@ -817,7 +818,7 @@ typedef struct VBGLOS2ATTACHDD
      * @param   cbReq               The size of the data buffer.
      */
 # if ARCH_BITS == 32 || defined(DOXYGEN_RUNNING)
-    DECLCALLBACKMEMBER(int, pfnServiceEP)(uint32_t u32Session, unsigned iFunction, PVBGLREQHDR pReqHdr, size_t cbReq);
+    DECLCALLBACKMEMBER(int, pfnServiceEP,(uint32_t u32Session, unsigned iFunction, PVBGLREQHDR pReqHdr, size_t cbReq));
 # else
     uint32_t pfnServiceEP;
 #endif
@@ -834,7 +835,7 @@ typedef struct VBGLOS2ATTACHDD
      * @endcode
      */
 # if ARCH_BITS == 16 || defined(DOXYGEN_RUNNING)
-    DECLCALLBACKMEMBER(int, fpfnServiceEP)(uint32_t u32Session, uint16_t iFunction, PVBGLREQHDR fpvData, uint16_t cbData);
+    DECLCALLBACKMEMBER(int, fpfnServiceEP,(uint32_t u32Session, uint16_t iFunction, PVBGLREQHDR fpvData, uint16_t cbData));
 # else
     RTFAR16 fpfnServiceEP;
 # endif
