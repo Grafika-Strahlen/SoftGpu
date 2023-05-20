@@ -5,6 +5,8 @@
 #include "PCIControlRegisters.hpp"
 #include "MMU.hpp"
 #include <allocator/PageAllocator.hpp>
+#include <vd/Window.hpp>
+#include <vd/VulkanManager.hpp>
 
 #include <numeric>
 
@@ -14,7 +16,8 @@ DebugManager GlobalDebug;
 static u32 BAR0 = 0;
 static u64 BAR1 = 0;
 
-static void PreInit() noexcept;
+static void InitEnvironment() noexcept;
+static int InitCommandRegister() noexcept;
 static int InitBAR() noexcept;
 static int InitMmu() noexcept;
 static void ReleaseMmu() noexcept;
@@ -33,11 +36,23 @@ extern void RunTests() noexcept;
 int main(int argCount, char* args[])
 {
     UNUSED2(argCount, args);
-    PreInit();
+    InitEnvironment();
 
 #if 0
     ::tau::test::register_allocator::RunTests();
 #endif
+
+    ReferenceCountingPointer<tau::vd::Window> window = tau::vd::Window::CreateWindow();
+    ReferenceCountingPointer<tau::vd::VulkanManager> vulkanManager = tau::vd::VulkanManager::CreateVulkanManager();
+    ConPrinter::PrintLn("Created vulkan manager.");
+
+    {
+        const int commandInit = InitCommandRegister();
+        if(commandInit)
+        {
+            return commandInit;
+        }
+    }
 
     {
         const int barInit = InitBAR();
@@ -56,7 +71,7 @@ int main(int argCount, char* args[])
     }
 
     u32 resetRead;
-    processor.PciMemRead(BAR0 + REGISTER_RESET, 4, &resetRead);
+    processor.PciMemRead(BAR0 + PciControlRegisters::REGISTER_RESET, 4, &resetRead);
 
     // TestMove();
     // processor.PciMemRead(BAR0 + REGISTER_RESET, 4, &resetRead);
@@ -69,7 +84,7 @@ int main(int argCount, char* args[])
     // TestMul2FReplicated();
     // processor.PciMemRead(BAR0 + REGISTER_RESET, 4, &resetRead);
     TestMul2FReplicatedDualDispatch();
-    processor.PciMemRead(BAR0 + REGISTER_RESET, 4, &resetRead);
+    processor.PciMemRead(BAR0 + PciControlRegisters::REGISTER_RESET, 4, &resetRead);
 
     ReleaseMmu();
 
@@ -567,7 +582,7 @@ static void TestMul2FReplicatedDualDispatch() noexcept
     ConPrinter::PrintLn("LD/ST Saturation: {}:{} ({})", outData[0].LdStSaturation, outData[0].LdStTotals, ldStPercent);
 }
 
-static void PreInit() noexcept
+static void InitEnvironment() noexcept
 {
     Console::Init();
 
@@ -579,6 +594,23 @@ static void PreInit() noexcept
 
 static void* RawGpuMemory = nullptr;
 static u8* GpuMemory = nullptr;
+
+static int InitCommandRegister() noexcept
+{
+    {
+        u16 commandRegister = static_cast<u16>(processor.PciConfigRead(0x04, 2));
+        commandRegister |= 0x6;
+        processor.PciConfigWrite(0x04, 2, commandRegister);
+
+        commandRegister = static_cast<u16>(processor.PciConfigRead(0x04, 2));
+        if((commandRegister & 0x06) != 0x06)
+        {
+            return -501;
+        }
+    }
+
+    return 0;
+}
 
 static int InitBAR() noexcept
 {

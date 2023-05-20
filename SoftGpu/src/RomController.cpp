@@ -5,12 +5,12 @@ u16 RomController::PciReadExpansionRom(const u64 address, const u16 size, u32* c
 {
     if constexpr(false)
     {
-        ConPrinter::PrintLn("Attempting to read from ROM. Address = 0x{XP0}, Size = {}", address, size);
+        ConPrinter::PrintLn(u8"Attempting to read from ROM. Address = 0x{XP0}, Size = {}", address, size);
     }
 
     if(!m_Processor->ExpansionRomEnable())
     {
-        ConPrinter::PrintLn("Attempting to read Expansion ROM while it is disabled.");
+        ConPrinter::PrintLn(u8"Attempting to read Expansion ROM while it is disabled.");
         return 0;
     }
 
@@ -25,7 +25,12 @@ u16 RomController::PciReadExpansionRom(const u64 address, const u16 size, u32* c
 
     if constexpr(false)
     {
-        ConPrinter::PrintLn("Read {} bytes from ROM.", trueSize);
+        ConPrinter::PrintLn(u8"First Byte of Block: 0x{XP0}", m_ExpansionRom[address]);
+    }
+
+    if constexpr(false)
+    {
+        ConPrinter::PrintLn(u8"Read {} bytes from ROM.", trueSize);
     }
     return static_cast<u16>(trueSize);
 }

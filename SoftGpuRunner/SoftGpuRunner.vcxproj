@@ -79,27 +79,27 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)SoftGpu\include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(OutDir);$(LibraryPath)</LibraryPath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)SoftGpu\include;$(VK_SDK_PATH)\Include;$(SolutionDir)VirtualDisplay\include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(OutDir);$(VK_SDK_PATH)\Lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)SoftGpu\include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(OutDir);$(LibraryPath)</LibraryPath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)SoftGpu\include;$(VK_SDK_PATH)\Include;$(SolutionDir)VirtualDisplay\include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(OutDir);$(VK_SDK_PATH)\Lib;$(LibraryPath)</LibraryPath>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)SoftGpu\include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(OutDir);$(SolutionDir)libs\TauUtils\build\TauUtilsDynamic\Debug;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)SoftGpu\include;$(VK_SDK_PATH)\Include;$(SolutionDir)VirtualDisplay\include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(OutDir);$(VK_SDK_PATH)\Lib;$(SolutionDir)libs\TauUtils\build\TauUtilsDynamic\Debug;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)SoftGpu\include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(OutDir);$(SolutionDir)libs\TauUtils\build\TauUtilsDynamic\Release;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)SoftGpu\include;$(VK_SDK_PATH)\Include;$(SolutionDir)VirtualDisplay\include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(OutDir);$(VK_SDK_PATH)\Lib;$(SolutionDir)libs\TauUtils\build\TauUtilsDynamic\Release;$(LibraryPath)</LibraryPath>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -120,12 +120,13 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <BuildStlModules>false</BuildStlModules>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(LibraryPath);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>TauUtilsDynamicStatic.lib;SoftGpu.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>TauUtilsDynamicStatic.lib;SoftGpu.lib;VirtualDisplay.lib;vulkan-1.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LargeAddressAware>true</LargeAddressAware>
       <TargetMachine>MachineX86</TargetMachine>
     </Link>
@@ -150,6 +151,7 @@
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <BuildStlModules>false</BuildStlModules>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -157,7 +159,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(LibraryPath);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>TauUtilsDynamicStatic.lib;SoftGpu.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>TauUtilsDynamicStatic.lib;SoftGpu.lib;VirtualDisplay.lib;vulkan-1.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LargeAddressAware>true</LargeAddressAware>
       <TargetMachine>MachineX86</TargetMachine>
     </Link>
@@ -180,12 +182,13 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <BuildStlModules>false</BuildStlModules>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(LibraryPath);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>TauUtilsDynamicStatic.lib;SoftGpu.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>TauUtilsDynamicStatic.lib;SoftGpu.lib;VirtualDisplay.lib;vulkan-1.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LargeAddressAware>true</LargeAddressAware>
       <TargetMachine>MachineX64</TargetMachine>
     </Link>
@@ -210,6 +213,7 @@
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <BuildStlModules>false</BuildStlModules>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -217,7 +221,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(LibraryPath);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>TauUtilsDynamicStatic.lib;SoftGpu.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>TauUtilsDynamicStatic.lib;SoftGpu.lib;VirtualDisplay.lib;vulkan-1.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LargeAddressAware>true</LargeAddressAware>
       <TargetMachine>MachineX64</TargetMachine>
     </Link>
@@ -225,6 +229,10 @@
   <ItemGroup>
     <ClCompile Include="src\Main.cpp" />
     <ClCompile Include="src\RegisterAllocatorTests.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="..\libs\TauUtils\natvis\BitSet.natvis" />
+    <Natvis Include="..\libs\TauUtils\natvis\DynArray.natvis" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

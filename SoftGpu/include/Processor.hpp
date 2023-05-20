@@ -270,6 +270,7 @@ public:
 
     // Intended only for VBDevice.
     PciController& GetPciController() noexcept { return m_PciController; }
+    PciControlRegisters& GetPciControlRegisters() noexcept { return m_PciRegisters; }
 private:
     PciController m_PciController;
     RomController m_RomController;

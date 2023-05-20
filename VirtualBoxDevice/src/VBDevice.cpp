@@ -20,6 +20,7 @@
 #include <Processor.hpp>
 #include <DebugManager.hpp>
 #include <Console.hpp>
+#include <vd/VulkanManager.hpp>
 #include "ConLogger.hpp"
 #include "VBoxDeviceFunction.hpp"
 #include "PciConfigHandler.hpp"
@@ -48,6 +49,14 @@ DebugManager GlobalDebug;
     (void) iid;
 
     return nullptr;
+}
+
+static void PciControlWriteCallback(const u32 address, const u32 value) noexcept
+{
+    if(address == PciControlRegisters::REGISTER_DEBUG_PRINT)
+    {
+        ConLogLn("SoftGpu/[0]: Writing Debug Register: {} [0x{XP0}]", value, value);
+    }
 }
 
 static DECLCALLBACK(VBOXSTRICTRC) softGpuMMIORead(PPDMDEVINS pDevIns, void* pvUser, RTGCPHYS off, void* pv, unsigned cb)
@@ -202,6 +211,11 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
     RTStrPrintf(pciFunction->FunctionName, sizeof(pciFunction->FunctionName), "soft_gpu%u", 0);
     pciFunction->FunctionId = 0;
     ::new(&pciFunction->processor) Processor;
+
+    pciFunction->processor.GetPciControlRegisters().RegisterDebugCallbacks(nullptr, PciControlWriteCallback);
+
+    ReferenceCountingPointer<tau::vd::VulkanManager> vulkanManager = tau::vd::VulkanManager::CreateVulkanManager();
+    ConLogLn("Created Vulkan Manager.");
 
     PDMPCIDEV_ASSERT_VALID(deviceInstance, pciDevice);
     ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Asserted pciDevice as valid.");

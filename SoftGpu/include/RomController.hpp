@@ -87,13 +87,17 @@ private:
         if(fseek(romFile, 0, SEEK_SET))
         {
             (void) fclose(romFile);
-            ConPrinter::PrintLn(u8"Could not load ROM file [seek_set].\n");
+            ConPrinter::PrintLn(u8"Could not load ROM file [seek_set].");
             return;
         }
 
         (void) fread(m_ExpansionRom, 1, fileSize, romFile);
 
         (void) fclose(romFile);
+
+        ConPrinter::PrintLn(u8"Rom First Bytes: 0x{XP0}{XP0}{XP0}{XP0}", m_ExpansionRom[0], m_ExpansionRom[1], m_ExpansionRom[2], m_ExpansionRom[3]);
+        ConPrinter::PrintLn(u8"Last Non Zero Byte (Should Be A7): 0x{XP0}", m_ExpansionRom[0x6DEB]);
+        ConPrinter::PrintLn(u8"Last Byte: 0x{XP0}", m_ExpansionRom[0x6DFF]);
     }
 private:
     Processor* m_Processor;

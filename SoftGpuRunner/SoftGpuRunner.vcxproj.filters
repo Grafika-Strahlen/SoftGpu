@@ -22,4 +22,8 @@
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="..\libs\TauUtils\natvis\BitSet.natvis" />
+    <Natvis Include="..\libs\TauUtils\natvis\DynArray.natvis" />
+  </ItemGroup>
 </Project>

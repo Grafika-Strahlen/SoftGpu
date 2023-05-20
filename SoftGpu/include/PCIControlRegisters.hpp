@@ -18,6 +18,9 @@ struct ControlRegister final
     };
 };
 
+typedef void (*PciControlDebugReadCallback_f)(u32 localAddress);
+typedef void (*PciControlDebugWriteCallback_f)(u32 localAddress, u32 value);
+
 class PciControlRegisters final
 {
     DEFAULT_DESTRUCT(PciControlRegisters);
@@ -26,13 +29,16 @@ public:
     static inline constexpr u32 REGISTER_MAGIC_VALUE = 0x4879666C;
     static inline constexpr u32 REGISTER_REVISION_VALUE =0x00000001;
 
-    static inline constexpr u16 REGISTER_MAGIC      = 0x0000;
-    static inline constexpr u16 REGISTER_REVISION   = 0x0004;
-    static inline constexpr u16 REGISTER_EMULATION  = 0x0008;
-    static inline constexpr u16 REGISTER_RESET      = 0x000C;
-    static inline constexpr u16 REGISTER_CONTROL    = 0x0010;
-    static inline constexpr u16 REGISTER_VGA_WIDTH  = 0x1014;
-    static inline constexpr u16 REGISTER_VGA_HEIGHT = 0x1018;
+    static inline constexpr u16 REGISTER_MAGIC       = 0x0000;
+    static inline constexpr u16 REGISTER_REVISION    = 0x0004;
+    static inline constexpr u16 REGISTER_EMULATION   = 0x0008;
+    static inline constexpr u16 REGISTER_RESET       = 0x000C;
+    static inline constexpr u16 REGISTER_CONTROL     = 0x0010;
+
+    static inline constexpr u16 REGISTER_VGA_WIDTH   = 0x1014;
+    static inline constexpr u16 REGISTER_VGA_HEIGHT  = 0x1018;
+
+    static inline constexpr u16 REGISTER_DEBUG_PRINT = 0x8000;
 
     static inline constexpr u32 CONTROL_REGISTER_VALID_MASK = 0x00000001;
 
@@ -44,6 +50,8 @@ public:
         , m_ControlRegister{.Value = 0}
         , m_VgaWidth(DEFAULT_VGA_WIDTH)
         , m_VgaHeight(DEFAULT_VGA_HEIGHT)
+        , m_DebugReadCallback(nullptr)
+        , m_DebugWriteCallback(nullptr)
     { }
 
     void Reset()
@@ -56,9 +64,18 @@ public:
     [[nodiscard]] u32 Read(u32 address) noexcept;
 
     void Write(u32 address, u32 value) noexcept;
+
+    void RegisterDebugCallbacks(const PciControlDebugReadCallback_f debugReadCallback, const PciControlDebugWriteCallback_f debugWriteCallback) noexcept
+    {
+        m_DebugReadCallback = debugReadCallback;
+        m_DebugWriteCallback = debugWriteCallback;
+    }
 private:
     Processor* m_Processor;
     ControlRegister m_ControlRegister;
     u16 m_VgaWidth;
     u16 m_VgaHeight;
+
+    PciControlDebugReadCallback_f m_DebugReadCallback;
+    PciControlDebugWriteCallback_f m_DebugWriteCallback;
 };

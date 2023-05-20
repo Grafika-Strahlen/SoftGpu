@@ -3,6 +3,11 @@
 
 [[nodiscard]] u32 PciControlRegisters::Read(const u32 address) noexcept
 {
+    if(m_DebugReadCallback)
+    {
+        m_DebugReadCallback(address);
+    }
+
     switch(address)
     {
         case REGISTER_MAGIC: return REGISTER_MAGIC_VALUE;
@@ -12,6 +17,7 @@
         case REGISTER_CONTROL: return m_ControlRegister.Value;
         case REGISTER_VGA_WIDTH: return m_VgaWidth;
         case REGISTER_VGA_HEIGHT: return m_VgaHeight;
+        case REGISTER_DEBUG_PRINT: return 0;
         default: break;
     }
 
@@ -20,6 +26,11 @@
 
 void PciControlRegisters::Write(const u32 address, const u32 value) noexcept
 {
+    if(m_DebugWriteCallback)
+    {
+        m_DebugWriteCallback(address, value);
+    }
+
     switch(address)
     {
         case REGISTER_CONTROL: m_ControlRegister.Value = value & CONTROL_REGISTER_VALID_MASK; break;
