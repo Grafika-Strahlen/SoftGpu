@@ -43,7 +43,7 @@ int main(int argCount, char* args[])
 #endif
 
     ReferenceCountingPointer<tau::vd::Window> window = tau::vd::Window::CreateWindow();
-    ReferenceCountingPointer<tau::vd::VulkanManager> vulkanManager = tau::vd::VulkanManager::CreateVulkanManager();
+    ReferenceCountingPointer<tau::vd::VulkanManager> vulkanManager = tau::vd::VulkanManager::CreateVulkanManager(window);
     ConPrinter::PrintLn("Created vulkan manager.");
 
     {

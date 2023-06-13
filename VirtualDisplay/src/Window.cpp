@@ -52,11 +52,21 @@ ReferenceCountingPointer<Window> Window::CreateWindow() noexcept
 
     ::ShowWindow(hWnd, SW_SHOWNORMAL);
 
+    GetClientRect(hWnd, &window->m_FramebufferSize);
+
     return window;
 }
 
 LRESULT Window::WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+    switch(uMsg)
+    {
+        case WM_SIZE:
+            GetClientRect(m_Window, &m_FramebufferSize);
+            break;
+        default: break;
+    }
+
     return DefWindowProcW(hWnd, uMsg, wParam, lParam);
 }
 

@@ -212,7 +212,10 @@
     <ClCompile Include="src\MemoryRecovery.cpp" />
     <ClCompile Include="src\VirtaulDisplay.cpp" />
     <ClCompile Include="src\VulkanDebug.cpp" />
+    <ClCompile Include="src\VulkanDeviceExtensions.cpp" />
     <ClCompile Include="src\VulkanFunctions.cpp" />
+    <ClCompile Include="src\VulkanInstanceExtensions.cpp" />
+    <ClCompile Include="src\VulkanInstanceLayers.cpp" />
     <ClCompile Include="src\VulkanManager.cpp" />
     <ClCompile Include="src\Window.cpp" />
   </ItemGroup>
@@ -220,7 +223,10 @@
     <ClInclude Include="include\vd\Config.hpp" />
     <ClInclude Include="include\vd\MemoryRecovery.hpp" />
     <ClInclude Include="include\vd\VulkanDebug.hpp" />
+    <ClInclude Include="include\vd\VulkanDeviceExtensions.hpp" />
     <ClInclude Include="include\vd\VulkanFunctions.hpp" />
+    <ClInclude Include="include\vd\VulkanInstanceExtensions.hpp" />
+    <ClInclude Include="include\vd\VulkanInstanceLayers.hpp" />
     <ClInclude Include="include\vd\VulkanManager.hpp" />
     <ClInclude Include="include\vd\Window.hpp" />
   </ItemGroup>
