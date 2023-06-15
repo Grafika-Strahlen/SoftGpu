@@ -4,18 +4,18 @@
 #include <vulkan/vulkan.h>
 #include <ReferenceCountingPointer.hpp>
 
-
 namespace tau::vd {
 
+class VulkanInstance;
 class VulkanDevice;
 class Window;
 
 class VulkanManager final
 {
+    DELETE_CM(VulkanManager);
 public:
     VulkanManager(
-        VkInstance vulkan,
-        const u32 vulkanVersion,
+        ReferenceCountingPointer<VulkanInstance>&& vulkan,
         VkDebugUtilsMessengerEXT debugMessenger,
         const ReferenceCountingPointer<Window>& window,
         VkSurfaceKHR surface,
@@ -32,8 +32,7 @@ public:
 public:
     static ReferenceCountingPointer<VulkanManager> CreateVulkanManager(const ReferenceCountingPointer<Window>& window) noexcept;
 private:
-    VkInstance m_Vulkan;
-    u32 m_VulkanVersion;
+    ReferenceCountingPointer<VulkanInstance> m_Vulkan;
     VkDebugUtilsMessengerEXT m_DebugMessenger;
     ReferenceCountingPointer<Window> m_Window;
     VkSurfaceKHR m_Surface;
