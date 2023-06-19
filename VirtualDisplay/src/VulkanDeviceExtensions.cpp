@@ -9,6 +9,9 @@ static constexpr ConstExprString DesiredDeviceExtensions[] = {
 };
 
 static constexpr ConstExprString Desired1_0DeviceExtensions[] = {
+#if defined(VK_KHR_maintenance1) && VK_KHR_maintenance1
+    VK_KHR_MAINTENANCE1_EXTENSION_NAME,
+#endif
 };
 
 static constexpr ConstExprString Desired1_1DeviceExtensions[] = {

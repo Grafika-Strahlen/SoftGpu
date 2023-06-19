@@ -3,6 +3,7 @@
 #include <DynArray.hpp>
 #include <vulkan/vulkan.h>
 #include <ReferenceCountingPointer.hpp>
+#include <Safeties.hpp>
 
 namespace tau::vd {
 
@@ -15,12 +16,12 @@ class VulkanManager final
     DELETE_CM(VulkanManager);
 public:
     VulkanManager(
-        ReferenceCountingPointer<VulkanInstance>&& vulkan,
+        StrongRef<VulkanInstance>&& vulkan,
         VkDebugUtilsMessengerEXT debugMessenger,
         const ReferenceCountingPointer<Window>& window,
         VkSurfaceKHR surface,
         VkPhysicalDevice physicalDevice,
-        ReferenceCountingPointer<VulkanDevice>&& device,
+        StrongRef<VulkanDevice>&& device,
         VkSwapchainKHR swapchain,
         const DynArray<VkImage>& swapchainImages,
         const DynArray<VkImageView>& swapchainImageViews,
@@ -29,15 +30,17 @@ public:
     ) noexcept;
 
     ~VulkanManager() noexcept;
+
+    [[nodiscard]] StrongRef<VulkanDevice> Device() const noexcept { return m_Device; }
 public:
-    static ReferenceCountingPointer<VulkanManager> CreateVulkanManager(const ReferenceCountingPointer<Window>& window) noexcept;
+    static Ref<VulkanManager> CreateVulkanManager(const Ref<Window>& window) noexcept;
 private:
-    ReferenceCountingPointer<VulkanInstance> m_Vulkan;
+    StrongRef<VulkanInstance> m_Vulkan;
     VkDebugUtilsMessengerEXT m_DebugMessenger;
-    ReferenceCountingPointer<Window> m_Window;
+    Ref<Window> m_Window;
     VkSurfaceKHR m_Surface;
     VkPhysicalDevice m_PhysicalDevice;
-    ReferenceCountingPointer<VulkanDevice> m_Device;
+    StrongRef<VulkanDevice> m_Device;
     VkSwapchainKHR m_Swapchain;
     DynArray<VkImage> m_SwapchainImages;
     DynArray<VkImageView> m_SwapchainImageViews;

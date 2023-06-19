@@ -7,8 +7,10 @@
 #include <allocator/PageAllocator.hpp>
 #include <vd/Window.hpp>
 #include <vd/VulkanManager.hpp>
+#include <vd/VulkanCommandPools.hpp>
 
 #include <numeric>
+#include <Safeties.hpp>
 
 static Processor processor;
 DebugManager GlobalDebug;
@@ -42,9 +44,15 @@ int main(int argCount, char* args[])
     ::tau::test::register_allocator::RunTests();
 #endif
 
-    ReferenceCountingPointer<tau::vd::Window> window = tau::vd::Window::CreateWindow();
-    ReferenceCountingPointer<tau::vd::VulkanManager> vulkanManager = tau::vd::VulkanManager::CreateVulkanManager(window);
+    const Ref<tau::vd::Window> window = tau::vd::Window::CreateWindow();
+    Ref<tau::vd::VulkanManager> vulkanManager = tau::vd::VulkanManager::CreateVulkanManager(window);
     ConPrinter::PrintLn("Created vulkan manager.");
+    Ref<tau::vd::VulkanCommandPools> vulkanCommandPools = ::tau::vd::VulkanCommandPools::CreateCommandPools(
+        vulkanManager->Device(), 
+        1, 
+        1,
+        vulkanManager->Device()->GraphicsQueueFamilyIndex()
+    );
 
     {
         const int commandInit = InitCommandRegister();

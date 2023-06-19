@@ -3,7 +3,7 @@
 #include <vulkan/vulkan.h>
 
 #include <Objects.hpp>
-#include <ReferenceCountingPointer.hpp>
+#include <Safeties.hpp>
 #include <String.hpp>
 #include <StringFormat.hpp>
 
@@ -41,15 +41,13 @@
 
 #define VK_CALL0(Call) VK_CALL(Call, #Call)
 
-extern PFN_vkEnumerateInstanceVersion VkEnumerateInstanceVersion;
+#define VulkanDeclFunc(Name) PFN_vk##Name Vk##Name
+
+extern VulkanDeclFunc(EnumerateInstanceVersion);
 
 namespace tau::vd {
 
 void LoadNonInstanceFunctions() noexcept;
-
-class VulkanInstance;
-
-using VulkanInstanceRef = ReferenceCountingPointer<VulkanInstance>;
 
 class VulkanInstance final
 {
@@ -70,35 +68,37 @@ public:
     [[nodiscard]] const VkAllocationCallbacks* Allocator() const noexcept { return m_Allocator; }
     [[nodiscard]] u32 Version() const noexcept { return m_Version; }
 public:
-    VkResult CreateDebugUtilsMessengerEXT(const VkDebugUtilsMessengerCreateInfoEXT* const pCreateInfo, VkDebugUtilsMessengerEXT* const pMessenger) const noexcept;
+    [[nodiscard]] VkResult CreateDebugUtilsMessengerEXT(const VkDebugUtilsMessengerCreateInfoEXT* const pCreateInfo, VkDebugUtilsMessengerEXT* const pMessenger) const noexcept;
     void DestroyDebugUtilsMessengerEXT(VkDebugUtilsMessengerEXT messenger) const noexcept;
 
-    VkResult CreateWin32SurfaceKHR(const VkWin32SurfaceCreateInfoKHR* const pCreateInfo, VkSurfaceKHR* const pSurface) const noexcept;
+    [[nodiscard]] VkResult CreateWin32SurfaceKHR(const VkWin32SurfaceCreateInfoKHR* const pCreateInfo, VkSurfaceKHR* const pSurface) const noexcept;
     void DestroySurfaceKHR(VkSurfaceKHR surface) const noexcept;
 
-    VkResult EnumeratePhysicalDevices(uint32_t* const pPhysicalDeviceCount, VkPhysicalDevice* const pPhysicalDevices) const noexcept;
+    [[nodiscard]] VkResult EnumeratePhysicalDevices(uint32_t* const pPhysicalDeviceCount, VkPhysicalDevice* const pPhysicalDevices) const noexcept;
 public:
-    PFN_vkCreateDebugUtilsMessengerEXT VkCreateDebugUtilsMessengerEXT = nullptr;
-    PFN_vkDestroyDebugUtilsMessengerEXT VkDestroyDebugUtilsMessengerEXT = nullptr;
+    VulkanDeclFunc(CreateDebugUtilsMessengerEXT) = nullptr;
+    VulkanDeclFunc(DestroyDebugUtilsMessengerEXT) = nullptr;
 
-    PFN_vkCreateWin32SurfaceKHR VkCreateWin32SurfaceKHR = nullptr;
-    PFN_vkDestroySurfaceKHR VkDestroySurfaceKHR = nullptr;
+    VulkanDeclFunc(CreateWin32SurfaceKHR) = nullptr;
+    VulkanDeclFunc(DestroySurfaceKHR) = nullptr;
 
-    PFN_vkEnumeratePhysicalDevices VkEnumeratePhysicalDevices = nullptr;
+    VulkanDeclFunc(EnumeratePhysicalDevices) = nullptr;
 
-    PFN_vkGetPhysicalDeviceProperties2 VkGetPhysicalDeviceProperties2 = nullptr;
-    PFN_vkGetPhysicalDeviceProperties2KHR VkGetPhysicalDeviceProperties2KHR = nullptr;
+    VulkanDeclFunc(GetPhysicalDeviceProperties2) = nullptr;
+    VulkanDeclFunc(GetPhysicalDeviceProperties2KHR) = nullptr;
 
-    PFN_vkGetPhysicalDeviceQueueFamilyProperties2 VkGetPhysicalDeviceQueueFamilyProperties2 = nullptr;
-    PFN_vkGetPhysicalDeviceQueueFamilyProperties2KHR VkGetPhysicalDeviceQueueFamilyProperties2KHR = nullptr;
+    VulkanDeclFunc(GetPhysicalDeviceQueueFamilyProperties2) = nullptr;
+    VulkanDeclFunc(GetPhysicalDeviceQueueFamilyProperties2KHR) = nullptr;
 
-    PFN_vkGetPhysicalDeviceSurfaceSupportKHR VkGetPhysicalDeviceSurfaceSupportKHR = nullptr;
-    PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR VkGetPhysicalDeviceSurfaceCapabilitiesKHR = nullptr;
-    PFN_vkGetPhysicalDeviceSurfaceFormatsKHR VkGetPhysicalDeviceSurfaceFormatsKHR = nullptr;
-    PFN_vkGetPhysicalDeviceSurfacePresentModesKHR VkGetPhysicalDeviceSurfacePresentModesKHR = nullptr;
+    VulkanDeclFunc(GetPhysicalDeviceSurfaceSupportKHR) = nullptr;
+    VulkanDeclFunc(GetPhysicalDeviceSurfaceCapabilitiesKHR) = nullptr;
+    VulkanDeclFunc(GetPhysicalDeviceSurfaceFormatsKHR) = nullptr;
+    VulkanDeclFunc(GetPhysicalDeviceSurfacePresentModesKHR) = nullptr;
 
-    PFN_vkGetPhysicalDeviceSurfaceCapabilities2KHR VkGetPhysicalDeviceSurfaceCapabilities2KHR = nullptr;
-    PFN_vkGetPhysicalDeviceSurfaceFormats2KHR VkGetPhysicalDeviceSurfaceFormats2KHR = nullptr;
+    VulkanDeclFunc(GetPhysicalDeviceSurfaceCapabilities2KHR) = nullptr;
+    VulkanDeclFunc(GetPhysicalDeviceSurfaceFormats2KHR) = nullptr;
+
+    VulkanDeclFunc(CreateDevice) = nullptr;
 private:
     VkInstance m_Instance;
     const VkAllocationCallbacks* m_Allocator;
@@ -106,28 +106,42 @@ private:
 private:
     void LoadInstanceFunctions() noexcept;
 public:
-    static VulkanInstanceRef LoadInstanceFunctions(VkInstance instance, const VkAllocationCallbacks* const allocator, const u32 vulkanVersion) noexcept;
+    static StrongRef<VulkanInstance> LoadInstanceFunctions(VkInstance instance, const VkAllocationCallbacks* const allocator, const u32 vulkanVersion) noexcept;
 };
-
-class VulkanDevice;
-
-using VulkanDeviceRef = ReferenceCountingPointer<VulkanDevice>;
 
 class VulkanDevice final
 {
     DEFAULT_CM(VulkanDevice);
 public:
-    VulkanDevice(VkDevice device, const VkAllocationCallbacks* const allocator, const u32 deviceVersion) noexcept
-        : m_Device(device)
+    VulkanDevice(
+        const WeakRef<VulkanInstance>& vulkan, 
+        VkDevice device, 
+        const VkAllocationCallbacks* const allocator, 
+        const u32 deviceVersion,
+        const u32 graphicsQueueFamilyIndex,
+        const u32 presentQueueFamilyIndex
+    ) noexcept
+        : m_Vulkan(vulkan)
+        , m_Device(device)
         , m_Allocator(allocator)
         , m_DeviceVersion(deviceVersion)
         , m_GraphicsQueue(VK_NULL_HANDLE)
         , m_PresentQueue(VK_NULL_HANDLE)
+        , m_GraphicsQueueFamilyIndex(graphicsQueueFamilyIndex)
+        , m_PresentQueueFamilyIndex(presentQueueFamilyIndex)
     { }
 
     ~VulkanDevice() noexcept
     {
-        vkDestroyDevice(m_Device, m_Allocator);
+        if(VkDeviceWaitIdle)
+        {
+            VkDeviceWaitIdle(m_Device);
+        }
+
+        if(VkDestroyDevice)
+        {
+            VkDestroyDevice(m_Device, m_Allocator);
+        }
     }
 
     [[nodiscard]] VkDevice Device() const noexcept { return m_Device; }
@@ -137,28 +151,53 @@ public:
     [[nodiscard]] VkQueue& GraphicsQueue() noexcept { return m_GraphicsQueue; }
     [[nodiscard]] VkQueue  PresentQueue() const noexcept { return m_PresentQueue; }
     [[nodiscard]] VkQueue& PresentQueue() noexcept { return m_PresentQueue; }
+    [[nodiscard]] u32 GraphicsQueueFamilyIndex() const noexcept { return m_GraphicsQueueFamilyIndex; }
+    [[nodiscard]] u32 PresentQueueFamilyIndex() const noexcept { return m_PresentQueueFamilyIndex; }
 
-    VkResult CreateSwapchainKHR(const VkSwapchainCreateInfoKHR* const pCreateInfo, VkSwapchainKHR* const pSwapchain) const noexcept;
+    void GetDeviceQueue(const uint32_t queueFamilyIndex, const uint32_t queueIndex, VkQueue* const pQueue) const noexcept;
+    [[nodiscard]] VkResult CreateSwapchainKHR(const VkSwapchainCreateInfoKHR* const pCreateInfo, VkSwapchainKHR* const pSwapchain) const noexcept;
     void DestroySwapchainKHR(VkSwapchainKHR swapchain) const noexcept;
-    VkResult GetSwapchainImagesKHR(VkSwapchainKHR swapchain, u32* const pSwapchainImageCount, VkImage* const pSwapchainImages) const noexcept;
-    VkResult CreateImageView(const VkImageViewCreateInfo* const pCreateInfo, VkImageView* const pView) const noexcept;
+    [[nodiscard]] VkResult GetSwapchainImagesKHR(VkSwapchainKHR swapchain, u32* const pSwapchainImageCount, VkImage* const pSwapchainImages) const noexcept;
+    [[nodiscard]] VkResult CreateImageView(const VkImageViewCreateInfo* const pCreateInfo, VkImageView* const pView) const noexcept;
     void DestroyImageView(VkImageView imageView) const noexcept;
+    [[nodiscard]] VkResult CreateCommandPool(const VkCommandPoolCreateInfo* const pCreateInfo, VkCommandPool* const pCommandPool) const noexcept;
+    void TrimCommandPool(const VkCommandPool commandPool, const VkCommandPoolTrimFlags flags) const noexcept;
+    [[nodiscard]] VkResult ResetCommandPool(const VkCommandPool commandPool, const VkCommandPoolResetFlags flags) const noexcept;
+    void DestroyCommandPool(const VkCommandPool commandPool) const noexcept;
 private:
     void LoadDeviceFunctions() noexcept;
 private:
+    WeakRef<VulkanInstance> m_Vulkan;
     VkDevice m_Device;
     const VkAllocationCallbacks* m_Allocator;
     u32 m_DeviceVersion;
     VkQueue m_GraphicsQueue;
     VkQueue m_PresentQueue;
+    u32 m_GraphicsQueueFamilyIndex;
+    u32 m_PresentQueueFamilyIndex;
 public:
-    PFN_vkCreateSwapchainKHR VkCreateSwapchainKHR = nullptr;
-    PFN_vkDestroySwapchainKHR VkDestroySwapchainKHR = nullptr;
-    PFN_vkGetSwapchainImagesKHR VkGetSwapchainImagesKHR = nullptr;
-    PFN_vkCreateImageView VkCreateImageView = nullptr;
-    PFN_vkDestroyImageView VkDestroyImageView = nullptr;
+    VulkanDeclFunc(DestroyDevice) = nullptr;
+    VulkanDeclFunc(DeviceWaitIdle) = nullptr;
+    VulkanDeclFunc(GetDeviceQueue) = nullptr;
+    VulkanDeclFunc(CreateSwapchainKHR) = nullptr;
+    VulkanDeclFunc(DestroySwapchainKHR) = nullptr;
+    VulkanDeclFunc(GetSwapchainImagesKHR) = nullptr;
+    VulkanDeclFunc(CreateImageView) = nullptr;
+    VulkanDeclFunc(DestroyImageView) = nullptr;
+    VulkanDeclFunc(CreateCommandPool) = nullptr;
+    VulkanDeclFunc(TrimCommandPool) = nullptr;
+    VulkanDeclFunc(TrimCommandPoolKHR) = nullptr;
+    VulkanDeclFunc(ResetCommandPool) = nullptr;
+    VulkanDeclFunc(DestroyCommandPool) = nullptr;
 public:
-    [[nodiscard]] static VulkanDeviceRef LoadDeviceFunctions(VkDevice device, const u32 deviceVulkanVersion, const VkAllocationCallbacks* const allocator = nullptr) noexcept;
+    [[nodiscard]] static StrongRef<VulkanDevice> LoadDeviceFunctions(
+        const WeakRef<VulkanInstance>& vulkan, 
+        VkDevice device, 
+        const u32 deviceVulkanVersion, 
+        const u32 graphicsQueueFamilyIndex, 
+        const u32 presentQueueFamilyIndex, 
+        const VkAllocationCallbacks* const allocator = nullptr
+    ) noexcept;
 };
 
 void PrintError(const VkResult result, const DynString& source) noexcept;

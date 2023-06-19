@@ -16,12 +16,12 @@
 using namespace tau::vd;
 
 VulkanManager::VulkanManager(
-    ReferenceCountingPointer<VulkanInstance>&& vulkan,
+    StrongRef<VulkanInstance>&& vulkan,
     VkDebugUtilsMessengerEXT debugMessenger,
-    const ReferenceCountingPointer<Window>& window,
+    const Ref<Window>& window,
     VkSurfaceKHR surface,
     VkPhysicalDevice physicalDevice, 
-    ReferenceCountingPointer<VulkanDevice>&& device,
+    StrongRef<VulkanDevice>&& device,
     VkSwapchainKHR swapchain,
     const DynArray<VkImage>& swapchainImages,
     const DynArray<VkImageView>& swapchainImageViews,
@@ -106,7 +106,7 @@ static u32 GetVulkanVersion() noexcept
     return vulkanVersion;
 }
 
-static DynArray<VkPhysicalDevice> GetPhysicalDevices(const VulkanInstanceRef& vulkan) noexcept
+static DynArray<VkPhysicalDevice> GetPhysicalDevices(const StrongRef<VulkanInstance>& vulkan) noexcept
 {
     u32 physicalDeviceCount;
     VK_CALL(vulkan->EnumeratePhysicalDevices(&physicalDeviceCount, nullptr), "querying number of physical devices.");
@@ -231,7 +231,7 @@ template<typename QueueFamilyProperties2, VkStructureType Type, typename Func>
 }
 
 template<typename QueueFamilyProperties2>
-static void FindQueues(const VulkanInstanceRef& vulkan, const DynArray<QueueFamilyProperties2>& queueFamilyProperties, RankedDevice* const device, VkSurfaceKHR surface) noexcept
+static void FindQueues(const StrongRef<VulkanInstance>& vulkan, const DynArray<QueueFamilyProperties2>& queueFamilyProperties, RankedDevice* const device, VkSurfaceKHR surface) noexcept
 {
     for(iSys i = 0; i < static_cast<iSys>(queueFamilyProperties.Length()); ++i)
     {
@@ -325,7 +325,7 @@ template<typename SurfaceFormat2, VkStructureType Type, typename Func>
     VK_ERROR_HANDLER_BRACE();
 }
 
-[[nodiscard]] static DynArray<VkPresentModeKHR> GetPhysicalDeviceSurfacePresentModes(const VulkanInstanceRef& vulkan, VkPhysicalDevice physicalDevice, VkSurfaceKHR surface) noexcept
+[[nodiscard]] static DynArray<VkPresentModeKHR> GetPhysicalDeviceSurfacePresentModes(const StrongRef<VulkanInstance>& vulkan, VkPhysicalDevice physicalDevice, VkSurfaceKHR surface) noexcept
 {
     VkResult result;
     u32 presentModeCount;
@@ -352,7 +352,7 @@ template<typename SurfaceFormat2, VkStructureType Type, typename Func>
     VK_ERROR_HANDLER_BRACE();
 }
 
-static void RankDevice(const VulkanInstanceRef& vulkan, RankedDevice* const device, const i32 index, const u32 vulkanVersion, VkSurfaceKHR surface) noexcept
+static void RankDevice(const StrongRef<VulkanInstance>& vulkan, RankedDevice* const device, const i32 index, const u32 vulkanVersion, VkSurfaceKHR surface) noexcept
 {
     (void) vulkanVersion;
 
@@ -363,19 +363,19 @@ static void RankDevice(const VulkanInstanceRef& vulkan, RankedDevice* const devi
     if(vulkan->VkGetPhysicalDeviceProperties2)
     {
         VkPhysicalDeviceProperties2 deviceProperties = GetPhysicalDeviceProperties2<VkPhysicalDeviceProperties2, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2>(device->Device, vulkan->VkGetPhysicalDeviceProperties2);
-        propsRank += ComputeScoreOfDeviceProps(deviceProperties.properties, &device->DeviceVulkanVersion);
+        propsRank = ComputeScoreOfDeviceProps(deviceProperties.properties, &device->DeviceVulkanVersion);
     }
     else if(vulkan->VkGetPhysicalDeviceProperties2KHR)
     {
         VkPhysicalDeviceProperties2KHR deviceProperties = GetPhysicalDeviceProperties2<VkPhysicalDeviceProperties2KHR, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2_KHR>(device->Device, vulkan->VkGetPhysicalDeviceProperties2KHR);
-        propsRank += ComputeScoreOfDeviceProps(deviceProperties.properties, &device->DeviceVulkanVersion);
+        propsRank = ComputeScoreOfDeviceProps(deviceProperties.properties, &device->DeviceVulkanVersion);
     }
     else
     {
         VkPhysicalDeviceProperties deviceProperties { };
 
         vkGetPhysicalDeviceProperties(device->Device, &deviceProperties);
-        propsRank += ComputeScoreOfDeviceProps(deviceProperties, &device->DeviceVulkanVersion);
+        propsRank = ComputeScoreOfDeviceProps(deviceProperties, &device->DeviceVulkanVersion);
     }
 
     if(propsRank == IntMaxMin<decltype(propsRank)>::Min)
@@ -503,7 +503,7 @@ static void RankDevice(const VulkanInstanceRef& vulkan, RankedDevice* const devi
     VK_ERROR_HANDLER_VOID();
 }
 
-static void PickDevice(const VulkanInstanceRef& vulkan, const DynArray<VkPhysicalDevice>& physicalDevices, const u32 vulkanVersion, VkSurfaceKHR surface, RankedDevice* const physicalDevice) noexcept
+static void PickDevice(const StrongRef<VulkanInstance>& vulkan, const DynArray<VkPhysicalDevice>& physicalDevices, const u32 vulkanVersion, VkSurfaceKHR surface, RankedDevice* const physicalDevice) noexcept
 {
     RankedDevice maxRankedDevice;
     
@@ -585,7 +585,7 @@ static void PickDevice(const VulkanInstanceRef& vulkan, const DynArray<VkPhysica
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-[[nodiscard]] VkExtent2D PickSwapChainSize(const ReferenceCountingPointer<Window>& window, const VkSurfaceCapabilitiesKHR& capabilities) noexcept
+[[nodiscard]] VkExtent2D PickSwapChainSize(const Ref<Window>& window, const VkSurfaceCapabilitiesKHR& capabilities) noexcept
 {
     if(capabilities.currentExtent.width != IntMaxMin<decltype(capabilities.currentExtent.width)>::Max)
     {
@@ -598,7 +598,7 @@ static void PickDevice(const VulkanInstanceRef& vulkan, const DynArray<VkPhysica
     return ret;
 }
 
-[[nodiscard]] DynArray<VkImage> GetSwapchainImages(const VulkanDeviceRef& vulkanDevice, VkSwapchainKHR swapchain) noexcept
+[[nodiscard]] DynArray<VkImage> GetSwapchainImages(const StrongRef<VulkanDevice>& vulkanDevice, VkSwapchainKHR swapchain) noexcept
 {
     u32 imageCount;
     VK_CALL(vulkanDevice->GetSwapchainImagesKHR(swapchain, &imageCount, nullptr), "quering swapchain image count.");
@@ -621,7 +621,7 @@ static void PickDevice(const VulkanInstanceRef& vulkan, const DynArray<VkPhysica
     VK_ERROR_HANDLER_BRACE();
 }
 
-[[nodiscard]] VulkanInstanceRef CreateVulkanInstance(const u32 vulkanVersion, VkDebugUtilsMessengerCreateInfoEXT& debugMessengerCreateInfo) noexcept
+[[nodiscard]] StrongRef<VulkanInstance> CreateVulkanInstance(const u32 vulkanVersion, VkDebugUtilsMessengerCreateInfoEXT& debugMessengerCreateInfo) noexcept
 {
     u32 layerCount;
     DynArray<const char*> enabledInstanceLayers = GetRequestedInstanceLayers(&layerCount);
@@ -683,7 +683,7 @@ static void PickDevice(const VulkanInstanceRef& vulkan, const DynArray<VkPhysica
     VK_ERROR_HANDLER_NULL();
 }
 
-[[nodiscard]] VkDebugUtilsMessengerEXT CreateDebugMessenger(const VulkanInstanceRef& vulkan, const VkDebugUtilsMessengerCreateInfoEXT& debugMessengerCreateInfo) noexcept
+[[nodiscard]] VkDebugUtilsMessengerEXT CreateDebugMessenger(const StrongRef<VulkanInstance>& vulkan, const VkDebugUtilsMessengerCreateInfoEXT& debugMessengerCreateInfo) noexcept
 {
     VkDebugUtilsMessengerEXT vkDebugMessenger;
 
@@ -696,7 +696,7 @@ static void PickDevice(const VulkanInstanceRef& vulkan, const DynArray<VkPhysica
     VK_ERROR_HANDLER_VK_NULL();
 }
 
-[[nodiscard]] VkSurfaceKHR CreateSurface(const ReferenceCountingPointer<Window>& window, const VulkanInstanceRef& vulkan) noexcept
+[[nodiscard]] VkSurfaceKHR CreateSurface(const Ref<Window>& window, const StrongRef<VulkanInstance>& vulkan) noexcept
 {
     VkWin32SurfaceCreateInfoKHR createInfo { };
     createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
@@ -707,14 +707,14 @@ static void PickDevice(const VulkanInstanceRef& vulkan, const DynArray<VkPhysica
 
     VkSurfaceKHR surface;
 
-    VK_CALL(vulkan->VkCreateWin32SurfaceKHR(vulkan->Instance(), &createInfo, nullptr, &surface), "creating surface.");
+    VK_CALL(vulkan->CreateWin32SurfaceKHR(&createInfo, &surface), "creating surface.");
 
     return surface;
 
     VK_ERROR_HANDLER_VK_NULL();
 }
 
-[[nodiscard]] VkDevice CreateDevice(const RankedDevice& physicalDevice) noexcept
+[[nodiscard]] VkDevice CreateDevice(const StrongRef<VulkanInstance>& vulkan, const RankedDevice& physicalDevice) noexcept
 {
     u32 extensionCount;
     DynArray<const char*> enabledExtensions = GetRequestedDeviceExtensions(physicalDevice.Device, physicalDevice.DeviceVulkanVersion, &extensionCount);
@@ -765,14 +765,14 @@ static void PickDevice(const VulkanInstanceRef& vulkan, const DynArray<VkPhysica
 
     VkDevice device;
 
-    VK_CALL(vkCreateDevice(physicalDevice.Device, &deviceCreateInfo, nullptr, &device), "creating device.");
+    VK_CALL(vulkan->VkCreateDevice(physicalDevice.Device, &deviceCreateInfo, nullptr, &device), "creating device.");
 
     return device;
 
     VK_ERROR_HANDLER_VK_NULL();
 }
 
-[[nodiscard]] VkSwapchainKHR CreateSwapchain(const VulkanDeviceRef& vulkanDevice, const RankedDevice& physicalDevice, VkSurfaceKHR surface, const VkSurfaceFormatKHR& surfaceFormat, const VkExtent2D swapchainSize) noexcept
+[[nodiscard]] VkSwapchainKHR CreateSwapchain(const StrongRef<VulkanDevice>& vulkanDevice, const RankedDevice& physicalDevice, VkSurfaceKHR surface, const VkSurfaceFormatKHR& surfaceFormat, const VkExtent2D swapchainSize) noexcept
 {
     u32 frameCount = physicalDevice.SurfaceCapabilities.minImageCount + 1;
     if(physicalDevice.SurfaceCapabilities.maxImageCount > 0)
@@ -828,7 +828,7 @@ static void PickDevice(const VulkanInstanceRef& vulkan, const DynArray<VkPhysica
     VK_ERROR_HANDLER_VK_NULL();
 }
 
-[[nodiscard]] DynArray<VkImageView> CreateSwapchainImageViews(const VulkanDeviceRef& vulkanDevice, const DynArray<VkImage>& swapchainImages, const VkFormat swapchainImageFormat) noexcept
+[[nodiscard]] DynArray<VkImageView> CreateSwapchainImageViews(const StrongRef<VulkanDevice>& vulkanDevice, const DynArray<VkImage>& swapchainImages, const VkFormat swapchainImageFormat) noexcept
 {
     DynArray<VkImageView> swapchainImageViews(swapchainImages.Length());
 
@@ -865,7 +865,7 @@ ReferenceCountingPointer<VulkanManager> VulkanManager::CreateVulkanManager(const
 
     VkDebugUtilsMessengerCreateInfoEXT debugMessengerCreateInfo { };
 
-    VulkanInstanceRef vulkan = CreateVulkanInstance(vulkanVersion, debugMessengerCreateInfo);
+    StrongRef<VulkanInstance> vulkan = CreateVulkanInstance(vulkanVersion, debugMessengerCreateInfo);
 
     {
         if(!vulkan)
@@ -903,14 +903,14 @@ ReferenceCountingPointer<VulkanManager> VulkanManager::CreateVulkanManager(const
         }
     }
 
-    VkDevice device = CreateDevice(physicalDevice);
+    VkDevice device = CreateDevice(vulkan, physicalDevice);
 
     if(!device)
     {
         return nullptr;
     }
 
-    ReferenceCountingPointer<VulkanDevice> vulkanDevice = VulkanDevice::LoadDeviceFunctions(device, physicalDevice.DeviceVulkanVersion);
+    StrongRef<VulkanDevice> vulkanDevice = VulkanDevice::LoadDeviceFunctions(vulkan, device, physicalDevice.DeviceVulkanVersion, static_cast<u32>(physicalDevice.GraphicsQueueIndex), static_cast<u32>(physicalDevice.PresentQueueIndex));
 
     if(!vulkanDevice)
     {
@@ -921,12 +921,12 @@ ReferenceCountingPointer<VulkanManager> VulkanManager::CreateVulkanManager(const
     VkQueue presentQueue;
 
     {
-        vkGetDeviceQueue(device, static_cast<u32>(physicalDevice.GraphicsQueueIndex), 0, &graphicsQueue);
+        vulkanDevice->GetDeviceQueue(static_cast<u32>(physicalDevice.GraphicsQueueIndex), 0, &graphicsQueue);
         vulkanDevice->GraphicsQueue() = graphicsQueue;
 
         if(!physicalDevice.IsGraphicsAndPresentSame())
         {
-            vkGetDeviceQueue(device, static_cast<u32>(physicalDevice.PresentQueueIndex), 0, &presentQueue);
+            vulkanDevice->GetDeviceQueue(static_cast<u32>(physicalDevice.PresentQueueIndex), 0, &presentQueue);
         }
         else
         {
@@ -961,5 +961,5 @@ ReferenceCountingPointer<VulkanManager> VulkanManager::CreateVulkanManager(const
         return nullptr;
     }
 
-    return ReferenceCountingPointer<VulkanManager>(::std::move(vulkan), vkDebugMessenger, window, surface, physicalDevice.Device, ::std::move(vulkanDevice), swapchain, swapchainImages, swapchainImageViews, swapchainSize, swapchainImageFormat);
+    return Ref<VulkanManager>(::std::move(vulkan), vkDebugMessenger, window, surface, physicalDevice.Device, ::std::move(vulkanDevice), swapchain, swapchainImages, swapchainImageViews, swapchainSize, swapchainImageFormat);
 }

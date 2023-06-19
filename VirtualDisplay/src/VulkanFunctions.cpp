@@ -4,6 +4,8 @@
 
 #include "vd/MemoryRecovery.hpp"
 
+#define VK_ERROR_FUNCTION_NOT_FOUND (VK_ERROR_UNKNOWN)
+
 #define VD_STR(X) #X
 #define VD_XSTR(X) VD_STR(X)
 
@@ -11,7 +13,7 @@
 #define LoadInstanceFunc(BaseName) Vk##BaseName = reinterpret_cast<PFN_vk##BaseName>(vkGetInstanceProcAddr(m_Instance, "vk" #BaseName))
 #define LoadDeviceFunc(BaseName) Vk##BaseName = reinterpret_cast<PFN_vk##BaseName>(vkGetDeviceProcAddr(m_Device, "vk" #BaseName))
 
-PFN_vkEnumerateInstanceVersion VkEnumerateInstanceVersion;
+VulkanDeclFunc(EnumerateInstanceVersion);
 
 namespace tau::vd {
 
@@ -20,9 +22,9 @@ void LoadNonInstanceFunctions() noexcept
     LoadNonInstanceFunc(EnumerateInstanceVersion);
 }
 
-ReferenceCountingPointer<VulkanInstance> VulkanInstance::LoadInstanceFunctions(VkInstance instance, const VkAllocationCallbacks* const allocator, const u32 vulkanVersion) noexcept
+StrongRef<VulkanInstance> VulkanInstance::LoadInstanceFunctions(VkInstance instance, const VkAllocationCallbacks* const allocator, const u32 vulkanVersion) noexcept
 {
-    ReferenceCountingPointer<VulkanInstance> ret(instance, allocator, vulkanVersion);
+    StrongRef<VulkanInstance> ret(instance, allocator, vulkanVersion);
 
     ret->LoadInstanceFunctions();
 
@@ -47,24 +49,26 @@ void VulkanInstance::LoadInstanceFunctions() noexcept
     LoadInstanceFunc(GetPhysicalDeviceSurfaceCapabilities2KHR);
     LoadInstanceFunc(GetPhysicalDeviceSurfaceFormats2KHR);
 
-    if(m_Version >= VK_API_VERSION_1_0)
+    LoadInstanceFunc(CreateDevice);
+
+    if(m_Version <= VK_API_VERSION_1_0)
     {
         LoadInstanceFunc(GetPhysicalDeviceProperties2KHR);
         LoadInstanceFunc(GetPhysicalDeviceQueueFamilyProperties2KHR);
     }
 
-    if(m_Version >= VK_API_VERSION_1_1)
+    if(m_Version <= VK_API_VERSION_1_1)
     {
         LoadInstanceFunc(GetPhysicalDeviceProperties2);
         LoadInstanceFunc(GetPhysicalDeviceQueueFamilyProperties2);
     }
 
-    if(m_Version >= VK_API_VERSION_1_2)
+    if(m_Version <= VK_API_VERSION_1_2)
     {
 
     }
 
-    if(m_Version >= VK_API_VERSION_1_3)
+    if(m_Version <= VK_API_VERSION_1_3)
     {
 
     }
@@ -74,7 +78,7 @@ VkResult VulkanInstance::CreateDebugUtilsMessengerEXT(const VkDebugUtilsMessenge
 {
     if(!VkCreateDebugUtilsMessengerEXT)
     {
-        return VK_ERROR_UNKNOWN;
+        return VK_ERROR_FUNCTION_NOT_FOUND;
     }
 
     return VkCreateDebugUtilsMessengerEXT(m_Instance, pCreateInfo, m_Allocator, pMessenger);
@@ -94,7 +98,7 @@ VkResult VulkanInstance::CreateWin32SurfaceKHR(const VkWin32SurfaceCreateInfoKHR
 {
     if(!VkCreateWin32SurfaceKHR)
     {
-        return VK_ERROR_UNKNOWN;
+        return VK_ERROR_FUNCTION_NOT_FOUND;
     }
 
     return VkCreateWin32SurfaceKHR(m_Instance, pCreateInfo, m_Allocator, pSurface);
@@ -114,15 +118,22 @@ VkResult VulkanInstance::EnumeratePhysicalDevices(uint32_t* const pPhysicalDevic
 {
     if(!VkEnumeratePhysicalDevices)
     {
-        return VK_ERROR_UNKNOWN;
+        return VK_ERROR_FUNCTION_NOT_FOUND;
     }
 
     return VkEnumeratePhysicalDevices(m_Instance, pPhysicalDeviceCount, pPhysicalDevices);
 }
 
-ReferenceCountingPointer<VulkanDevice> VulkanDevice::LoadDeviceFunctions(VkDevice device, const u32 deviceVulkanVersion, const VkAllocationCallbacks* const allocator) noexcept
+StrongRef<VulkanDevice> VulkanDevice::LoadDeviceFunctions(
+    const WeakRef<VulkanInstance>& vulkan, 
+    VkDevice device, 
+    const u32 deviceVulkanVersion,
+    const u32 graphicsQueueFamilyIndex,
+    const u32 presentQueueFamilyIndex,
+    const VkAllocationCallbacks* const allocator
+) noexcept
 {
-    ReferenceCountingPointer<VulkanDevice> ret(device, allocator, deviceVulkanVersion);
+    StrongRef<VulkanDevice> ret(vulkan, device, allocator, deviceVulkanVersion, graphicsQueueFamilyIndex, presentQueueFamilyIndex);
 
     ret->LoadDeviceFunctions();
 
@@ -131,36 +142,56 @@ ReferenceCountingPointer<VulkanDevice> VulkanDevice::LoadDeviceFunctions(VkDevic
 
 void VulkanDevice::LoadDeviceFunctions() noexcept
 {
+    LoadDeviceFunc(DestroyDevice);
+    LoadDeviceFunc(DeviceWaitIdle);
+    LoadDeviceFunc(GetDeviceQueue);
     LoadDeviceFunc(CreateSwapchainKHR);
     LoadDeviceFunc(DestroySwapchainKHR);
     LoadDeviceFunc(GetSwapchainImagesKHR);
     LoadDeviceFunc(CreateImageView);
     LoadDeviceFunc(DestroyImageView);
+    LoadDeviceFunc(CreateCommandPool);
+    LoadDeviceFunc(DestroyCommandPool);
+    LoadDeviceFunc(CreateCommandPool);
+    LoadDeviceFunc(ResetCommandPool);
+    LoadDeviceFunc(DestroyCommandPool);
 
-    if(m_DeviceVersion >= VK_API_VERSION_1_0)
+    if(m_DeviceVersion <= VK_API_VERSION_1_0)
     {
+        LoadDeviceFunc(TrimCommandPoolKHR);
     }
 
-    if(m_DeviceVersion >= VK_API_VERSION_1_1)
+    if(m_DeviceVersion <= VK_API_VERSION_1_1)
     {
+        LoadDeviceFunc(TrimCommandPool);
     }
 
-    if(m_DeviceVersion >= VK_API_VERSION_1_2)
-    {
-
-    }
-
-    if(m_DeviceVersion >= VK_API_VERSION_1_3)
+    if(m_DeviceVersion <= VK_API_VERSION_1_2)
     {
 
     }
+
+    if(m_DeviceVersion <= VK_API_VERSION_1_3)
+    {
+
+    }
+}
+
+void VulkanDevice::GetDeviceQueue(const uint32_t queueFamilyIndex, const uint32_t queueIndex, VkQueue* const pQueue) const noexcept
+{
+    if(!VkGetDeviceQueue)
+    {
+        return;
+    }
+
+    VkGetDeviceQueue(m_Device, queueFamilyIndex, queueIndex, pQueue);
 }
 
 VkResult VulkanDevice::CreateSwapchainKHR(const VkSwapchainCreateInfoKHR* const pCreateInfo, VkSwapchainKHR* const pSwapchain) const noexcept
 {
     if(!VkCreateSwapchainKHR)
     {
-        return VK_ERROR_UNKNOWN;
+        return VK_ERROR_FUNCTION_NOT_FOUND;
     }
 
     return VkCreateSwapchainKHR(m_Device, pCreateInfo, m_Allocator, pSwapchain);
@@ -180,7 +211,7 @@ VkResult VulkanDevice::GetSwapchainImagesKHR(VkSwapchainKHR swapchain, u32* cons
 {
     if(!VkGetSwapchainImagesKHR)
     {
-        return VK_ERROR_UNKNOWN;
+        return VK_ERROR_FUNCTION_NOT_FOUND;
     }
 
     return VkGetSwapchainImagesKHR(m_Device, swapchain, pSwapchainImageCount, pSwapchainImages);
@@ -190,7 +221,7 @@ VkResult VulkanDevice::CreateImageView(const VkImageViewCreateInfo* const pCreat
 {
     if(!VkCreateImageView)
     {
-        return VK_ERROR_UNKNOWN;
+        return VK_ERROR_FUNCTION_NOT_FOUND;
     }
 
     return VkCreateImageView(m_Device, pCreateInfo, m_Allocator, pView);
@@ -204,6 +235,48 @@ void VulkanDevice::DestroyImageView(VkImageView imageView) const noexcept
     }
 
     return VkDestroyImageView(m_Device, imageView, m_Allocator);
+}
+
+VkResult VulkanDevice::CreateCommandPool(const VkCommandPoolCreateInfo* const pCreateInfo, VkCommandPool* const pCommandPool) const noexcept
+{
+    if(!VkCreateCommandPool)
+    {
+        return VK_ERROR_FUNCTION_NOT_FOUND;
+    }
+
+    return VkCreateCommandPool(m_Device, pCreateInfo, m_Allocator, pCommandPool);
+}
+
+void VulkanDevice::TrimCommandPool(const VkCommandPool commandPool, const VkCommandPoolTrimFlags flags) const noexcept
+{
+    if(VkTrimCommandPool)
+    {
+        VkTrimCommandPool(m_Device, commandPool, flags);
+    }
+    else if(VkTrimCommandPoolKHR)
+    {
+        VkTrimCommandPoolKHR(m_Device, commandPool, flags);
+    }
+}
+
+VkResult VulkanDevice::ResetCommandPool(const VkCommandPool commandPool, const VkCommandPoolResetFlags flags) const noexcept
+{
+    if(!VkResetCommandPool)
+    {
+        return VK_ERROR_FUNCTION_NOT_FOUND;
+    }
+
+    return VkResetCommandPool(m_Device, commandPool, flags);
+}
+
+void VulkanDevice::DestroyCommandPool(const VkCommandPool commandPool) const noexcept
+{
+    if(!VkDestroyCommandPool)
+    {
+        return;
+    }
+
+    return VkDestroyCommandPool(m_Device, commandPool, m_Allocator);
 }
 
 void PrintError(const VkResult result, const DynString& source) noexcept

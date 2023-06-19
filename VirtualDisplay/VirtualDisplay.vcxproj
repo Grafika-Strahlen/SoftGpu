@@ -211,6 +211,7 @@
   <ItemGroup>
     <ClCompile Include="src\MemoryRecovery.cpp" />
     <ClCompile Include="src\VirtaulDisplay.cpp" />
+    <ClCompile Include="src\VulkanCommandPools.cpp" />
     <ClCompile Include="src\VulkanDebug.cpp" />
     <ClCompile Include="src\VulkanDeviceExtensions.cpp" />
     <ClCompile Include="src\VulkanFunctions.cpp" />
@@ -222,6 +223,7 @@
   <ItemGroup>
     <ClInclude Include="include\vd\Config.hpp" />
     <ClInclude Include="include\vd\MemoryRecovery.hpp" />
+    <ClInclude Include="include\vd\VulkanCommandPools.hpp" />
     <ClInclude Include="include\vd\VulkanDebug.hpp" />
     <ClInclude Include="include\vd\VulkanDeviceExtensions.hpp" />
     <ClInclude Include="include\vd\VulkanFunctions.hpp" />

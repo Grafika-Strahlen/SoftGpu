@@ -42,6 +42,9 @@
     <ClCompile Include="src\VulkanDeviceExtensions.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\VulkanCommandPools.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\vd\Window.hpp">
@@ -69,6 +72,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\vd\VulkanDeviceExtensions.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\vd\VulkanCommandPools.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
