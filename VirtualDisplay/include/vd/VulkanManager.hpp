@@ -9,6 +9,7 @@ namespace tau::vd {
 
 class VulkanInstance;
 class VulkanDevice;
+class VulkanCommandPools;
 class Window;
 
 class VulkanManager final
@@ -23,15 +24,30 @@ public:
         VkPhysicalDevice physicalDevice,
         StrongRef<VulkanDevice>&& device,
         VkSwapchainKHR swapchain,
-        const DynArray<VkImage>& swapchainImages,
-        const DynArray<VkImageView>& swapchainImageViews,
+        DynArray<VkImage>&& swapchainImages,
+        DynArray<VkImageView>&& swapchainImageViews,
+        DynArray<VkPresentModeKHR>&& presentModes,
         VkExtent2D swapchainSize,
-        VkFormat swapchainImageFormat
+        VkFormat swapchainImageFormat,
+        const VkSurfaceFormatKHR& surfaceFormat,
+        const VkSurfaceCapabilitiesKHR& surfaceCapabilities,
+        VkFence frameFence,
+        VkSemaphore imageAvailableSemaphore,
+        VkSemaphore renderFinishedSemaphore
     ) noexcept;
 
     ~VulkanManager() noexcept;
 
+    void TransitionSwapchain(Ref<VulkanCommandPools>& commandPools) noexcept;
+
+    u32 WaitForFrame() noexcept;
+    void SubmitCommandBuffers(const u32 commandBufferCount, const VkCommandBuffer* const commandBuffers) noexcept;
+    void Present(const u32 frameIndex) noexcept;
+
+    void RebuildSwapchain() noexcept;
+
     [[nodiscard]] StrongRef<VulkanDevice> Device() const noexcept { return m_Device; }
+    [[nodiscard]] const DynArray<VkImage>& SwapchainImages() const noexcept { return m_SwapchainImages; }
 public:
     static Ref<VulkanManager> CreateVulkanManager(const Ref<Window>& window) noexcept;
 private:
@@ -44,8 +60,14 @@ private:
     VkSwapchainKHR m_Swapchain;
     DynArray<VkImage> m_SwapchainImages;
     DynArray<VkImageView> m_SwapchainImageViews;
+    DynArray<VkPresentModeKHR> m_PresentModes;
     VkExtent2D m_SwapchainSize;
     VkFormat m_SwapchainImageFormat;
+    VkSurfaceFormatKHR m_SurfaceFormat;
+    VkSurfaceCapabilitiesKHR m_SurfaceCapabilities;
+    VkFence m_FrameFence;
+    VkSemaphore m_ImageAvailableSemaphore;
+    VkSemaphore m_RenderFinishedSemaphore;
 };
 
 }

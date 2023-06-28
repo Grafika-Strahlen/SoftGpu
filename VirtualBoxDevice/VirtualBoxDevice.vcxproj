@@ -79,26 +79,26 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\VBox;$(SolutionDir)SoftGpu\include;$(VK_SDK_PATH)\Include;$(SolutionDir)VirtualDisplay\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\VBox;$(SolutionDir)SoftGpu\include;$(VK_SDK_PATH)\Include;$(SolutionDir)VirtualDisplay\include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(OutDir);$(VK_SDK_PATH)\Lib;$(VC_LibraryPath_x86);$(WindowsSDK_LibraryPath_x86)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\VBox;$(SolutionDir)SoftGpu\include;$(VK_SDK_PATH)\Include;$(SolutionDir)VirtualDisplay\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\VBox;$(SolutionDir)SoftGpu\include;$(VK_SDK_PATH)\Include;$(SolutionDir)VirtualDisplay\include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(OutDir);$(VK_SDK_PATH)\Lib;$(VC_LibraryPath_x86);$(WindowsSDK_LibraryPath_x86)</LibraryPath>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\VBox;$(SolutionDir)SoftGpu\include;$(VK_SDK_PATH)\Include;$(SolutionDir)VirtualDisplay\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\VBox;$(SolutionDir)SoftGpu\include;$(VK_SDK_PATH)\Include;$(SolutionDir)VirtualDisplay\include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(OutDir);$(VK_SDK_PATH)\Lib;$(SolutionDir)libs\VBox\bin;$(SolutionDir)libs\TauUtils\build\TauUtilsDynamic\Debug;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\VBox;$(SolutionDir)SoftGpu\include;$(VK_SDK_PATH)\Include;$(SolutionDir)VirtualDisplay\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\VBox;$(SolutionDir)SoftGpu\include;$(VK_SDK_PATH)\Include;$(SolutionDir)VirtualDisplay\include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(OutDir);$(VK_SDK_PATH)\Lib;$(SolutionDir)libs\VBox\bin;$(SolutionDir)libs\TauUtils\build\TauUtilsDynamic\Release;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>

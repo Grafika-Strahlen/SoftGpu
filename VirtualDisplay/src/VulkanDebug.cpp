@@ -78,7 +78,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
         ConPrinter::Print(' ');
     }
 
-    ConPrinter::PrintLn("] [{}]: {}", callbackData->messageIdNumber, callbackData->pMessage);
+    ConPrinter::PrintLn("] [{}]: {}\n", callbackData->messageIdNumber, callbackData->pMessage);
 
     return VK_FALSE;
 }

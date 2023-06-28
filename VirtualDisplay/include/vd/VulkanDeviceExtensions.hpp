@@ -12,6 +12,6 @@ static constexpr ConstExprString RequiredDeviceExtensions[] = {
 #endif
 };
 
-[[nodiscard]] DynArray<const char*> GetRequestedDeviceExtensions(VkPhysicalDevice physicalDevice, const u32 deviceVulkanVersion, u32* const extensionCount) noexcept;
+[[nodiscard]] DynArray<const char*> GetRequestedDeviceExtensions(VkPhysicalDevice physicalDevice, const u32 deviceVulkanVersion, u32* const extensionCount, u32* const hasBindMemory2) noexcept;
 
 }

@@ -79,23 +79,23 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\glm;$(VK_SDK_PATH)\Include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\glm;$(VK_SDK_PATH)\Include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\glm;$(VK_SDK_PATH)\Include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\glm;$(VK_SDK_PATH)\Include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\glm;$(VK_SDK_PATH)\Include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\glm;$(VK_SDK_PATH)\Include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(VK_SDK_PATH)\Lib;$(SolutionDir)libs\TauUtils\bin\debug_win64-x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\glm;$(VK_SDK_PATH)\Include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\glm;$(VK_SDK_PATH)\Include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(VK_SDK_PATH)\Lib;$(SolutionDir)libs\TauUtils\bin\release_win64-x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -209,8 +209,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\FramebufferRenderer.cpp" />
     <ClCompile Include="src\MemoryRecovery.cpp" />
     <ClCompile Include="src\VirtaulDisplay.cpp" />
+    <ClCompile Include="src\VMA.cpp" />
     <ClCompile Include="src\VulkanCommandPools.cpp" />
     <ClCompile Include="src\VulkanDebug.cpp" />
     <ClCompile Include="src\VulkanDeviceExtensions.cpp" />
@@ -222,6 +224,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\vd\Config.hpp" />
+    <ClInclude Include="include\vd\FramebufferRenderer.hpp" />
     <ClInclude Include="include\vd\MemoryRecovery.hpp" />
     <ClInclude Include="include\vd\VulkanCommandPools.hpp" />
     <ClInclude Include="include\vd\VulkanDebug.hpp" />

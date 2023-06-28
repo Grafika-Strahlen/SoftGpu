@@ -8,6 +8,7 @@
 #include <vd/Window.hpp>
 #include <vd/VulkanManager.hpp>
 #include <vd/VulkanCommandPools.hpp>
+#include <vd/FramebufferRenderer.hpp>
 
 #include <numeric>
 #include <Safeties.hpp>
@@ -35,6 +36,60 @@ namespace tau::test::register_allocator {
 extern void RunTests() noexcept;
 }
 
+static void FillFramebuffer(const Ref<::tau::vd::Window>& window, u8* const framebuffer) noexcept
+{
+    for(uSys y = 0; y < window->FramebufferHeight(); ++y)
+    {
+        for(uSys x = 0; x < window->FramebufferWidth(); ++x)
+        {
+            const uSys index = (y * window->FramebufferWidth() + x) * 4;
+
+            if(x < window->FramebufferWidth() / 2)
+            {
+                if(y < window->FramebufferHeight() / 2)
+                {
+                    framebuffer[index + 0] = 0xFF;
+                    framebuffer[index + 1] = 0x00;
+                    framebuffer[index + 2] = 0xFF;
+                    framebuffer[index + 3] = 0xFF;
+                }
+                else
+                {
+                    framebuffer[index + 0] = 0x00;
+                    framebuffer[index + 1] = 0x00;
+                    framebuffer[index + 2] = 0x00;
+                    framebuffer[index + 3] = 0xFF;
+                }
+            }
+            else
+            {
+                if(y < window->FramebufferHeight() / 2)
+                {
+                    framebuffer[index + 0] = 0x00;
+                    framebuffer[index + 1] = 0x00;
+                    framebuffer[index + 2] = 0x00;
+                    framebuffer[index + 3] = 0xFF;
+                }
+                else
+                {
+                    framebuffer[index + 0] = 0xFF;
+                    framebuffer[index + 1] = 0x00;
+                    framebuffer[index + 2] = 0xFF;
+                    framebuffer[index + 3] = 0xFF;
+
+                }
+            }
+        }
+    }
+}
+
+static u8* BuildFramebuffer(const Ref<::tau::vd::Window>& window) noexcept
+{
+    u8* const framebuffer = new(::std::nothrow) u8[static_cast<uSys>(window->FramebufferWidth()) * static_cast<uSys>(window->FramebufferHeight()) * 4];
+    FillFramebuffer(window, framebuffer);
+    return framebuffer;
+}
+
 int main(int argCount, char* args[])
 {
     UNUSED2(argCount, args);
@@ -44,15 +99,43 @@ int main(int argCount, char* args[])
     ::tau::test::register_allocator::RunTests();
 #endif
 
-    const Ref<tau::vd::Window> window = tau::vd::Window::CreateWindow();
+    Ref<tau::vd::Window> window = tau::vd::Window::CreateWindow();
     Ref<tau::vd::VulkanManager> vulkanManager = tau::vd::VulkanManager::CreateVulkanManager(window);
     ConPrinter::PrintLn("Created vulkan manager.");
     Ref<tau::vd::VulkanCommandPools> vulkanCommandPools = ::tau::vd::VulkanCommandPools::CreateCommandPools(
         vulkanManager->Device(), 
         1, 
-        1,
+        static_cast<u32>(vulkanManager->SwapchainImages().Count()),
         vulkanManager->Device()->GraphicsQueueFamilyIndex()
     );
+
+    if(!vulkanCommandPools)
+    {
+        return -1;
+    }
+
+    vulkanManager->TransitionSwapchain(vulkanCommandPools);
+
+    u8* framebuffer = BuildFramebuffer(window);
+
+    Ref<tau::vd::FramebufferRenderer> frameBufferRenderer = tau::vd::FramebufferRenderer::CreateFramebufferRenderer(
+        window,
+        vulkanManager->Device(),
+        framebuffer,
+        0,
+        vulkanCommandPools,
+        vulkanManager->SwapchainImages(),
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+    );
+
+    window->ResizeCallback() = [&framebuffer, &window, &frameBufferRenderer, &vulkanManager, &vulkanCommandPools](const u32, const u32)
+    {
+        vulkanManager->Device()->VkQueueWaitIdle(vulkanManager->Device()->GraphicsQueue());
+        framebuffer = BuildFramebuffer(window);
+        vulkanManager->RebuildSwapchain();
+        vulkanManager->TransitionSwapchain(vulkanCommandPools);
+        frameBufferRenderer->RebuildBuffers(vulkanManager->SwapchainImages(), framebuffer);
+    };
 
     {
         const int commandInit = InitCommandRegister();
@@ -80,6 +163,21 @@ int main(int argCount, char* args[])
 
     u32 resetRead;
     processor.PciMemRead(BAR0 + PciControlRegisters::REGISTER_RESET, 4, &resetRead);
+
+    while(!window->ShouldClose())
+    {
+        window->PollMessages();
+
+        const u32 frameIndex = vulkanManager->WaitForFrame();
+        VkCommandBuffer commandBuffer = frameBufferRenderer->Record(frameIndex);
+        vulkanManager->SubmitCommandBuffers(1, &commandBuffer);
+        vulkanManager->Present(frameIndex);
+    }
+
+    if(vulkanManager->Device()->VkDeviceWaitIdle)
+    {
+        vulkanManager->Device()->VkDeviceWaitIdle(vulkanManager->Device()->Device());
+    }
 
     // TestMove();
     // processor.PciMemRead(BAR0 + REGISTER_RESET, 4, &resetRead);

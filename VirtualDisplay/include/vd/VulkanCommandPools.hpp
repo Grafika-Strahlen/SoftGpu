@@ -16,7 +16,7 @@ public:
 
     ~VulkanCommandPools() noexcept;
 
-    [[nodiscard]] VkCommandPool GetCommandPool(const u32 threadIndex, const u32 frameIndex) noexcept
+    [[nodiscard]] VkCommandPool GetCommandPool(const u32 threadIndex, const u32 frameIndex) const noexcept
     {
         return m_Pools[ComputePoolIndex(threadIndex, frameIndex)];
     }
@@ -26,7 +26,7 @@ public:
     void TrimCommandPools(const VkCommandPoolTrimFlags flags = 0) noexcept;
     void TrimCommandPool(const u32 threadIndex, const u32 frameIndex, const VkCommandPoolTrimFlags flags = 0) noexcept;
 private:
-    [[nodiscard]] u32 ComputePoolIndex(const u32 threadIndex, const u32 frameIndex) noexcept { return threadIndex * m_ThreadCount + frameIndex; }
+    [[nodiscard]] u32 ComputePoolIndex(const u32 threadIndex, const u32 frameIndex) const noexcept { return threadIndex * m_ThreadCount + frameIndex; }
 private:
     WeakRef<VulkanDevice> m_Device;
     DynArray<VkCommandPool> m_Pools;

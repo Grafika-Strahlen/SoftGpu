@@ -5,12 +5,19 @@
 
 namespace tau::vd {
 
+#if defined(VK_KHR_bind_memory2) && VK_KHR_bind_memory2
+static constexpr ConstExprString VkKhrBindMemory2Name(VK_KHR_BIND_MEMORY_2_EXTENSION_NAME);
+#endif
+
 static constexpr ConstExprString DesiredDeviceExtensions[] = {
 };
 
 static constexpr ConstExprString Desired1_0DeviceExtensions[] = {
 #if defined(VK_KHR_maintenance1) && VK_KHR_maintenance1
     VK_KHR_MAINTENANCE1_EXTENSION_NAME,
+#endif
+#if defined(VK_KHR_bind_memory2) && VK_KHR_bind_memory2
+    VkKhrBindMemory2Name
 #endif
 };
 
@@ -76,9 +83,10 @@ static constexpr ConstExprString Desired1_3DeviceExtensions[] = {
     return { };
 }
 
-DynArray<const char*> GetRequestedDeviceExtensions(VkPhysicalDevice physicalDevice, const u32 deviceVulkanVersion, u32* const extensionCount) noexcept
+DynArray<const char*> GetRequestedDeviceExtensions(VkPhysicalDevice physicalDevice, const u32 deviceVulkanVersion, u32* const extensionCount, u32* const hasBindMemory2) noexcept
 {
     *extensionCount = 0;
+    *hasBindMemory2 = 0;
     DynArray<VkExtensionProperties> deviceExtensions = GetDeviceExtensions(physicalDevice);
 
     if(deviceExtensions.Length() == 0)
@@ -136,6 +144,13 @@ DynArray<const char*> GetRequestedDeviceExtensions(VkPhysicalDevice physicalDevi
             {
                 if(extension == availableExtension.extensionName)
                 {
+#if defined(VK_KHR_bind_memory2) && VK_KHR_bind_memory2
+                    if(extension.Equals(VkKhrBindMemory2Name))
+                    {
+                        *hasBindMemory2 = 1;
+                    }
+#endif
+
                     enabledInstanceExtensions[insertIndex++] = extension;
                     break;
                 }
@@ -183,6 +198,11 @@ DynArray<const char*> GetRequestedDeviceExtensions(VkPhysicalDevice physicalDevi
                 }
             }
         }
+    }
+
+    if(deviceVulkanVersion >= VK_API_VERSION_1_1 && *hasBindMemory2 == 0)
+    {
+        *hasBindMemory2 = 2;
     }
 
     *extensionCount = static_cast<u32>(insertIndex);

@@ -5,15 +5,23 @@
 #include "vd/VulkanInstanceLayers.hpp"
 #include "vd/VulkanInstanceExtensions.hpp"
 #include "vd/VulkanDeviceExtensions.hpp"
+#include "vd/Window.hpp"
+#include "vd/VulkanCommandPools.hpp"
+#include <vk_mem_alloc.h>
 
 #include <DynArray.hpp>
 #include <String.hpp>
 #include <ConPrinter.hpp>
 #include <TUMaths.hpp>
 
-#include "vd/Window.hpp"
 
+struct RankedDevice;
 using namespace tau::vd;
+
+[[nodiscard]] static VkExtent2D PickSwapChainSize(const Ref<Window>& window, const VkSurfaceCapabilitiesKHR& capabilities) noexcept;
+[[nodiscard]] static VkSwapchainKHR CreateSwapchain(const StrongRef<VulkanDevice>& vulkanDevice, const VkSurfaceCapabilitiesKHR& surfaceCapabilities, const DynArray<VkPresentModeKHR>& presentModes, VkSurfaceKHR surface, const VkSurfaceFormatKHR& surfaceFormat, const VkExtent2D swapchainSize) noexcept;
+[[nodiscard]] static DynArray<VkImage> GetSwapchainImages(const StrongRef<VulkanDevice>& vulkanDevice, VkSwapchainKHR swapchain) noexcept;
+[[nodiscard]] static DynArray<VkImageView> CreateSwapchainImageViews(const StrongRef<VulkanDevice>& vulkanDevice, const DynArray<VkImage>& swapchainImages, const VkFormat swapchainImageFormat) noexcept;
 
 VulkanManager::VulkanManager(
     StrongRef<VulkanInstance>&& vulkan,
@@ -23,10 +31,16 @@ VulkanManager::VulkanManager(
     VkPhysicalDevice physicalDevice, 
     StrongRef<VulkanDevice>&& device,
     VkSwapchainKHR swapchain,
-    const DynArray<VkImage>& swapchainImages,
-    const DynArray<VkImageView>& swapchainImageViews,
+    DynArray<VkImage>&& swapchainImages,
+    DynArray<VkImageView>&& swapchainImageViews,
+    DynArray<VkPresentModeKHR>&& presentModes,
     VkExtent2D swapchainSize,
-    VkFormat swapchainImageFormat
+    VkFormat swapchainImageFormat,
+    const VkSurfaceFormatKHR& surfaceFormat,
+    const VkSurfaceCapabilitiesKHR& surfaceCapabilities,
+    VkFence frameFence,
+    VkSemaphore imageAvailableSemaphore,
+    VkSemaphore renderFinishedSemaphore
 ) noexcept
     : m_Vulkan(::std::move(vulkan))
     , m_DebugMessenger(debugMessenger)
@@ -35,14 +49,29 @@ VulkanManager::VulkanManager(
     , m_PhysicalDevice(physicalDevice)
     , m_Device(::std::move(device))
     , m_Swapchain(swapchain)
-    , m_SwapchainImages(swapchainImages)
-    , m_SwapchainImageViews(swapchainImageViews)
+    , m_SwapchainImages(::std::move(swapchainImages))
+    , m_SwapchainImageViews(::std::move(swapchainImageViews))
+    , m_PresentModes(::std::move(presentModes))
     , m_SwapchainSize(swapchainSize)
     , m_SwapchainImageFormat(swapchainImageFormat)
+    , m_SurfaceFormat(surfaceFormat)
+    , m_SurfaceCapabilities(surfaceCapabilities)
+    , m_FrameFence(frameFence)
+    , m_ImageAvailableSemaphore(imageAvailableSemaphore)
+    , m_RenderFinishedSemaphore(renderFinishedSemaphore)
 { }
 
 VulkanManager::~VulkanManager() noexcept
 {
+    if(m_Device->VkDeviceWaitIdle)
+    {
+        m_Device->VkDeviceWaitIdle(m_Device->Device());
+    }
+
+    m_Device->DestroySemaphore(m_RenderFinishedSemaphore);
+    m_Device->DestroySemaphore(m_ImageAvailableSemaphore);
+    m_Device->DestroyFence(m_FrameFence);
+
     for(VkImageView imageView : m_SwapchainImageViews)
     {
         m_Device->DestroyImageView(imageView);
@@ -61,10 +90,178 @@ VulkanManager::~VulkanManager() noexcept
     }
 }
 
+void VulkanManager::TransitionSwapchain(Ref<VulkanCommandPools>& commandPools) noexcept
+{
+    VkCommandBufferAllocateInfo allocateInfo { };
+    allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocateInfo.pNext = nullptr;
+
+    allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocateInfo.commandBufferCount = 1;
+
+    allocateInfo.commandPool = commandPools->GetCommandPool(0, 0);
+
+    VkCommandBufferBeginInfo beginInfo { };
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.pNext = nullptr;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    beginInfo.pInheritanceInfo = nullptr;
+
+    VkImageMemoryBarrier barrier { };
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.pNext = nullptr;
+    barrier.srcAccessMask = VK_ACCESS_NONE;
+    barrier.dstAccessMask = VK_ACCESS_NONE;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+
+    VkSubmitInfo submitInfo { };
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.pNext = nullptr;
+    submitInfo.waitSemaphoreCount = 0;
+    submitInfo.pWaitSemaphores = nullptr;
+    submitInfo.pWaitDstStageMask = nullptr;
+    submitInfo.signalSemaphoreCount = 0;
+    submitInfo.pSignalSemaphores = nullptr;
+
+    VkCommandBuffer commandBuffer;
+    VK_CALL(m_Device->AllocateCommandBuffers(&allocateInfo, &commandBuffer), "allocating Command Buffer for swapchain transition");
+
+    {
+        VK_CALL(m_Device->VkBeginCommandBuffer(commandBuffer, &beginInfo), "beginning command buffer for swapchain transition");
+    }
+
+    for(uSys i = 0; i < m_SwapchainImages.Count(); ++i)
+    {
+        barrier.image = m_SwapchainImages[i];
+        
+        m_Device->VkCmdPipelineBarrier(
+            commandBuffer, 
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &barrier
+        );
+    }
+
+    m_Device->VkEndCommandBuffer(commandBuffer);
+
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+
+    VK_CALL0(m_Device->VkQueueSubmit(m_Device->GraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE));
+
+    m_Device->VkQueueWaitIdle(m_Device->GraphicsQueue());
+
+    m_Device->FreeCommandBuffers(allocateInfo.commandPool, 1, &commandBuffer);
+
+    VK_ERROR_HANDLER_VOID();
+}
+
+u32 VulkanManager::WaitForFrame() noexcept
+{
+    VK_CALL0(m_Device->VkWaitForFences(m_Device->Device(), 1, &m_FrameFence, VK_TRUE, UINT64_MAX));
+    VK_CALL0(m_Device->VkResetFences(m_Device->Device(), 1, &m_FrameFence));
+
+    u32 imageIndex;
+    VK_CALL0(m_Device->VkAcquireNextImageKHR(m_Device->Device(), m_Swapchain, UINT64_MAX, m_ImageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex));
+
+    return imageIndex;
+
+    VK_ERROR_HANDLER_N1();
+}
+
+void VulkanManager::SubmitCommandBuffers(const u32 commandBufferCount, const VkCommandBuffer* const commandBuffers) noexcept
+{
+    const VkSemaphore waitSemaphores[] = {
+        m_ImageAvailableSemaphore
+    };
+    constexpr VkPipelineStageFlags waitStages[] = {
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+    };
+    const VkSemaphore signalSemaphores[] = {
+        m_RenderFinishedSemaphore
+    };
+
+    VkSubmitInfo submitInfo { };
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.pNext = nullptr;
+    submitInfo.waitSemaphoreCount = ::std::size(waitSemaphores);
+    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitDstStageMask = waitStages;
+    submitInfo.commandBufferCount = commandBufferCount;
+    submitInfo.pCommandBuffers = commandBuffers;
+    submitInfo.signalSemaphoreCount = ::std::size(signalSemaphores);
+    submitInfo.pSignalSemaphores = signalSemaphores;
+
+    VK_CALL0(m_Device->VkQueueSubmit(m_Device->GraphicsQueue(), 1, &submitInfo, m_FrameFence));
+
+    VK_ERROR_HANDLER_VOID();
+}
+
+void VulkanManager::Present(const u32 frameIndex) noexcept
+{
+    const VkSemaphore waitSemaphores[] = {
+        m_RenderFinishedSemaphore
+    };
+
+    const VkSwapchainKHR swapchains[] = {
+        m_Swapchain
+    };
+
+    VkPresentInfoKHR presentInfo { };
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.pNext = nullptr;
+    presentInfo.waitSemaphoreCount = ::std::size(waitSemaphores);
+    presentInfo.pWaitSemaphores = waitSemaphores;
+    presentInfo.swapchainCount = ::std::size(swapchains);
+    presentInfo.pSwapchains = swapchains;
+    presentInfo.pImageIndices = &frameIndex;
+    presentInfo.pResults = nullptr;
+
+    VK_CALL0(m_Device->VkQueuePresentKHR(m_Device->PresentQueue(), &presentInfo));
+
+    VK_ERROR_HANDLER_VOID();
+}
+
+void VulkanManager::RebuildSwapchain() noexcept
+{
+    if(m_Swapchain)
+    {
+        for(VkImageView imageView : m_SwapchainImageViews)
+        {
+            m_Device->DestroyImageView(imageView);
+        }
+
+        m_Device->DestroySwapchainKHR(m_Swapchain);
+    }
+
+
+    VK_CALL(m_Vulkan->VkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_PhysicalDevice, m_Surface, &m_SurfaceCapabilities), "querying surface capabilities.");
+
+    m_SwapchainSize = PickSwapChainSize(m_Window, m_SurfaceCapabilities);
+    m_Swapchain = CreateSwapchain(m_Device, m_SurfaceCapabilities, m_PresentModes, m_Surface, m_SurfaceFormat, m_SwapchainSize);
+    m_SwapchainImages = GetSwapchainImages(m_Device, m_Swapchain);
+    m_SwapchainImageViews = CreateSwapchainImageViews(m_Device, m_SwapchainImages, m_SwapchainImageFormat);
+
+
+    VK_ERROR_HANDLER_VOID();
+}
+
 static u32 GetVulkanVersion() noexcept
 {
     // Load the vkEnumerateInstanceVersion function. If this is null, we have to use Vulkan 1.0
-    ::tau::vd::LoadNonInstanceFunctions();
+    LoadNonInstanceFunctions();
 
     // Default to Vulkan 1.0
     u32 vulkanVersion = VK_API_VERSION_1_0;
@@ -72,12 +269,12 @@ static u32 GetVulkanVersion() noexcept
     // Attempt to get the latest Vulkan version.
     if(VkEnumerateInstanceVersion)
     {
-        const VkResult result = vkEnumerateInstanceVersion(&vulkanVersion);
+        const VkResult result = VkEnumerateInstanceVersion(&vulkanVersion);
 
         // If the system is out of memory it's probably not worth trying to allocate anything.
         if(result == VK_ERROR_OUT_OF_HOST_MEMORY)
         {
-            tau::vd::RecoverSacrificialMemory();
+            RecoverSacrificialMemory();
             return VK_API_VERSION_1_0;
         }
         // If we get some other error, make sure vulkanVersion is well defined to Vulkan 1.0
@@ -88,9 +285,9 @@ static u32 GetVulkanVersion() noexcept
     }
 
 #if defined(VD_FORCE_MAX_VULKAN_VERSION)
-#define MAX_VK_VERSION VD_FORCE_MAX_VULKAN_VERSION
+  #define MAX_VK_VERSION VD_FORCE_MAX_VULKAN_VERSION
 #else
-#define MAX_VK_VERSION VK_API_VERSION_1_3
+  #define MAX_VK_VERSION VK_API_VERSION_1_3
 #endif
 
     //   If the Vulkan loader supports a version newer than what we're
@@ -193,18 +390,6 @@ static i32 ComputeScoreOfDeviceProps(const VkPhysicalDeviceProperties& devicePro
     }
 
     return propsRank;
-}
-
-template<typename DeviceProperties2, VkStructureType Type, typename Func>
-[[nodiscard]] static DeviceProperties2 GetPhysicalDeviceProperties2(VkPhysicalDevice physicalDevice, Func func) noexcept
-{
-    DeviceProperties2 deviceProperties { };
-    deviceProperties.sType = Type;
-    deviceProperties.pNext = nullptr;
-
-    func(physicalDevice, &deviceProperties);
-
-    return deviceProperties;
 }
 
 template<typename QueueFamilyProperties2, VkStructureType Type, typename Func>
@@ -362,12 +547,11 @@ static void RankDevice(const StrongRef<VulkanInstance>& vulkan, RankedDevice* co
 
     if(vulkan->VkGetPhysicalDeviceProperties2)
     {
-        VkPhysicalDeviceProperties2 deviceProperties = GetPhysicalDeviceProperties2<VkPhysicalDeviceProperties2, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2>(device->Device, vulkan->VkGetPhysicalDeviceProperties2);
-        propsRank = ComputeScoreOfDeviceProps(deviceProperties.properties, &device->DeviceVulkanVersion);
-    }
-    else if(vulkan->VkGetPhysicalDeviceProperties2KHR)
-    {
-        VkPhysicalDeviceProperties2KHR deviceProperties = GetPhysicalDeviceProperties2<VkPhysicalDeviceProperties2KHR, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2_KHR>(device->Device, vulkan->VkGetPhysicalDeviceProperties2KHR);
+        VkPhysicalDeviceProperties2 deviceProperties { };
+        deviceProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+        deviceProperties.pNext = nullptr;
+
+        vulkan->VkGetPhysicalDeviceProperties2(device->Device, &deviceProperties);
         propsRank = ComputeScoreOfDeviceProps(deviceProperties.properties, &device->DeviceVulkanVersion);
     }
     else
@@ -393,11 +577,6 @@ static void RankDevice(const StrongRef<VulkanInstance>& vulkan, RankedDevice* co
         DynArray<VkQueueFamilyProperties2> queueFamilyProperties = GetPhysicalDeviceQueueFamilyProperties2<VkQueueFamilyProperties2, VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2>(device->Device, vulkan->VkGetPhysicalDeviceQueueFamilyProperties2);
         FindQueues(vulkan, queueFamilyProperties, device, surface);
     }
-    else if(vulkan->VkGetPhysicalDeviceQueueFamilyProperties2KHR)
-    {
-        DynArray<VkQueueFamilyProperties2KHR> queueFamilyProperties = GetPhysicalDeviceQueueFamilyProperties2<VkQueueFamilyProperties2KHR, VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2_KHR>(device->Device, vulkan->VkGetPhysicalDeviceQueueFamilyProperties2KHR);
-        FindQueues(vulkan, queueFamilyProperties, device, surface);
-    }
     else
     {
         DynArray<VkQueueFamilyProperties> queueFamilyProperties = GetPhysicalDeviceQueueFamilyProperties2<VkQueueFamilyProperties, VK_STRUCTURE_TYPE_MAX_ENUM>(device->Device, vkGetPhysicalDeviceQueueFamilyProperties);
@@ -416,7 +595,8 @@ static void RankDevice(const StrongRef<VulkanInstance>& vulkan, RankedDevice* co
 
     {
         u32 extensionCount;
-        DynArray<const char*> enabledExtensions = GetRequestedDeviceExtensions(device->Device, device->DeviceVulkanVersion, &extensionCount);
+        u32 hasBindMemory2;
+        DynArray<const char*> enabledExtensions = GetRequestedDeviceExtensions(device->Device, device->DeviceVulkanVersion, &extensionCount, &hasBindMemory2);
 
         if constexpr(::std::size(RequiredDeviceExtensions) > 0)
         {
@@ -585,7 +765,7 @@ static void PickDevice(const StrongRef<VulkanInstance>& vulkan, const DynArray<V
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-[[nodiscard]] VkExtent2D PickSwapChainSize(const Ref<Window>& window, const VkSurfaceCapabilitiesKHR& capabilities) noexcept
+[[nodiscard]] static VkExtent2D PickSwapChainSize(const Ref<Window>& window, const VkSurfaceCapabilitiesKHR& capabilities) noexcept
 {
     if(capabilities.currentExtent.width != IntMaxMin<decltype(capabilities.currentExtent.width)>::Max)
     {
@@ -598,7 +778,7 @@ static void PickDevice(const StrongRef<VulkanInstance>& vulkan, const DynArray<V
     return ret;
 }
 
-[[nodiscard]] DynArray<VkImage> GetSwapchainImages(const StrongRef<VulkanDevice>& vulkanDevice, VkSwapchainKHR swapchain) noexcept
+[[nodiscard]] static DynArray<VkImage> GetSwapchainImages(const StrongRef<VulkanDevice>& vulkanDevice, VkSwapchainKHR swapchain) noexcept
 {
     u32 imageCount;
     VK_CALL(vulkanDevice->GetSwapchainImagesKHR(swapchain, &imageCount, nullptr), "quering swapchain image count.");
@@ -621,7 +801,7 @@ static void PickDevice(const StrongRef<VulkanInstance>& vulkan, const DynArray<V
     VK_ERROR_HANDLER_BRACE();
 }
 
-[[nodiscard]] StrongRef<VulkanInstance> CreateVulkanInstance(const u32 vulkanVersion, VkDebugUtilsMessengerCreateInfoEXT& debugMessengerCreateInfo) noexcept
+[[nodiscard]] static StrongRef<VulkanInstance> CreateVulkanInstance(const u32 vulkanVersion, VkDebugUtilsMessengerCreateInfoEXT& debugMessengerCreateInfo) noexcept
 {
     u32 layerCount;
     DynArray<const char*> enabledInstanceLayers = GetRequestedInstanceLayers(&layerCount);
@@ -683,7 +863,7 @@ static void PickDevice(const StrongRef<VulkanInstance>& vulkan, const DynArray<V
     VK_ERROR_HANDLER_NULL();
 }
 
-[[nodiscard]] VkDebugUtilsMessengerEXT CreateDebugMessenger(const StrongRef<VulkanInstance>& vulkan, const VkDebugUtilsMessengerCreateInfoEXT& debugMessengerCreateInfo) noexcept
+[[nodiscard]] static VkDebugUtilsMessengerEXT CreateDebugMessenger(const StrongRef<VulkanInstance>& vulkan, const VkDebugUtilsMessengerCreateInfoEXT& debugMessengerCreateInfo) noexcept
 {
     VkDebugUtilsMessengerEXT vkDebugMessenger;
 
@@ -696,7 +876,7 @@ static void PickDevice(const StrongRef<VulkanInstance>& vulkan, const DynArray<V
     VK_ERROR_HANDLER_VK_NULL();
 }
 
-[[nodiscard]] VkSurfaceKHR CreateSurface(const Ref<Window>& window, const StrongRef<VulkanInstance>& vulkan) noexcept
+[[nodiscard]] static VkSurfaceKHR CreateSurface(const Ref<Window>& window, const StrongRef<VulkanInstance>& vulkan) noexcept
 {
     VkWin32SurfaceCreateInfoKHR createInfo { };
     createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
@@ -714,10 +894,10 @@ static void PickDevice(const StrongRef<VulkanInstance>& vulkan, const DynArray<V
     VK_ERROR_HANDLER_VK_NULL();
 }
 
-[[nodiscard]] VkDevice CreateDevice(const StrongRef<VulkanInstance>& vulkan, const RankedDevice& physicalDevice) noexcept
+[[nodiscard]] static VkDevice CreateDevice(const StrongRef<VulkanInstance>& vulkan, const RankedDevice& physicalDevice, u32* const hasBindMemory2) noexcept
 {
     u32 extensionCount;
-    DynArray<const char*> enabledExtensions = GetRequestedDeviceExtensions(physicalDevice.Device, physicalDevice.DeviceVulkanVersion, &extensionCount);
+    DynArray<const char*> enabledExtensions = GetRequestedDeviceExtensions(physicalDevice.Device, physicalDevice.DeviceVulkanVersion, &extensionCount, hasBindMemory2);
 
     if constexpr(::std::size(RequiredDeviceExtensions) > 0)
     {
@@ -772,15 +952,15 @@ static void PickDevice(const StrongRef<VulkanInstance>& vulkan, const DynArray<V
     VK_ERROR_HANDLER_VK_NULL();
 }
 
-[[nodiscard]] VkSwapchainKHR CreateSwapchain(const StrongRef<VulkanDevice>& vulkanDevice, const RankedDevice& physicalDevice, VkSurfaceKHR surface, const VkSurfaceFormatKHR& surfaceFormat, const VkExtent2D swapchainSize) noexcept
+[[nodiscard]] static VkSwapchainKHR CreateSwapchain(const StrongRef<VulkanDevice>& vulkanDevice, const VkSurfaceCapabilitiesKHR& surfaceCapabilities, const DynArray<VkPresentModeKHR>& presentModes, VkSurfaceKHR surface, const VkSurfaceFormatKHR& surfaceFormat, const VkExtent2D swapchainSize) noexcept
 {
-    u32 frameCount = physicalDevice.SurfaceCapabilities.minImageCount + 1;
-    if(physicalDevice.SurfaceCapabilities.maxImageCount > 0)
+    u32 frameCount = surfaceCapabilities.minImageCount + 1;
+    if(surfaceCapabilities.maxImageCount > 0)
     {
-        frameCount = minT(frameCount, physicalDevice.SurfaceCapabilities.maxImageCount);
+        frameCount = minT(frameCount, surfaceCapabilities.maxImageCount);
     }
     
-    const VkPresentModeKHR presentMode = PickPresentMode(physicalDevice.PresentModes);
+    const VkPresentModeKHR presentMode = PickPresentMode(presentModes);
 
     VkSwapchainCreateInfoKHR createInfo { };
     createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -797,10 +977,10 @@ static void PickDevice(const StrongRef<VulkanInstance>& vulkan, const DynArray<V
 
     u32 queueFamilyIndices[2];
 
-    if(physicalDevice.GraphicsQueueIndex != physicalDevice.PresentQueueIndex)
+    if(vulkanDevice->GraphicsQueueFamilyIndex() != vulkanDevice->PresentQueueFamilyIndex())
     {
-        queueFamilyIndices[0] = static_cast<u32>(physicalDevice.GraphicsQueueIndex);
-        queueFamilyIndices[1] = static_cast<u32>(physicalDevice.PresentQueueIndex);
+        queueFamilyIndices[0] = vulkanDevice->GraphicsQueueFamilyIndex();
+        queueFamilyIndices[1] = vulkanDevice->PresentQueueFamilyIndex();
 
         createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
         createInfo.queueFamilyIndexCount = 2;
@@ -813,7 +993,7 @@ static void PickDevice(const StrongRef<VulkanInstance>& vulkan, const DynArray<V
         createInfo.pQueueFamilyIndices = nullptr;
     }
 
-    createInfo.preTransform = physicalDevice.SurfaceCapabilities.currentTransform;
+    createInfo.preTransform = surfaceCapabilities.currentTransform;
     createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     createInfo.presentMode = presentMode;
     createInfo.clipped = VK_TRUE;
@@ -828,7 +1008,7 @@ static void PickDevice(const StrongRef<VulkanInstance>& vulkan, const DynArray<V
     VK_ERROR_HANDLER_VK_NULL();
 }
 
-[[nodiscard]] DynArray<VkImageView> CreateSwapchainImageViews(const StrongRef<VulkanDevice>& vulkanDevice, const DynArray<VkImage>& swapchainImages, const VkFormat swapchainImageFormat) noexcept
+[[nodiscard]] static DynArray<VkImageView> CreateSwapchainImageViews(const StrongRef<VulkanDevice>& vulkanDevice, const DynArray<VkImage>& swapchainImages, const VkFormat swapchainImageFormat) noexcept
 {
     DynArray<VkImageView> swapchainImageViews(swapchainImages.Length());
 
@@ -859,7 +1039,66 @@ static void PickDevice(const StrongRef<VulkanInstance>& vulkan, const DynArray<V
     VK_ERROR_HANDLER_BRACE();
 }
 
-ReferenceCountingPointer<VulkanManager> VulkanManager::CreateVulkanManager(const ReferenceCountingPointer<Window>& window) noexcept
+[[nodiscard]] static VmaAllocator CreateVmaAllocator(const StrongRef<VulkanInstance>& vulkan, const StrongRef<VulkanDevice>& vulkanDevice, const VkPhysicalDevice physicalDevice, const u32 hasBindMemory2) noexcept
+{
+    VmaVulkanFunctions vulkanFunctions { };
+    vulkanFunctions.vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
+    vulkanFunctions.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
+
+    VmaAllocatorCreateInfo createInfo { };
+    createInfo.flags = (hasBindMemory2 != 0 ? VMA_ALLOCATOR_CREATE_KHR_BIND_MEMORY2_BIT : 0);
+    createInfo.physicalDevice = physicalDevice;
+    createInfo.device = vulkanDevice->Device();
+    createInfo.preferredLargeHeapBlockSize = 0;
+    createInfo.pAllocationCallbacks = nullptr;
+    createInfo.pDeviceMemoryCallbacks = nullptr;
+    createInfo.pHeapSizeLimit = nullptr;
+    createInfo.pVulkanFunctions = &vulkanFunctions;
+    createInfo.instance = vulkan->Instance();
+    createInfo.vulkanApiVersion = vulkan->Version();
+#if VMA_EXTERNAL_MEMORY
+    createInfo.pTypeExternalMemoryHandleTypes = nullptr;
+#endif
+
+    VmaAllocator allocator;
+    VK_CALL(vmaCreateAllocator(&createInfo, &allocator), "creating VMA allocator.");
+
+    return allocator;
+
+    VK_ERROR_HANDLER_VK_NULL();
+}
+
+[[nodiscard]] static VkFence CreateFrameFence(const StrongRef<VulkanDevice>& vulkanDevice) noexcept
+{
+    VkFenceCreateInfo createInfo { };
+    createInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    createInfo.pNext = nullptr;
+    createInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+    VkFence fence;
+    VK_CALL(vulkanDevice->CreateFence(&createInfo, &fence), "creating fence");
+
+    return fence;
+
+    VK_ERROR_HANDLER_VK_NULL();
+}
+
+[[nodiscard]] static VkSemaphore CreateSemaphore(const StrongRef<VulkanDevice>& vulkanDevice) noexcept
+{
+    VkSemaphoreCreateInfo createInfo { };
+    createInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    createInfo.pNext = nullptr;
+    createInfo.flags = 0;
+
+    VkSemaphore semaphore;
+    VK_CALL(vulkanDevice->CreateSemaphore(&createInfo, &semaphore), "creating semaphore");
+
+    return semaphore;
+
+    VK_ERROR_HANDLER_VK_NULL();
+}
+
+ReferenceCountingPointer<VulkanManager> VulkanManager::CreateVulkanManager(const Ref<Window>& window) noexcept
 {
     const u32 vulkanVersion = GetVulkanVersion();
 
@@ -903,7 +1142,8 @@ ReferenceCountingPointer<VulkanManager> VulkanManager::CreateVulkanManager(const
         }
     }
 
-    VkDevice device = CreateDevice(vulkan, physicalDevice);
+    u32 hasBindMemory2;
+    VkDevice device = CreateDevice(vulkan, physicalDevice, &hasBindMemory2);
 
     if(!device)
     {
@@ -936,30 +1176,66 @@ ReferenceCountingPointer<VulkanManager> VulkanManager::CreateVulkanManager(const
         vulkanDevice->PresentQueue() = presentQueue;
     }
 
+    VmaAllocator vmaAllocator = CreateVmaAllocator(vulkan, vulkanDevice, physicalDevice.Device, hasBindMemory2);
+
+    vulkanDevice->VmaAllocator() = vmaAllocator;
+
+    if(!vmaAllocator)
+    {
+        return nullptr;
+    }
+
     const VkExtent2D swapchainSize = PickSwapChainSize(window, physicalDevice.SurfaceCapabilities);
-    const VkSurfaceFormatKHR surfaceFormat = PickSwapChainFormat(physicalDevice.SurfaceFormats);
+    VkSurfaceFormatKHR surfaceFormat = PickSwapChainFormat(physicalDevice.SurfaceFormats);
     const VkFormat swapchainImageFormat = surfaceFormat.format;
 
-    VkSwapchainKHR swapchain = CreateSwapchain(vulkanDevice, physicalDevice, surface, surfaceFormat, swapchainSize);
+    VkSwapchainKHR swapchain = CreateSwapchain(vulkanDevice, physicalDevice.SurfaceCapabilities, physicalDevice.PresentModes, surface, surfaceFormat, swapchainSize);
 
     if(!swapchain)
     {
         return nullptr;
     }
 
-    const DynArray<VkImage> swapchainImages = GetSwapchainImages(vulkanDevice, swapchain);
+    DynArray<VkImage> swapchainImages = GetSwapchainImages(vulkanDevice, swapchain);
 
     if(swapchainImages.Length() == 0)
     {
         return nullptr;
     }
     
-    const DynArray<VkImageView> swapchainImageViews = CreateSwapchainImageViews(vulkanDevice, swapchainImages, swapchainImageFormat);
+    DynArray<VkImageView> swapchainImageViews = CreateSwapchainImageViews(vulkanDevice, swapchainImages, swapchainImageFormat);
 
     if(swapchainImageViews.Length() != swapchainImages.Length())
     {
         return nullptr;
     }
 
-    return Ref<VulkanManager>(::std::move(vulkan), vkDebugMessenger, window, surface, physicalDevice.Device, ::std::move(vulkanDevice), swapchain, swapchainImages, swapchainImageViews, swapchainSize, swapchainImageFormat);
+    VkFence frameFence = CreateFrameFence(vulkanDevice);
+    VkSemaphore imageAvailableSemaphore = CreateSemaphore(vulkanDevice);
+    VkSemaphore renderFinishedSemaphore = CreateSemaphore(vulkanDevice);
+
+    if(!frameFence || !imageAvailableSemaphore || !renderFinishedSemaphore)
+    {
+        return nullptr;
+    }
+
+    return Ref<VulkanManager>(
+        ::std::move(vulkan), 
+        vkDebugMessenger, 
+        window, 
+        surface, 
+        physicalDevice.Device, 
+        ::std::move(vulkanDevice), 
+        swapchain, 
+        ::std::move(swapchainImages), 
+        ::std::move(swapchainImageViews),
+        ::std::move(physicalDevice.PresentModes),
+        swapchainSize, 
+        swapchainImageFormat,
+        surfaceFormat,
+        physicalDevice.SurfaceCapabilities,
+        frameFence,
+        imageAvailableSemaphore,
+        renderFinishedSemaphore
+    );
 }

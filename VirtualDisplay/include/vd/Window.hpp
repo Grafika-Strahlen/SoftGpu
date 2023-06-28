@@ -4,6 +4,7 @@
 #include <Windows.h>
 #include <Objects.hpp>
 #include <ReferenceCountingPointer.hpp>
+#include <functional>
 
 #undef CreateWindow
 
@@ -14,6 +15,8 @@ class Window final
     DELETE_CM(Window);
 public:
     static ReferenceCountingPointer<Window> CreateWindow() noexcept;
+
+    using WindowResizeCallback_f = ::std::function<void(u32 width, u32 height)>;
 public:
     void ShowWindow() noexcept;
     void HideWindow() noexcept;
@@ -23,9 +26,13 @@ public:
         , m_Window(nullptr)
         , m_hDc(nullptr)
         , m_FramebufferSize{}
+        , m_ResizeCallback(nullptr)
+        , m_ShouldClose(false)
     { }
 
     ~Window() noexcept;
+
+    void PollMessages() const noexcept;
 
     [[nodiscard]] WNDCLASSEXW WindowClass() const noexcept { return m_WindowClass; }
     [[nodiscard]] HINSTANCE ModuleInstance() const noexcept { return m_WindowClass.hInstance; }
@@ -34,6 +41,8 @@ public:
     [[nodiscard]] const RECT& FramebufferSize() const noexcept { return m_FramebufferSize; }
     [[nodiscard]] u32 FramebufferWidth() const noexcept { return static_cast<u32>(m_FramebufferSize.right); }
     [[nodiscard]] u32 FramebufferHeight() const noexcept { return static_cast<u32>(m_FramebufferSize.bottom); }
+    [[nodiscard]] WindowResizeCallback_f& ResizeCallback() noexcept { return m_ResizeCallback; }
+    [[nodiscard]] bool ShouldClose() const noexcept { return m_ShouldClose; }
 private:
     LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 public:
@@ -43,6 +52,8 @@ private:
     HWND m_Window;
     HDC m_hDc;
     RECT m_FramebufferSize;
+    WindowResizeCallback_f m_ResizeCallback;
+    bool m_ShouldClose;
 };
 
 }

@@ -11,6 +11,16 @@ Window::~Window() noexcept
     UnregisterClassW(WindowClassName, GetModuleHandleW(nullptr));
 }
 
+void Window::PollMessages() const noexcept
+{
+    MSG msg;
+    while(PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE))
+    {
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+}
+
 ReferenceCountingPointer<Window> Window::CreateWindow() noexcept
 {
     WNDCLASSEXW windowClass { };
@@ -62,8 +72,15 @@ LRESULT Window::WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     switch(uMsg)
     {
         case WM_SIZE:
-            GetClientRect(m_Window, &m_FramebufferSize);
+            (void) GetClientRect(m_Window, &m_FramebufferSize);
+            if(m_ResizeCallback)
+            {
+                m_ResizeCallback(FramebufferWidth(), FramebufferHeight());
+            }
             break;
+        case WM_CLOSE:
+            m_ShouldClose = true;
+            return 0;
         default: break;
     }
 

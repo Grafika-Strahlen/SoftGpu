@@ -88,7 +88,7 @@ static constexpr ConstExprString Desired1_3InstanceExtensions[] = {
     return { };
 }
 
-DynArray<const char*> GetRequestedInstanceExtensions(const u32 vulkanVersion, u32* const extensionCount, bool* hasDebugExt) noexcept
+DynArray<const char*> GetRequestedInstanceExtensions(const u32 vulkanVersion, u32* const extensionCount, bool* const hasDebugExt) noexcept
 {
     *extensionCount = 0;
     *hasDebugExt = false;
