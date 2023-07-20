@@ -1,5 +1,7 @@
 #include "vd/Window.hpp"
 
+#include <ConPrinter.hpp>
+
 namespace tau::vd {
 
 static constexpr const wchar_t WindowClassName[] = L"SoftGpu Virtual Display Window";
@@ -14,11 +16,16 @@ Window::~Window() noexcept
 void Window::PollMessages() const noexcept
 {
     MSG msg;
-    while(PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE))
+    while(PeekMessageW(&msg, m_Window, 0, 0, PM_REMOVE))
     {
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }
+}
+
+void Window::Close() noexcept
+{
+    m_ShouldClose = true;
 }
 
 ReferenceCountingPointer<Window> Window::CreateWindow() noexcept

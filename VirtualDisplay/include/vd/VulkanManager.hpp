@@ -46,7 +46,7 @@ public:
 
     void RebuildSwapchain() noexcept;
 
-    [[nodiscard]] StrongRef<VulkanDevice> Device() const noexcept { return m_Device; }
+    [[nodiscard]] const StrongRef<VulkanDevice>& Device() const noexcept { return m_Device; }
     [[nodiscard]] const DynArray<VkImage>& SwapchainImages() const noexcept { return m_SwapchainImages; }
 public:
     static Ref<VulkanManager> CreateVulkanManager(const Ref<Window>& window) noexcept;

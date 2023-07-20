@@ -2,8 +2,19 @@
 
 #include <VBox/vmm/pdmdev.h>
 #include <iprt/assert.h>
+#include <Safeties.hpp>
+#include <thread>
 
 #include "Processor.hpp"
+
+namespace tau::vd {
+
+class Window;
+class VulkanManager;
+class VulkanCommandPools;
+class FramebufferRenderer;
+
+}
 
 /**
  * Playground device per function (sub-device) data.
@@ -32,6 +43,12 @@ struct SoftGpuDeviceFunction final
     PDMIDISPLAYPORT IDisplayPort;
     R3PTRTYPE(PPDMIBASE) pDrvBase;
     Processor processor;
+    Ref<tau::vd::Window> Window;
+    Ref<tau::vd::VulkanManager> VulkanManager;
+    Ref<tau::vd::VulkanCommandPools> VulkanCommandPools;
+    Ref<tau::vd::FramebufferRenderer> FramebufferRenderer;
+    void* Framebuffer;
+    ::std::thread VulkanThread;
 };
 
 /**

@@ -36,7 +36,7 @@ namespace tau::test::register_allocator {
 extern void RunTests() noexcept;
 }
 
-static void FillFramebuffer(const Ref<::tau::vd::Window>& window, u8* const framebuffer) noexcept
+static void FillFramebufferBlackMagenta(const Ref<::tau::vd::Window>& window, u8* const framebuffer) noexcept
 {
     for(uSys y = 0; y < window->FramebufferHeight(); ++y)
     {
@@ -83,10 +83,26 @@ static void FillFramebuffer(const Ref<::tau::vd::Window>& window, u8* const fram
     }
 }
 
+static void FillFramebufferGradient(const Ref<::tau::vd::Window>& window, u8* const framebuffer) noexcept
+{
+    for(uSys y = 0; y < window->FramebufferHeight(); ++y)
+    {
+        for(uSys x = 0; x < window->FramebufferWidth(); ++x)
+        {
+            const uSys index = (y * window->FramebufferWidth() + x) * 4;
+
+            framebuffer[index + 0] = static_cast<u8>((x * 256) / window->FramebufferWidth());
+            framebuffer[index + 1] = static_cast<u8>((y * 256) / window->FramebufferHeight());
+            framebuffer[index + 2] = 0xFF - static_cast<u8>((x * y * 256) / (window->FramebufferWidth() * window->FramebufferHeight()));
+            framebuffer[index + 3] = 0xFF;
+        }
+    }
+}
+
 static u8* BuildFramebuffer(const Ref<::tau::vd::Window>& window) noexcept
 {
     u8* const framebuffer = new(::std::nothrow) u8[static_cast<uSys>(window->FramebufferWidth()) * static_cast<uSys>(window->FramebufferHeight()) * 4];
-    FillFramebuffer(window, framebuffer);
+    FillFramebufferGradient(window, framebuffer);
     return framebuffer;
 }
 
@@ -801,6 +817,7 @@ static int InitBAR() noexcept
     processor.PciConfigWrite(0x10, 4, BAR0);
     processor.PciConfigWrite(0x14, 4, static_cast<u32>(BAR1));
     processor.PciConfigWrite(0x18, 4, static_cast<u32>(BAR1 >> 32));
+    processor.TestSetRamBaseAddress(BAR1);
 
     ConPrinter::PrintLn("Loaded BAR0 at 0x{XP0}.", BAR0);
     ConPrinter::PrintLn("Loaded BAR1 at 0x{XP0}.", BAR1);

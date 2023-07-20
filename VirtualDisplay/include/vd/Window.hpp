@@ -5,6 +5,7 @@
 #include <Objects.hpp>
 #include <ReferenceCountingPointer.hpp>
 #include <functional>
+#include <atomic>
 
 #undef CreateWindow
 
@@ -34,6 +35,8 @@ public:
 
     void PollMessages() const noexcept;
 
+    void Close() noexcept;
+
     [[nodiscard]] WNDCLASSEXW WindowClass() const noexcept { return m_WindowClass; }
     [[nodiscard]] HINSTANCE ModuleInstance() const noexcept { return m_WindowClass.hInstance; }
     [[nodiscard]] HWND WindowHandle() const noexcept { return m_Window; }
@@ -42,7 +45,7 @@ public:
     [[nodiscard]] u32 FramebufferWidth() const noexcept { return static_cast<u32>(m_FramebufferSize.right); }
     [[nodiscard]] u32 FramebufferHeight() const noexcept { return static_cast<u32>(m_FramebufferSize.bottom); }
     [[nodiscard]] WindowResizeCallback_f& ResizeCallback() noexcept { return m_ResizeCallback; }
-    [[nodiscard]] bool ShouldClose() const noexcept { return m_ShouldClose; }
+    [[nodiscard]] const ::std::atomic<bool>& ShouldClose() const noexcept { return m_ShouldClose; }
 private:
     LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 public:
@@ -53,7 +56,7 @@ private:
     HDC m_hDc;
     RECT m_FramebufferSize;
     WindowResizeCallback_f m_ResizeCallback;
-    bool m_ShouldClose;
+    ::std::atomic<bool> m_ShouldClose;
 };
 
 }

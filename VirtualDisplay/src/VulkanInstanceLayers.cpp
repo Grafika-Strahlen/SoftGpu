@@ -7,7 +7,7 @@
 namespace tau::vd {
 
 static constexpr ConstExprString DesiredLayers[] = {
-    "VK_LAYER_KHRONOS_validation"
+    // "VK_LAYER_KHRONOS_validation"
 };
 
 [[nodiscard]] static DynArray<VkLayerProperties> GetInstanceLayers() noexcept

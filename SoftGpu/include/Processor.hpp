@@ -20,6 +20,7 @@ public:
         , m_CacheController(this)
         , m_SMs { { this, 0 }, { this, 1 }, { this, 2 }, { this, 3 } }
         , m_ClockCycle(0)
+        , m_RamBaseAddress(0)
     { }
 
     void Reset()
@@ -103,6 +104,11 @@ public:
         m_SMs[sm].TestLoadRegister(dispatchPort, replicationIndex, registerIndex, registerValue);
     }
 
+    void TestSetRamBaseAddress(const u64 ramBaseAddress) noexcept
+    {
+        m_RamBaseAddress = ramBaseAddress;
+    }
+
     [[nodiscard]] u32 MemReadPhy(const u64 address, const bool external = false) noexcept
     {
         (void) external;
@@ -160,19 +166,25 @@ public:
             return 0;
         }
 
+        const u64 addressOffset = m_PciController.GetBAROffset(address, bar);
+
         if(bar == 0)
         {
-            const u64 addressOffset = m_PciController.GetBAROffset(address, bar);
             data[0] = m_PciRegisters.Read(static_cast<u32>(addressOffset));
             return 1;
         }
 
         if(bar == 1)
         {
-            for(u16 i = 0; i < size; ++i)
+            // Shift right 2 to match the MMU granularity of 4 bytes.
+            const u64 realAddress4 = (addressOffset + m_RamBaseAddress) >> 2;
+
+            const u16 sizeWords = size / 4;
+
+            for(u16 i = 0; i < sizeWords; ++i)
             {
-                // Use the real address as that is mapped into the system virtual page.
-                data[i] = MemReadPhy((address >> 2) + i);
+                // ~Use the real address as that is mapped into the system virtual page.~
+                data[i] = MemReadPhy(realAddress4 + i);
             }
 
             return size;
@@ -180,7 +192,6 @@ public:
 
         if(bar == PciController::EXPANSION_ROM_BAR_ID)
         {
-            const u64 addressOffset = m_PciController.GetBAROffset(address, bar);
             return m_RomController.PciReadExpansionRom(addressOffset, size, data);
         }
 
@@ -204,17 +215,23 @@ public:
             return;
         }
 
+        const u64 addressOffset = m_PciController.GetBAROffset(address, bar);
+
         if(bar == 0)
         {
-            const u64 addressOffset = m_PciController.GetBAROffset(address, bar);
             m_PciRegisters.Write(static_cast<u32>(addressOffset), data[0]);
         }
         else if(bar == 1)
         {
-            for(u16 i = 0; i < size; ++i)
+            // Shift right 2 to match the MMU granularity of 4 bytes.
+            const u64 realAddress4 = (addressOffset + m_RamBaseAddress) >> 2;
+
+            const u16 sizeWords = size / 4;
+
+            for(u16 i = 0; i < sizeWords; ++i)
             {
-                // Use the real address as that is mapped into the system virtual page.
-                MemWritePhy((address >> 2) + i, data[i]);
+                // ~Use the real address as that is mapped into the system virtual page.~
+                MemWritePhy(realAddress4 + i, data[i]);
             }
         }
     }
@@ -278,4 +295,5 @@ private:
     CacheController m_CacheController;
     StreamingMultiprocessor m_SMs[4];
     u32 m_ClockCycle;
+    u64 m_RamBaseAddress;
 };

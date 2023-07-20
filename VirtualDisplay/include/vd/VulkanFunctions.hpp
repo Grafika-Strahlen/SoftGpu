@@ -79,6 +79,8 @@ public:
 
     [[nodiscard]] VkResult EnumeratePhysicalDevices(uint32_t* const pPhysicalDeviceCount, VkPhysicalDevice* const pPhysicalDevices) const noexcept;
 public:
+    VulkanDeclFunc(GetDeviceProcAddr) = nullptr;
+
     VulkanDeclFunc(CreateDebugUtilsMessengerEXT) = nullptr;
     VulkanDeclFunc(DestroyDebugUtilsMessengerEXT) = nullptr;
 

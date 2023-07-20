@@ -24,6 +24,9 @@
 #include "ConLogger.hpp"
 #include "VBoxDeviceFunction.hpp"
 #include "PciConfigHandler.hpp"
+#include "vd/FramebufferRenderer.hpp"
+#include "vd/VulkanCommandPools.hpp"
+#include "vd/Window.hpp"
 
 DebugManager GlobalDebug;
 
@@ -59,7 +62,7 @@ static void PciControlWriteCallback(const u32 address, const u32 value) noexcept
     }
 }
 
-static DECLCALLBACK(VBOXSTRICTRC) softGpuMMIORead(PPDMDEVINS pDevIns, void* pvUser, RTGCPHYS off, void* pv, unsigned cb)
+static DECLCALLBACK(VBOXSTRICTRC) softGpuMMIORead(PPDMDEVINS pDevIns, void* pvUser, RTGCPHYS off, void* pv, unsigned cb) noexcept
 {
     SoftGpuDeviceFunction* pFun = static_cast<SoftGpuDeviceFunction*>(pvUser);
     NOREF(pDevIns);
@@ -83,7 +86,7 @@ static DECLCALLBACK(VBOXSTRICTRC) softGpuMMIORead(PPDMDEVINS pDevIns, void* pvUs
     return VINF_SUCCESS;
 }
 
-static DECLCALLBACK(VBOXSTRICTRC) softGpuMMIOWrite(PPDMDEVINS pDevIns, void* pvUser, RTGCPHYS off, void const* pv, unsigned cb)
+static DECLCALLBACK(VBOXSTRICTRC) softGpuMMIOWrite(PPDMDEVINS pDevIns, void* pvUser, RTGCPHYS off, void const* pv, unsigned cb) noexcept
 {
     SoftGpuDeviceFunction* pFun = static_cast<SoftGpuDeviceFunction*>(pvUser);
     NOREF(pDevIns);
@@ -102,7 +105,7 @@ static DECLCALLBACK(VBOXSTRICTRC) softGpuMMIOWrite(PPDMDEVINS pDevIns, void* pvU
     return VINF_SUCCESS;
 }
 
-static DECLCALLBACK(int) softGpuMMIOMapUnmap(PPDMDEVINS pDevIns, PPDMPCIDEV pPciDev, uint32_t iRegion, RTGCPHYS GCPhysAddress, RTGCPHYS cb, PCIADDRESSSPACE enmType)
+static DECLCALLBACK(int) softGpuMMIOMapUnmap(PPDMDEVINS pDevIns, PPDMPCIDEV pPciDev, uint32_t iRegion, RTGCPHYS GCPhysAddress, RTGCPHYS cb, PCIADDRESSSPACE enmType) noexcept
 {
     (void) pPciDev;
 
@@ -121,7 +124,78 @@ static DECLCALLBACK(int) softGpuMMIOMapUnmap(PPDMDEVINS pDevIns, PPDMPCIDEV pPci
     return VINF_SUCCESS;
 }
 
-static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instance, PCFGMNODE cfg)
+static void FillFramebufferGradient(const Ref<::tau::vd::Window>& window, u8* const framebuffer) noexcept
+{
+    for(uSys y = 0; y < window->FramebufferHeight(); ++y)
+    {
+        for(uSys x = 0; x < window->FramebufferWidth(); ++x)
+        {
+            const uSys index = (y * window->FramebufferWidth() + x) * 4;
+
+            framebuffer[index + 0] = static_cast<u8>((x * 256) / window->FramebufferWidth());
+            framebuffer[index + 1] = static_cast<u8>((y * 256) / window->FramebufferHeight());
+            framebuffer[index + 2] = 0xFF - static_cast<u8>((x * y * 256) / static_cast<uSys>(window->FramebufferWidth() * window->FramebufferHeight()));
+            framebuffer[index + 3] = 0xFF;
+        }
+    }
+}
+
+void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
+{
+    ::new(&pciFunction->Window) Ref<tau::vd::Window>(tau::vd::Window::CreateWindow());
+    ::new(&pciFunction->VulkanManager) Ref<tau::vd::VulkanManager>(tau::vd::VulkanManager::CreateVulkanManager(pciFunction->Window));
+    ConPrinter::PrintLn("Created vulkan manager.");
+    ::new(&pciFunction->VulkanCommandPools) Ref<tau::vd::VulkanCommandPools>(::tau::vd::VulkanCommandPools::CreateCommandPools(
+        pciFunction->VulkanManager->Device(),
+        1,
+        static_cast<u32>(pciFunction->VulkanManager->SwapchainImages().Count()),
+        pciFunction->VulkanManager->Device()->GraphicsQueueFamilyIndex()
+    ));
+
+    if(!pciFunction->VulkanCommandPools)
+    {
+        return;
+    }
+
+    pciFunction->VulkanManager->TransitionSwapchain(pciFunction->VulkanCommandPools);
+
+    FillFramebufferGradient(pciFunction->Window, reinterpret_cast<u8*>(pciFunction->Framebuffer));
+
+    ::new(&pciFunction->FramebufferRenderer) Ref<tau::vd::FramebufferRenderer>(tau::vd::FramebufferRenderer::CreateFramebufferRenderer(
+        pciFunction->Window,
+        pciFunction->VulkanManager->Device(),
+        pciFunction->Framebuffer,
+        0,
+        pciFunction->VulkanCommandPools,
+        pciFunction->VulkanManager->SwapchainImages(),
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+    ));
+
+    pciFunction->Window->ResizeCallback() = [pciFunction](const u32, const u32)
+    {
+        if(pciFunction->Window->ShouldClose())
+        {
+            return;
+        }
+        pciFunction->VulkanManager->Device()->VkQueueWaitIdle(pciFunction->VulkanManager->Device()->GraphicsQueue());
+        FillFramebufferGradient(pciFunction->Window, reinterpret_cast<u8*>(pciFunction->Framebuffer));
+        pciFunction->VulkanManager->RebuildSwapchain();
+        pciFunction->VulkanManager->TransitionSwapchain(pciFunction->VulkanCommandPools);
+        pciFunction->FramebufferRenderer->RebuildBuffers(pciFunction->VulkanManager->SwapchainImages(), pciFunction->Framebuffer);
+    };
+
+    while(!pciFunction->Window->ShouldClose())
+    {
+        pciFunction->Window->PollMessages();
+
+        const u32 frameIndex = pciFunction->VulkanManager->WaitForFrame();
+        VkCommandBuffer commandBuffer = pciFunction->FramebufferRenderer->Record(frameIndex);
+        pciFunction->VulkanManager->SubmitCommandBuffers(1, &commandBuffer);
+        pciFunction->VulkanManager->Present(frameIndex);
+    }
+}
+
+static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instance, PCFGMNODE cfg) noexcept
 {
     /*
      * Check that the device instance and device helper structures are compatible.
@@ -213,9 +287,12 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
     ::new(&pciFunction->processor) Processor;
 
     pciFunction->processor.GetPciControlRegisters().RegisterDebugCallbacks(nullptr, PciControlWriteCallback);
+    
+    pciFunction->Framebuffer = VirtualAlloc(nullptr, static_cast<uSys>(256 * 1024 * 1024), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    pciFunction->processor.TestSetRamBaseAddress(reinterpret_cast<uPtr>(pciFunction->Framebuffer));
 
-    ReferenceCountingPointer<tau::vd::VulkanManager> vulkanManager = tau::vd::VulkanManager::CreateVulkanManager();
-    ConLogLn("Created Vulkan Manager.");
+    ::new(&pciFunction->VulkanThread) ::std::thread(VulkanThreadFunc, pciFunction);
+    (void) SetThreadDescription(pciFunction->VulkanThread.native_handle(), L"VulkanRenderThread");
 
     PDMPCIDEV_ASSERT_VALID(deviceInstance, pciDevice);
     ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Asserted pciDevice as valid.");
@@ -343,7 +420,7 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
     return VINF_SUCCESS;
 }
 
-static DECLCALLBACK(int) softGpuDestruct(PPDMDEVINS deviceInstance)
+static DECLCALLBACK(int) softGpuDestruct(PPDMDEVINS deviceInstance) noexcept
 {
     /*
      * Check the versions here as well since the destructor is *always* called.
@@ -356,7 +433,24 @@ static DECLCALLBACK(int) softGpuDestruct(PPDMDEVINS deviceInstance)
     SoftGpuDevice* device = PDMDEVINS_2_DATA(deviceInstance, SoftGpuDevice*);
     SoftGpuDeviceFunction& pciFunction = device->pciFunction;
 
+    pciFunction.Window->Close();
+
+    pciFunction.VulkanThread.join();
+    pciFunction.VulkanThread.~thread();
+
+    if(pciFunction.VulkanManager->Device()->VkDeviceWaitIdle)
+    {
+        pciFunction.VulkanManager->Device()->VkDeviceWaitIdle(pciFunction.VulkanManager->Device()->Device());
+    }
+
+    pciFunction.FramebufferRenderer.~ReferenceCountingPointer();
+    pciFunction.VulkanCommandPools.~ReferenceCountingPointer();
+    pciFunction.VulkanManager.~ReferenceCountingPointer();
+    pciFunction.Window.~ReferenceCountingPointer();
+
     pciFunction.processor.~Processor();
+
+    (void) VirtualFree(pciFunction.Framebuffer, static_cast<uSys>(256 * 1024 * 1024), MEM_RELEASE);
 
     return VINF_SUCCESS;
 }

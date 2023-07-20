@@ -10,7 +10,7 @@
 
 #define LoadNonInstanceFunc(BaseName) LoadFunc(BaseName, vkGetInstanceProcAddr, nullptr)
 #define LoadInstanceFunc(BaseName) LoadFunc(BaseName, vkGetInstanceProcAddr, m_Instance)
-#define LoadDeviceFunc(BaseName) LoadFunc(BaseName, vkGetDeviceProcAddr, m_Device)
+#define LoadDeviceFunc(BaseName) LoadFunc(BaseName, m_Vulkan->VkGetDeviceProcAddr, m_Device)
 
 #define LoadFunc2(BaseName0, BaseName1, Loader, LoaderParam) \
     do { \
@@ -23,7 +23,7 @@
 
 #define LoadNonInstanceFunc2(BaseName0, BaseName1) LoadFunc2(BaseName0, BaseName1, vkGetInstanceProcAddr, nullptr)
 #define LoadInstanceFunc2(BaseName0, BaseName1) LoadFunc2(BaseName0, BaseName1, vkGetInstanceProcAddr, m_Instance)
-#define LoadDeviceFunc2(BaseName0, BaseName1) LoadFunc2(BaseName0, BaseName1, vkGetDeviceProcAddr, m_Device)
+#define LoadDeviceFunc2(BaseName0, BaseName1) LoadFunc2(BaseName0, BaseName1, m_Vulkan->VkGetDeviceProcAddr, m_Device)
 
 VulkanDeclFunc(EnumerateInstanceVersion);
 
@@ -45,6 +45,8 @@ StrongRef<VulkanInstance> VulkanInstance::LoadInstanceFunctions(VkInstance insta
 
 void VulkanInstance::LoadInstanceFunctions() noexcept
 {
+    LoadInstanceFunc(GetDeviceProcAddr);
+
     LoadInstanceFunc(CreateDebugUtilsMessengerEXT);
     LoadInstanceFunc(DestroyDebugUtilsMessengerEXT);
 

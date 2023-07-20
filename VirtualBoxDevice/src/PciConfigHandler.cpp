@@ -25,7 +25,7 @@ static bool IsBar(const u32 address) noexcept
     return (address >= 0x10 && address < 0x28) || (address >= 0x30 && address < 0x34);
 }
 
-DECLCALLBACK(VBOXSTRICTRC) SoftGpuConfigRead(const PPDMDEVINS deviceInstance, const PPDMPCIDEV pPciDev, const uint32_t uAddress, const unsigned cb, uint32_t* const pu32Value)
+DECLCALLBACK(VBOXSTRICTRC) SoftGpuConfigRead(const PPDMDEVINS deviceInstance, const PPDMPCIDEV pPciDev, const uint32_t uAddress, const unsigned cb, uint32_t* const pu32Value) noexcept
 {
     (void) pPciDev;
 
@@ -83,7 +83,7 @@ DECLCALLBACK(VBOXSTRICTRC) SoftGpuConfigRead(const PPDMDEVINS deviceInstance, co
     return VINF_SUCCESS;
 }
 
-DECLCALLBACK(VBOXSTRICTRC) SoftGpuConfigWrite(const PPDMDEVINS deviceInstance, const PPDMPCIDEV pPciDev, const uint32_t uAddress, const unsigned cb, const uint32_t u32Value)
+DECLCALLBACK(VBOXSTRICTRC) SoftGpuConfigWrite(const PPDMDEVINS deviceInstance, const PPDMPCIDEV pPciDev, const uint32_t uAddress, const unsigned cb, const uint32_t u32Value) noexcept
 {
     SoftGpuDevice* device = PDMDEVINS_2_DATA(deviceInstance, SoftGpuDevice*);
     SoftGpuDeviceFunction& pciFunction = device->pciFunction;
