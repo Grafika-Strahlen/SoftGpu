@@ -5,8 +5,13 @@
 #include <ConPrinter.hpp>
 
 #include <cstring>
+#include <mutex>
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
 
 #undef DeviceCapabilities
+
+class Processor;
 
 struct PciConfigHeader final
 {
@@ -284,14 +289,37 @@ public:
 
     static inline constexpr u8 EXPANSION_ROM_BAR_ID = 0x7F;
 public:
-    PciController() noexcept
-        : m_PciConfig{ 0 }
+    PciController(Processor* const processor) noexcept
+        : m_Processor(processor)
+        , m_PciConfig{ 0 }
         , m_PciExtendedConfig{ 0 }
+        , m_SimulationSyncEvent(INVALID_HANDLE_VALUE)
+        , m_ReadRequestActive(false)
+        , m_ReadRequestAddress(0)
+        , m_ReadRequestSize(0)
+        , m_ReadRequestResponseData(nullptr)
+        , m_ReadCountResponse(nullptr)
+        , m_WriteRequestActive(false)
+        , m_WriteRequestAddress(0)
+        , m_WriteRequestSize(0)
+        , m_WriteRequestData(nullptr)
+        , m_ReadState(0)
+        , m_WriteState(0)
+        , m_Pad0{}
     {
         InitConfigHeader();
         InitPcieCapabilityStructure();
         InitPowerManagementCapabilityStructure();
         InitAdvancedErrorReportingCapabilityStructure();
+    }
+
+    void Clock(bool risingEdge = true) noexcept
+    {
+        if(risingEdge)
+        {
+            ExecuteMemRead();
+            ExecuteMemWrite();
+        }
     }
 
     [[nodiscard]] u32 ConfigRead(u16 address, u8 size) noexcept;
@@ -404,6 +432,25 @@ public:
         }
     }
 
+    void PciMemReadSet(const u64 address, const u16 size, u32* const data, u16* const readResponse) noexcept
+    {
+        ::std::lock_guard lock(m_ReadDataMutex);
+        m_ReadRequestActive = true;
+        m_ReadRequestAddress = address;
+        m_ReadRequestSize = size;
+        m_ReadRequestResponseData = data;
+        m_ReadCountResponse = readResponse;
+    }
+
+    void PciMemWriteSet(const u64 address, const u16 size, const u32* const data) noexcept
+    {
+        ::std::lock_guard lock(m_WriteDataMutex);
+        m_WriteRequestActive = true;
+        m_WriteRequestAddress = address;
+        m_WriteRequestSize = size;
+        m_WriteRequestData = data;
+    }
+
     [[nodiscard]] u8 GetBARFromAddress(const u64 address) noexcept
     {
         if(address < 0xFFFFFFFF)
@@ -453,7 +500,46 @@ public:
 
     [[nodiscard]] u16 CommandRegister() const noexcept { return m_ConfigHeader.Command; }
     [[nodiscard]] bool ExpansionRomEnable() const noexcept { return m_ConfigHeader.ExpansionROMBaseAddress & EXPANSION_ROM_BAR_ENABLE_BIT; }
+
+    void SetSimulationSyncEvent(HANDLE event) noexcept
+    {
+        m_SimulationSyncEvent = event;
+    }
 private:
+    /**
+     * @brief Initializes the PCI configuration header.
+     *
+     * This method sets up the PCI configuration header with the appropriate default values:
+     * - VendorID: Set to 0xFFFD. This is a unique identifier assigned by the PCI SIG to the vendor of the device.
+     * - DeviceID: Set to 0x0001. This is a unique identifier assigned by the vendor to the device.
+     * - Command: Set to 0x0000. This field is used to control the device's behavior.
+     * - Status: Set to 0x0010. This field provides status information about the device.
+     * - RevisionID: Set to 0x01. This field specifies the revision ID of the device.
+     * - ClassCode: Set to 0x030001. This field specifies the class and subclass of the device.
+     * - CacheLineSize: Set to 0x0. This field specifies the system cache line size in units of DWORDs.
+     * - MasterLatencyTimer: Set to 0x0. This field specifies how long a device can retain control of the PCI bus.
+     * - HeaderType: Set to 0x00. This field specifies the layout of the rest of the header.
+     * - BIST: Set to 0x00. This field provides a mechanism for software to test the device.
+     * - BAR0 to BAR5: These fields specify the base addresses for the device's memory and I/O ranges.
+     *   - BAR0: Set to 0x00000000. This is a 32-bit non-prefetchable memory space.
+     *   - BAR1: Set to 0x0000000C. This is a 64-bit prefetchable memory space.
+     *   - BAR2: Set to 0x00000000. This is part of the 64-bit prefetchable memory space defined by BAR1.
+     *   - BAR3 to BAR5: Set to 0x00000000. These are unused in this configuration.
+     * - CardBusCISPointer: Set to 0x0. This field provides a pointer to the Card Information Structure for CardBus devices.
+     * - SubsystemVendorID: Set to 0x0. This field specifies the vendor of the subsystem.
+     * - SubsystemID: Set to 0x0. This field specifies the ID of the subsystem.
+     * - ExpansionROMBaseAddress: Set to 0x00000000. This field specifies the base address of the expansion ROM.
+     * - CapPointer: Set to the offset of the PcieCapability structure. This field provides a pointer to the device's capabilities list.
+     * - Reserved0 and Reserved1: Set to 0x0. These fields are reserved.
+     * - InterruptLine: Set to 0x0. This field specifies the interrupt line the device is connected to.
+     * - InterruptPin: Set to 0x0. This field specifies the interrupt pin the device uses.
+     * - MinGnt: Set to 0x00. This field specifies the minimum burst period of the device in units of PCI bus clocks.
+     * - MaxLat: Set to 0x00. This field specifies the maximum latency of the device in units of PCI bus clocks.
+     *
+     * @note This method is called in the constructor of the PciController class.
+     *
+     * @return void
+     */
     void InitConfigHeader() noexcept
     {
         m_ConfigHeader.VendorID = 0xFFFD;
@@ -613,13 +699,35 @@ private:
         m_AdvancedErrorReportingCapability.HeaderLogRegister[3] = 0;
     }
 
+    void ExecuteMemRead() noexcept;
+    void ExecuteMemWrite() noexcept;
 private:
+    Processor* m_Processor;
+
     PciConfigHeader m_ConfigHeader;
     PcieCapabilityStructure m_PcieCapability;
     PowerManagementCapabilityStructure m_PowerManagementCapability;
     u8 m_PciConfig[256 - sizeof(m_ConfigHeader) - sizeof(m_PcieCapability) - sizeof(m_PowerManagementCapability)];
     AdvancedErrorReportingCapabilityStructure m_AdvancedErrorReportingCapability;
     u8 m_PciExtendedConfig[4096 - 256 - sizeof(m_AdvancedErrorReportingCapability)];
+
+    HANDLE m_SimulationSyncEvent;
+    bool m_ReadRequestActive;
+    u64 m_ReadRequestAddress;
+    u16 m_ReadRequestSize;
+    u32* m_ReadRequestResponseData;
+    u16* m_ReadCountResponse;
+    bool m_WriteRequestActive;
+    u64 m_WriteRequestAddress;
+    u16 m_WriteRequestSize;
+    const u32* m_WriteRequestData;
+
+    u32 m_ReadState : 1;
+    u32 m_WriteState : 1;
+    u32 m_Pad0 : 30;
+
+    ::std::mutex m_ReadDataMutex;
+    ::std::mutex m_WriteDataMutex;
 
     friend class PciConfigOffsets;
 };

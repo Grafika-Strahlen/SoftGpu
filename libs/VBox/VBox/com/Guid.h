@@ -297,7 +297,7 @@ public:
         ::memset(buf, '\0', sizeof(buf));
         ::RTUuidToUtf16(&mUuid, buf, RT_ELEMENTS(buf));
 
-        return Bstr(buf);
+        return Bstr((const wchar_t*) buf);
     }
 
     /**
@@ -471,7 +471,7 @@ private:
         }
         else
         {
-            int rc = ::RTUuidFromUtf16(&mUuid, that);
+            int rc = ::RTUuidFromUtf16(&mUuid, (PCRTUTF16) that);
             if (RT_SUCCESS(rc))
                 updateState();
             else

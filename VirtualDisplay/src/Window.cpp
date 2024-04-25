@@ -71,6 +71,21 @@ ReferenceCountingPointer<Window> Window::CreateWindow() noexcept
 
     GetClientRect(hWnd, &window->m_FramebufferSize);
 
+    RECT newRect;
+    newRect.left = 0;
+    newRect.top = 0;
+    // newRect.right = 1032;
+    newRect.right = 800;
+    newRect.bottom = 600;
+    //
+    // (void) AdjustWindowRect(&newRect, WS_OVERLAPPEDWINDOW, FALSE);
+    (void) SetWindowPos(hWnd, nullptr, newRect.left, newRect.top, newRect.right, newRect.bottom, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOCOPYBITS | SWP_NOOWNERZORDER);
+
+    GetClientRect(hWnd, &window->m_FramebufferSize);
+
+    window->m_HorizontalSlop = newRect.right - window->m_FramebufferSize.right;
+    window->m_VerticalSlop = newRect.bottom - window->m_FramebufferSize.bottom;
+
     return window;
 }
 
@@ -126,6 +141,21 @@ void Window::ShowWindow() noexcept
 void Window::HideWindow() noexcept
 {
     ::ShowWindow(m_Window, SW_HIDE);
+}
+
+void Window::SetSize(const u32 width, const u32 height) noexcept
+{
+    RECT newRect;
+    newRect.left = 0;
+    newRect.top = 0;
+    // newRect.right = static_cast<LONG>(width) + 8;
+    // newRect.bottom = static_cast<LONG>(height) + 31;
+    newRect.right = static_cast<LONG>(width + m_HorizontalSlop);
+    newRect.bottom = static_cast<LONG>(height + m_VerticalSlop);
+
+    // (void) AdjustWindowRect(&newRect, WS_OVERLAPPEDWINDOW, FALSE);
+
+    ::SetWindowPos(m_Window, nullptr, 0, 0, newRect.right, newRect.bottom, SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOOWNERZORDER);
 }
 
 }

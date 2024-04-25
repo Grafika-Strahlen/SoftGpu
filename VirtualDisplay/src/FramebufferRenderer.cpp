@@ -17,7 +17,7 @@ FramebufferRenderer::~FramebufferRenderer() noexcept
     }
 }
 
-VkCommandBuffer FramebufferRenderer::Record(const u32 frameIndex) const noexcept
+VkCommandBuffer FramebufferRenderer::Record(const u32 frameIndex, bool active) const noexcept
 {
     if(frameIndex >= m_CommandBuffers.Length())
     {
@@ -30,7 +30,14 @@ VkCommandBuffer FramebufferRenderer::Record(const u32 frameIndex) const noexcept
 
     const uSys frameSize = static_cast<uSys>(m_Window->FramebufferWidth()) * static_cast<uSys>(m_Window->FramebufferHeight()) * 4;
 
-    (void) ::std::memcpy(static_cast<u8*>(m_StagingBufferAllocationInfo.pMappedData) + writeIndex, m_RawFramebuffer, frameSize);
+    if(active)
+    {
+        (void) ::std::memcpy(static_cast<u8*>(m_StagingBufferAllocationInfo.pMappedData) + writeIndex, m_RawFramebuffer, frameSize);
+    }
+    else
+    {
+        (void) ::std::memcpy(static_cast<u8*>(m_StagingBufferAllocationInfo.pMappedData) + writeIndex, 0, frameSize);
+    }
 
     VkCommandBuffer commandBuffer = m_CommandBuffers[frameIndex];
 
@@ -186,6 +193,7 @@ Ref<FramebufferRenderer> FramebufferRenderer::CreateFramebufferRenderer(
     allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     allocateInfo.commandBufferCount = 1;
 
+    // ReSharper disable once CppJoinDeclarationAndAssignment
     Ref<FramebufferRenderer> framebufferRenderer;
 
     for(u32 i = 0; i < frames.Count(); ++i)

@@ -3,6 +3,8 @@
 #include <NumTypes.hpp>
 #include <Objects.hpp>
 
+#include "DisplayManager.hpp"
+
 class Processor;
 
 struct ControlRegister final
@@ -18,6 +20,38 @@ struct ControlRegister final
     };
 };
 
+struct PciControlRegistersBus final
+{
+    DEFAULT_CONSTRUCT_PUC(PciControlRegistersBus);
+    DEFAULT_DESTRUCT(PciControlRegistersBus);
+    DEFAULT_CM_PUC(PciControlRegistersBus);
+
+    /**
+     * \brief Lock State
+     *   - 0 - Unlocked
+     *   - 1 - Locked
+     *   - 2 - Operation Complete
+     */
+    u32 ReadBusLocked : 2;
+    /**
+     * \brief Lock State
+     *   - 0 - Unlocked
+     *   - 1 - Locked
+     *   - 2 - Operation Complete
+     */
+    u32 WriteBusLocked : 2;
+
+    u32 Pad0 : 28;
+        
+    u32 ReadAddress;
+    u16 ReadSize;
+    u32 ReadResponse;
+        
+    u32 WriteAddress;
+    u16 WriteSize;
+    u32 WriteValue;
+};
+
 typedef void (*PciControlDebugReadCallback_f)(u32 localAddress);
 typedef void (*PciControlDebugWriteCallback_f)(u32 localAddress, u32 value);
 
@@ -27,18 +61,30 @@ class PciControlRegisters final
     DELETE_CM(PciControlRegisters);
 public:
     static inline constexpr u32 REGISTER_MAGIC_VALUE = 0x4879666C;
-    static inline constexpr u32 REGISTER_REVISION_VALUE =0x00000001;
+    static inline constexpr u32 REGISTER_REVISION_VALUE = 0x00000001;
 
-    static inline constexpr u16 REGISTER_MAGIC       = 0x0000;
-    static inline constexpr u16 REGISTER_REVISION    = 0x0004;
-    static inline constexpr u16 REGISTER_EMULATION   = 0x0008;
-    static inline constexpr u16 REGISTER_RESET       = 0x000C;
-    static inline constexpr u16 REGISTER_CONTROL     = 0x0010;
+    static inline constexpr u16 REGISTER_MAGIC              = 0x0000;
+    static inline constexpr u16 REGISTER_REVISION           = 0x0004;
+    static inline constexpr u16 REGISTER_EMULATION          = 0x0008;
+    static inline constexpr u16 REGISTER_RESET              = 0x000C;
+    static inline constexpr u16 REGISTER_CONTROL            = 0x0010;
+    static inline constexpr u16 REGISTER_VRAM_SIZE_LOW      = 0x0014;
+    static inline constexpr u16 REGISTER_VRAM_SIZE_HIGH     = 0x0018;
+                                                            
+    static inline constexpr u16 REGISTER_VGA_WIDTH          = 0x1014;
+    static inline constexpr u16 REGISTER_VGA_HEIGHT         = 0x1018;
+    
+    static inline constexpr u16 BASE_REGISTER_DI            = 0x2000;
+    static inline constexpr u16 SIZE_REGISTER_DI            = 4 * 0x4;
+    static inline constexpr u16 OFFSET_REGISTER_DI_WIDTH    = 0x00;
+    static inline constexpr u16 OFFSET_REGISTER_DI_HEIGHT   = 0x04;
+    static inline constexpr u16 OFFSET_REGISTER_DI_BPP      = 0x08;
+    static inline constexpr u16 OFFSET_REGISTER_DI_ENABLE   = 0x0C;
 
-    static inline constexpr u16 REGISTER_VGA_WIDTH   = 0x1014;
-    static inline constexpr u16 REGISTER_VGA_HEIGHT  = 0x1018;
+    static inline constexpr u16 BASE_REGISTER_EDID = 0x3000;
+    static inline constexpr u16 SIZE_EDID = 128;
 
-    static inline constexpr u16 REGISTER_DEBUG_PRINT = 0x8000;
+    static inline constexpr u16 REGISTER_DEBUG_PRINT        = 0x8000;
 
     static inline constexpr u32 CONTROL_REGISTER_VALID_MASK = 0x00000001;
 
@@ -50,20 +96,54 @@ public:
         , m_ControlRegister{.Value = 0}
         , m_VgaWidth(DEFAULT_VGA_WIDTH)
         , m_VgaHeight(DEFAULT_VGA_HEIGHT)
+        , m_Bus()
+        , m_ReadState(0)
+        , m_Pad0(0)
+        , m_DisplayEdidStorage()
+        , m_DisplayDataStorage()
         , m_DebugReadCallback(nullptr)
         , m_DebugWriteCallback(nullptr)
-    { }
+    {
+        m_Bus.ReadBusLocked = 0;
+        m_Bus.WriteBusLocked = 0;
+    }
 
     void Reset()
     {
         m_ControlRegister.Value = 0;
         m_VgaWidth = DEFAULT_VGA_WIDTH;
         m_VgaHeight = DEFAULT_VGA_HEIGHT;
+
+        m_Bus.ReadBusLocked = 0;
+        m_Bus.WriteBusLocked = 0;
+        m_Bus.ReadAddress = 0;
+        m_Bus.ReadResponse = 0;
+        m_Bus.WriteAddress = 0;
+        m_Bus.WriteValue = 0;
+
+        m_ReadState = 0;
     }
 
-    [[nodiscard]] u32 Read(u32 address) noexcept;
+    void Clock(bool risingEdge = false)
+    {
+        if(risingEdge)
+        {
+            ExecuteRead();
+        }
+        else
+        {
+            ExecuteWrite();
+        }
+    }
 
-    void Write(u32 address, u32 value) noexcept;
+    [[nodiscard]] PciControlRegistersBus& Bus() noexcept { return m_Bus; }
+
+    void ExecuteRead() noexcept;
+    void ExecuteWrite() noexcept;
+
+    // [[nodiscard]] u32 Read(u32 address) noexcept;
+    //
+    // void Write(u32 address, u32 value) noexcept;
 
     void RegisterDebugCallbacks(const PciControlDebugReadCallback_f debugReadCallback, const PciControlDebugWriteCallback_f debugWriteCallback) noexcept
     {
@@ -75,6 +155,13 @@ private:
     ControlRegister m_ControlRegister;
     u16 m_VgaWidth;
     u16 m_VgaHeight;
+
+    PciControlRegistersBus m_Bus;
+    u32 m_ReadState : 2;
+    u32 m_WriteState : 2;
+    u32 m_Pad0 : 28;
+    EdidBlock m_DisplayEdidStorage;
+    u32 m_DisplayDataStorage;
 
     PciControlDebugReadCallback_f m_DebugReadCallback;
     PciControlDebugWriteCallback_f m_DebugWriteCallback;

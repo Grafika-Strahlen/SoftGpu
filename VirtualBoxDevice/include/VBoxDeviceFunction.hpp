@@ -4,6 +4,7 @@
 #include <iprt/assert.h>
 #include <Safeties.hpp>
 #include <thread>
+#include <atomic>
 
 #include "Processor.hpp"
 
@@ -42,13 +43,16 @@ struct SoftGpuDeviceFunction final
     PDMIBASE IBase;
     PDMIDISPLAYPORT IDisplayPort;
     R3PTRTYPE(PPDMIBASE) pDrvBase;
-    Processor processor;
+    Processor Processor;
     Ref<tau::vd::Window> Window;
     Ref<tau::vd::VulkanManager> VulkanManager;
     Ref<tau::vd::VulkanCommandPools> VulkanCommandPools;
     Ref<tau::vd::FramebufferRenderer> FramebufferRenderer;
     void* Framebuffer;
     ::std::thread VulkanThread;
+    ::std::thread ProcessorThread;
+    ::std::atomic_bool ProcessorShouldExit;
+    HANDLE ProcessorSyncEvent;
 };
 
 /**

@@ -79,9 +79,24 @@ static DECLCALLBACK(VBOXSTRICTRC) softGpuMMIORead(PPDMDEVINS pDevIns, void* pvUs
     //     off++;
     // }
     
-    // ConLogLn("SoftGpu/[{}]: READ off=0x{XP0} cb={}: 0x{XP0}\n", pFun->FunctionId, off, cb, cb, pv);
 
-    pFun->processor.PciMemRead(off, static_cast<u16>(cb), reinterpret_cast<u32*>(pv));
+    // pFun->Processor.PciMemRead(off, static_cast<u16>(cb), reinterpret_cast<u32*>(pv));
+
+    u16 response;
+    pFun->Processor.PciMemReadSet(off, static_cast<u16>(cb), reinterpret_cast<u32*>(pv), &response);
+
+    const DWORD waitResult = WaitForSingleObject(pFun->ProcessorSyncEvent, 250);
+
+    // ConLogLn("SoftGpu/[{}]: READ off=0x{XP0} cb={}: 0x{XP0}", pFun->FunctionId, off, cb, *reinterpret_cast<u32*>(pv));
+
+    if(waitResult == WAIT_TIMEOUT)
+    {
+        ConLogLn("Read wait timed out: 0x{XP0} 0x{XP0}", off, cb);
+    }
+    else if(waitResult == WAIT_FAILED)
+    {
+        ConLogLn("Wait failed: {}", GetLastError());
+    }
 
     return VINF_SUCCESS;
 }
@@ -100,7 +115,20 @@ static DECLCALLBACK(VBOXSTRICTRC) softGpuMMIOWrite(PPDMDEVINS pDevIns, void* pvU
     //     off++;
     // }
 
-    pFun->processor.PciMemWrite(off, static_cast<u16>(cb), reinterpret_cast<const u32*>(pv));
+    // pFun->Processor.PciMemWrite(off, static_cast<u16>(cb), reinterpret_cast<const u32*>(pv));
+
+    pFun->Processor.PciMemWriteSet(off, static_cast<u16>(cb), reinterpret_cast<const u32*>(pv));
+
+    const DWORD waitResult = WaitForSingleObject(pFun->ProcessorSyncEvent, 250);
+
+    if(waitResult == WAIT_TIMEOUT)
+    {
+        ConLogLn("Write wait timed out: 0x{XP0} 0x{XP0}", off, cb);
+    }
+    else if(waitResult == WAIT_FAILED)
+    {
+        ConLogLn("Write wait failed: {}", GetLastError());
+    }
 
     return VINF_SUCCESS;
 }
@@ -140,9 +168,110 @@ static void FillFramebufferGradient(const Ref<::tau::vd::Window>& window, u8* co
     }
 }
 
+/**
+ * @brief This function is used to initialize and manage the Vulkan environment for a specific GPU device function.
+ *
+ * It creates a window and a Vulkan manager for the given device function. It also sets up the Vulkan command pools,
+ * transitions the swapchain, and fills the framebuffer with a gradient. Additionally, it sets up a framebuffer renderer
+ * and a resize callback for the window. The function then enters a loop where it waits for the frame, records the command buffer,
+ * submits the command buffer, and presents the frame until the window should close.
+ *
+ * @param pciFunction Pointer to the SoftGpuDeviceFunction structure which contains information about the GPU device function.
+ */
 void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
 {
     ::new(&pciFunction->Window) Ref<tau::vd::Window>(tau::vd::Window::CreateWindow());
+
+    EdidBlock& edid = pciFunction->Processor.GetDisplayManager().GetDisplayEdid(0);
+
+    edid.Header[0] = 0x00;
+    edid.Header[1] = 0xFF;
+    edid.Header[2] = 0xFF;
+    edid.Header[3] = 0xFF;
+    edid.Header[4] = 0xFF;
+    edid.Header[5] = 0xFF;
+    edid.Header[6] = 0xFF;
+    edid.Header[7] = 0x00;
+    edid.ManufactureName = 0;
+    edid.ProductCode = 0;
+    edid.SerialNumber = 0;
+    edid.WeekOfManufacture = 0;
+    edid.YearOfManufacture = 24;
+    edid.EdidVersion = 0;
+    edid.EdidRevision = 0;
+    edid.VideoInputDefinition = 0;
+    edid.MaxHorizontalImageSize = 0;
+    edid.MaxVerticalImageSize = 0;
+    edid.DisplayTransferCharacteristic = 0;
+    edid.FeatureSupport = 0;
+    edid.RedGreenLowBits = 0;
+    edid.BlueWhiteLowBits = 0;
+    edid.RedX = 0;
+    edid.RedY = 0;
+    edid.GreenX = 0;
+    edid.GreenY = 0;
+    edid.BlueX = 0;
+    edid.BlueY = 0;
+    edid.WhiteX = 0;
+    edid.WhiteY = 0;
+    edid.EstablishedTimings[0] = 0b00100001;
+    edid.EstablishedTimings[1] = 0b00001000;
+    edid.EstablishedTimings[2] = 0b00000000;
+    edid.StandardTimingIdentification[0x0] = 0;
+    edid.StandardTimingIdentification[0x1] = 0;
+    edid.StandardTimingIdentification[0x2] = 0;
+    edid.StandardTimingIdentification[0x3] = 0;
+    edid.StandardTimingIdentification[0x4] = 0;
+    edid.StandardTimingIdentification[0x5] = 0;
+    edid.StandardTimingIdentification[0x6] = 0;
+    edid.StandardTimingIdentification[0x7] = 0;
+    edid.StandardTimingIdentification[0x8] = 0;
+    edid.StandardTimingIdentification[0x9] = 0;
+    edid.StandardTimingIdentification[0xA] = 0;
+    edid.StandardTimingIdentification[0xB] = 0;
+    edid.StandardTimingIdentification[0xC] = 0;
+    edid.StandardTimingIdentification[0xD] = 0;
+    edid.StandardTimingIdentification[0xE] = 0;
+    edid.StandardTimingIdentification[0xF] = 0;
+    (void) ::std::memset(edid.DetailedTimingDescriptions, 0, sizeof(edid.DetailedTimingDescriptions));
+    edid.ExtensionFlag = 0;
+
+    {
+        const u8* const rawEdid = reinterpret_cast<const u8*>(&edid);
+
+        u8 checksum = 0;
+            
+        for(uSys i = 0; i < sizeof(edid) - 1; ++i)
+        {
+            checksum += rawEdid[i];
+        }
+
+        edid.Checksum = 0 - checksum;
+    }
+
+    ::std::atomic_bool displayActive = true;
+
+    pciFunction->Processor.GetDisplayManager().UpdateCallback() = [pciFunction, &displayActive](const u32 displayIndex, const DisplayData& displayData)
+    {
+        ConLogLn("Updating display {} size: {}x{}", displayIndex, displayData.Width, displayData.Height);
+        
+        if(displayIndex != 0)
+        {
+            return;
+        }
+    
+        displayActive = displayData.Enable;
+        
+        if(pciFunction->Window->FramebufferWidth() != displayData.Width || pciFunction->Window->FramebufferHeight() != displayData.Height)
+        {
+            pciFunction->Window->SetSize(displayData.Width, displayData.Height);
+        }
+    };
+
+    // pciFunction->Processor.GetDisplayManager().GetDisplay(0).Width = pciFunction->Window->FramebufferWidth();
+    // pciFunction->Processor.GetDisplayManager().GetDisplay(0).Height = pciFunction->Window->FramebufferHeight();
+    // pciFunction->Processor.GetDisplayManager().GetDisplay(0).BitsPerPixel = 24;
+
     ::new(&pciFunction->VulkanManager) Ref<tau::vd::VulkanManager>(tau::vd::VulkanManager::CreateVulkanManager(pciFunction->Window));
     ConPrinter::PrintLn("Created vulkan manager.");
     ::new(&pciFunction->VulkanCommandPools) Ref<tau::vd::VulkanCommandPools>(::tau::vd::VulkanCommandPools::CreateCommandPools(
@@ -171,14 +300,21 @@ void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
     ));
 
-    pciFunction->Window->ResizeCallback() = [pciFunction](const u32, const u32)
+    pciFunction->Window->ResizeCallback() = [pciFunction](const u32 width, const u32 height)
     {
         if(pciFunction->Window->ShouldClose())
         {
             return;
         }
+
+        ConLogLn("Updating display size: {}x{}", width, height);
+
+        // pciFunction->Processor.GetDisplayManager().GetDisplay(0).Width = width;
+        // pciFunction->Processor.GetDisplayManager().GetDisplay(0).Height = height;
+        // pciFunction->Processor.GetDisplayManager().GetDisplay(0).BitsPerPixel = 24;
+
         pciFunction->VulkanManager->Device()->VkQueueWaitIdle(pciFunction->VulkanManager->Device()->GraphicsQueue());
-        FillFramebufferGradient(pciFunction->Window, reinterpret_cast<u8*>(pciFunction->Framebuffer));
+        // FillFramebufferGradient(pciFunction->Window, reinterpret_cast<u8*>(pciFunction->Framebuffer));
         pciFunction->VulkanManager->RebuildSwapchain();
         pciFunction->VulkanManager->TransitionSwapchain(pciFunction->VulkanCommandPools);
         pciFunction->FramebufferRenderer->RebuildBuffers(pciFunction->VulkanManager->SwapchainImages(), pciFunction->Framebuffer);
@@ -189,10 +325,27 @@ void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
         pciFunction->Window->PollMessages();
 
         const u32 frameIndex = pciFunction->VulkanManager->WaitForFrame();
-        VkCommandBuffer commandBuffer = pciFunction->FramebufferRenderer->Record(frameIndex);
+        VkCommandBuffer commandBuffer = pciFunction->FramebufferRenderer->Record(frameIndex, displayActive);
         pciFunction->VulkanManager->SubmitCommandBuffers(1, &commandBuffer);
         pciFunction->VulkanManager->Present(frameIndex);
     }
+
+    ConLogLn(u8"Vulkan Thread Exiting");
+}
+
+void ProcessorThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
+{
+    // uSys i = 0;
+
+    while(!pciFunction->ProcessorShouldExit)
+    {
+        // ConPrinter::PrintLn(u8"Clock {}", i++);
+
+        pciFunction->Processor.Clock();
+        ::std::this_thread::yield();
+    }
+
+    ConLogLn(u8"Processor Thread Exiting");
 }
 
 static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instance, PCFGMNODE cfg) noexcept
@@ -284,12 +437,19 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
     SoftGpuDeviceFunction* pciFunction = &device->pciFunction;
     RTStrPrintf(pciFunction->FunctionName, sizeof(pciFunction->FunctionName), "soft_gpu%u", 0);
     pciFunction->FunctionId = 0;
-    ::new(&pciFunction->processor) Processor;
+    ::new(&pciFunction->Processor) Processor;
 
-    pciFunction->processor.GetPciControlRegisters().RegisterDebugCallbacks(nullptr, PciControlWriteCallback);
+    pciFunction->Processor.GetPciControlRegisters().RegisterDebugCallbacks(nullptr, PciControlWriteCallback);
     
     pciFunction->Framebuffer = VirtualAlloc(nullptr, static_cast<uSys>(256 * 1024 * 1024), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-    pciFunction->processor.TestSetRamBaseAddress(reinterpret_cast<uPtr>(pciFunction->Framebuffer));
+    pciFunction->Processor.TestSetRamBaseAddress(reinterpret_cast<uPtr>(pciFunction->Framebuffer));
+
+    ::new(&pciFunction->ProcessorShouldExit) ::std::atomic_bool(false);
+    pciFunction->ProcessorSyncEvent = CreateEventA(nullptr, FALSE, FALSE, "SoftGpuSync");
+    pciFunction->Processor.GetPciController().SetSimulationSyncEvent(pciFunction->ProcessorSyncEvent);
+
+    ::new(&pciFunction->ProcessorThread) ::std::thread(ProcessorThreadFunc, pciFunction);
+    (void) SetThreadDescription(pciFunction->ProcessorThread.native_handle(), L"SoftGpuProcessorThread");
 
     ::new(&pciFunction->VulkanThread) ::std::thread(VulkanThreadFunc, pciFunction);
     (void) SetThreadDescription(pciFunction->VulkanThread.native_handle(), L"VulkanRenderThread");
@@ -308,14 +468,14 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
     }
     else
     {
-        static_assert(sizeof(PciController) == sizeof(pciDevice->abConfig), "SoftGpu PCI config space does not match size of the VBox backing storage.");
+        // static_assert(sizeof(PciController) == sizeof(pciDevice->abConfig), "SoftGpu PCI config space does not match size of the VBox backing storage.");
 
         ConLogLn("Setting PCI config info by copying the PCIController.");
 
-        (void) ::std::memcpy(pciDevice->abConfig, &pciFunction->processor.GetPciController(), sizeof(pciDevice->abConfig));
+        (void) ::std::memcpy(pciDevice->abConfig, &pciFunction->Processor.GetPciController(), sizeof(pciDevice->abConfig));
 
         ConLogLn("VBox PCI Vendor ID: {X}", PDMPciDevGetVendorId(pciDevice));
-        ConLogLn("SoftGpu PCI Vendor ID: {X}", pciFunction->processor.PciConfigRead(0, 2));
+        ConLogLn("SoftGpu PCI Vendor ID: {X}", pciFunction->Processor.PciConfigRead(0, 2));
     }
 
     ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Set PCI info.");
@@ -422,21 +582,31 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
 
 static DECLCALLBACK(int) softGpuDestruct(PPDMDEVINS deviceInstance) noexcept
 {
+    ConLogLn(u8"VBoxSoftGpuEmulator::softGpuDestruct: deviceInstance->u32Version={X} deviceInstance->iInstance={}", deviceInstance->u32Version, deviceInstance->iInstance);
+
     /*
      * Check the versions here as well since the destructor is *always* called.
      * THIS IS ALWAYS THE FIRST STATEMENT IN A DESTRUCTOR!
      */
     PDMDEV_CHECK_VERSIONS_RETURN_QUIET(deviceInstance);
 
-    ConLogLn(u8"VBoxSoftGpuEmulator::softGpuDestruct: deviceInstance->u32Version={X} deviceInstance->iInstance={}", deviceInstance->u32Version, deviceInstance->iInstance);
-
     SoftGpuDevice* device = PDMDEVINS_2_DATA(deviceInstance, SoftGpuDevice*);
     SoftGpuDeviceFunction& pciFunction = device->pciFunction;
 
+    ConLogLn(u8"VBoxSoftGpuEmulator::softGpuDestruct: Telling processor thread to exit.");
+
+    pciFunction.ProcessorShouldExit = true;
+
+    ConLogLn(u8"VBoxSoftGpuEmulator::softGpuDestruct: Processor thread told to exit.");
+
     pciFunction.Window->Close();
+
+    ConLogLn(u8"VBoxSoftGpuEmulator::softGpuDestruct: Window Closed.");
 
     pciFunction.VulkanThread.join();
     pciFunction.VulkanThread.~thread();
+
+    ConLogLn(u8"VBoxSoftGpuEmulator::softGpuDestruct: Vulkan Thread Exited.");
 
     if(pciFunction.VulkanManager->Device()->VkDeviceWaitIdle)
     {
@@ -448,7 +618,16 @@ static DECLCALLBACK(int) softGpuDestruct(PPDMDEVINS deviceInstance) noexcept
     pciFunction.VulkanManager.~ReferenceCountingPointer();
     pciFunction.Window.~ReferenceCountingPointer();
 
-    pciFunction.processor.~Processor();
+    pciFunction.ProcessorThread.join();
+    pciFunction.ProcessorThread.~thread();
+
+    ConLogLn(u8"VBoxSoftGpuEmulator::softGpuDestruct: Processor Thread Exited.");
+
+    pciFunction.Processor.~Processor();
+
+    pciFunction.ProcessorShouldExit.~atomic();
+
+    CloseHandle(pciFunction.ProcessorSyncEvent);
 
     (void) VirtualFree(pciFunction.Framebuffer, static_cast<uSys>(256 * 1024 * 1024), MEM_RELEASE);
 

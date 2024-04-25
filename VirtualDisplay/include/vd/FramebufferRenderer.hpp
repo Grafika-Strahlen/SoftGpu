@@ -40,7 +40,7 @@ public:
 
     ~FramebufferRenderer() noexcept;
 
-    [[nodiscard]] VkCommandBuffer Record(const u32 frameIndex) const noexcept;
+    [[nodiscard]] VkCommandBuffer Record(const u32 frameIndex, bool active = false) const noexcept;
 
     void RebuildBuffers(const DynArray<VkImage>& frames, const void* const rawFramebuffer) noexcept;
 public:

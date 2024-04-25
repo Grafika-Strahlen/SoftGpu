@@ -1,3 +1,6 @@
+/**
+ * @file
+ */
 #pragma once
 
 #include <Objects.hpp>
@@ -22,6 +25,20 @@ public:
 
     u16 PciReadExpansionRom(const u64 address, const u16 size, u32* const data) noexcept;
 private:
+    /**
+     * @brief Initializes the ROM.
+     *
+     * This method is responsible for initializing the ROM. It first clears the expansion ROM memory.
+     * Then it retrieves the path to the ROM file from the environment variable "SOFT_GPU_ROM".
+     * If the path is valid, it opens the ROM file and loads its contents into the expansion ROM memory.
+     * If any step fails, an error message is printed to the console.
+     *
+     * @note This method is called in the constructor of the RomController class.
+     *
+     * @exception This method does not throw exceptions but handles them internally.
+     *
+     * @see RomController::RomController(Processor* const processor) noexcept
+     */
     void InitRom() noexcept
     {
         ::std::memset(m_ExpansionRom, 0, sizeof(m_ExpansionRom));

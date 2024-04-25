@@ -21,6 +21,8 @@ public:
 public:
     void ShowWindow() noexcept;
     void HideWindow() noexcept;
+
+    void SetSize(const u32 width, const u32 height) noexcept;
 public:
     Window(const WNDCLASSEXW& windowClass) noexcept
         : m_WindowClass(windowClass)
@@ -57,6 +59,8 @@ private:
     RECT m_FramebufferSize;
     WindowResizeCallback_f m_ResizeCallback;
     ::std::atomic<bool> m_ShouldClose;
+    u32 m_VerticalSlop;
+    u32 m_HorizontalSlop;
 };
 
 }

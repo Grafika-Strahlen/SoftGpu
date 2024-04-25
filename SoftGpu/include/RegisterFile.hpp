@@ -744,7 +744,7 @@ private:
     // This contains information about how each register is being used.
     // If the value is zero the register is unused.
     // If the value is one it is locked for writes.
-    // Otherwise the register is locked for reads. Any number of simultaneous reads are allowed.
+    // Otherwise, the register is locked for reads. Any number of simultaneous reads are allowed.
     // u8 m_RegisterContestationMap[REGISTER_FILE_REGISTER_COUNT];
 
     // Storage is just because hardware style ports don't work with the transient nature of functions.

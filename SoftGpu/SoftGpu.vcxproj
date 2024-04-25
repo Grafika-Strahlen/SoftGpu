@@ -238,11 +238,13 @@
     <ClCompile Include="src\LoadStore.cpp" />
     <ClCompile Include="src\Main.cpp" />
     <ClCompile Include="src\MMU.cpp" />
+    <ClCompile Include="src\PCIController.cpp" />
     <ClCompile Include="src\PCIControlRegisters.cpp" />
     <ClCompile Include="src\RomController.cpp" />
     <ClCompile Include="src\WarpScheduler.cpp" />
     <ClCompile Include="src\StreamingMultiprocessor.cpp" />
     <ClInclude Include="include\CommandListDispatcher.hpp" />
+    <ClInclude Include="include\DisplayManager.hpp" />
     <ClInclude Include="include\GraphicsPipeline.hpp" />
     <ClInclude Include="include\InputAssembler.hpp" />
     <ClInclude Include="include\MMU.hpp" />

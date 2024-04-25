@@ -44,7 +44,7 @@ DECLCALLBACK(VBOXSTRICTRC) SoftGpuConfigRead(const PPDMDEVINS deviceInstance, co
         return VERR_OUT_OF_SELECTOR_BOUNDS;
     }
 
-    const u32 readValue = pciFunction.processor.PciConfigRead(static_cast<u16>(uAddress), static_cast<u8>(cb));
+    const u32 readValue = pciFunction.Processor.PciConfigRead(static_cast<u16>(uAddress), static_cast<u8>(cb));
     // u32 readValue;
     //
     // switch(cb)
@@ -66,17 +66,17 @@ DECLCALLBACK(VBOXSTRICTRC) SoftGpuConfigRead(const PPDMDEVINS deviceInstance, co
     LogConfigName<true>(uAddress, cb, readValue, pciFunction.FunctionId);
     ConLogLn("SoftGpu/[{}]: Config Read Address={XP0}, cb={}: {XP0}", pciFunction.FunctionId, uAddress, cb, readValue);
 
-    static uSys readIndex = 0;
-    ++readIndex;
-    if(readIndex == 329)
-    {
-        ConLogLn("SoftGpu Pre blocking");
-        // Sleep(5000);
-        // for(uSys i = 0; i < 1024; ++i)
-        // {
-        //     ConLogLn("SoftGpu blocking");
-        // }
-    }
+    // static uSys readIndex = 0;
+    // ++readIndex;
+    // if(readIndex == 329)
+    // {
+    //     // ConLogLn("SoftGpu Pre blocking");
+    //     // Sleep(5000);
+    //     // for(uSys i = 0; i < 1024; ++i)
+    //     // {
+    //     //     ConLogLn("SoftGpu blocking");
+    //     // }
+    // }
 
     *pu32Value = readValue;
 
@@ -100,7 +100,7 @@ DECLCALLBACK(VBOXSTRICTRC) SoftGpuConfigWrite(const PPDMDEVINS deviceInstance, c
         return VERR_OUT_OF_SELECTOR_BOUNDS;
     }
 
-    pciFunction.processor.PciConfigWrite(static_cast<u16>(uAddress), static_cast<u8>(cb), u32Value);
+    pciFunction.Processor.PciConfigWrite(static_cast<u16>(uAddress), static_cast<u8>(cb), u32Value);
 
     // PDMPciDevSetDWord(pPciDev, uAddress, u32Value);
     //
@@ -122,7 +122,7 @@ DECLCALLBACK(VBOXSTRICTRC) SoftGpuConfigWrite(const PPDMDEVINS deviceInstance, c
     //         break;
     // }
 
-    const u32 readValue = pciFunction.processor.PciConfigRead(static_cast<u16>(uAddress), static_cast<u8>(cb));
+    const u32 readValue = pciFunction.Processor.PciConfigRead(static_cast<u16>(uAddress), static_cast<u8>(cb));
     LogConfigName<false>(uAddress, cb, u32Value, pciFunction.FunctionId);
     ConLogLn("SoftGpu/[{}]: Config Write Address={XP0}, cb={}: {XP0} [{XP0}]", pciFunction.FunctionId, uAddress, cb, u32Value, readValue);
 
@@ -151,7 +151,7 @@ static void SoftGpuUpdateMappings(const PPDMDEVINS deviceInstance, PPDMPCIDEV pP
     SoftGpuDevice* device = PDMDEVINS_2_DATA(deviceInstance, SoftGpuDevice*);
     SoftGpuDeviceFunction& pciFunction = device->pciFunction;
 
-    const u16 commandRegister = pciFunction.processor.CommandRegister();
+    const u16 commandRegister = pciFunction.Processor.CommandRegister();
     ConLogLn(u8"SoftGpuUpdateMappings: dev {}/{} ({}): u16Cmd=0x{XP0}", pPciDev->uDevFn >> VBOX_PCI_DEVFN_DEV_SHIFT, pPciDev->uDevFn & VBOX_PCI_DEVFN_FUN_MASK, pPciDev->pszNameR3, commandRegister);
 
     for(uSys currentBar = 0; currentBar < VBOX_PCI_NUM_REGIONS; ++currentBar)
@@ -172,10 +172,10 @@ static void SoftGpuUpdateMappings(const PPDMDEVINS deviceInstance, PPDMPCIDEV pP
             }
             else if(commandRegister & VBOX_PCI_COMMAND_MEMORY || true)
             {
-                u64 memBase = pciFunction.processor.PciConfigRead(barOffset, 4);
+                u64 memBase = pciFunction.Processor.PciConfigRead(barOffset, 4);
                 if(is64Bit)
                 {
-                    memBase |= static_cast<u64>(pciFunction.processor.PciConfigRead(barOffset + 4, 4)) << 32;
+                    memBase |= static_cast<u64>(pciFunction.Processor.PciConfigRead(barOffset + 4, 4)) << 32;
                 }
 
                 if(currentBar == PCI_ROM_SLOT)
