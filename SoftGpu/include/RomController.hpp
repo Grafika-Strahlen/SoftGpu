@@ -8,6 +8,14 @@
 #include <ConPrinter.hpp>
 #include <PCIController.hpp>
 
+#ifndef SOFT_GPU_USE_EMBEDDED_ROM
+  #define SOFT_GPU_USE_EMBEDDED_ROM (1)
+#endif
+
+#if SOFT_GPU_USE_EMBEDDED_ROM
+#include "SoftGpuRom.h"
+#endif
+
 class Processor;
 
 class RomController final
@@ -41,8 +49,11 @@ private:
      */
     void InitRom() noexcept
     {
-        ::std::memset(m_ExpansionRom, 0, sizeof(m_ExpansionRom));
+        (void) ::std::memset(m_ExpansionRom, 0, sizeof(m_ExpansionRom));
 
+#if SOFT_GPU_USE_EMBEDDED_ROM
+        (void) ::std::memcpy(m_ExpansionRom, SoftGpuGopDxe_rom, sizeof(SoftGpuGopDxe_rom));
+#else
         size_t trueLibraryPathLength = 0;
         if(const errno_t err = getenv_s(&trueLibraryPathLength, nullptr, 0, EXPANSION_ROM_ENV_VAR))
         {
@@ -115,6 +126,7 @@ private:
         ConPrinter::PrintLn(u8"Rom First Bytes: 0x{XP0}{XP0}{XP0}{XP0}", m_ExpansionRom[0], m_ExpansionRom[1], m_ExpansionRom[2], m_ExpansionRom[3]);
         ConPrinter::PrintLn(u8"Last Non Zero Byte (Should Be A7): 0x{XP0}", m_ExpansionRom[0x6DEB]);
         ConPrinter::PrintLn(u8"Last Byte: 0x{XP0}", m_ExpansionRom[0x6DFF]);
+#endif
     }
 private:
     Processor* m_Processor;

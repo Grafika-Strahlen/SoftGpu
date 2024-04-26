@@ -252,6 +252,7 @@
     <ClInclude Include="include\PCIControlRegisters.hpp" />
     <ClInclude Include="include\RegisterAllocator.hpp" />
     <ClInclude Include="include\RomController.hpp" />
+    <ClInclude Include="include\SoftGpuRom.h" />
     <ClInclude Include="include\WarpScheduler.hpp" />
   </ItemGroup>
   <ItemGroup>

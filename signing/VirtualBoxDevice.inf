@@ -1,4 +1,3 @@
-
 [Version]
 Signature="$WINDOWS NT$"
 DriverVer=08/28/2000,1.0.0.1
@@ -10,18 +9,19 @@ PnpLockdown=1
 
 [DestinationDirs]
 DefaultDestDir = 13
+Drivers_Dir = 13
 
 [SourceDisksNames]
 1 = %DiskName%,,,""
 
 [SourceDisksFiles]
-VirtualBoxDevice.dll  = 1,,
+VirtualBoxDevice.dll = 1,,
 WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll=1 ; make sure the number matches with SourceDisksNames
 
 [Manufacturer]
-%ManufacturerName%=Standard,NTamd64
+%ManufacturerName%=GrafikaStrahlen,NTamd64.10.0...16299
 
-[Standard.NTamd64]
+[GrafikaStrahlen.NTamd64.10.0...16299]
 %VirtualBoxDevice.DeviceDesc%=VirtualBoxDevice, Root\VirtualBoxDevice ; TODO: edit hw-id
 
 [VirtualBoxDevice.NT]
@@ -38,7 +38,7 @@ DisplayName    = %VirtualBoxDevice.SVCDESC%
 ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
 StartType      = 3               ; SERVICE_DEMAND_START
 ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
-ServiceBinary  = %12%\VirtualBoxDevice.dll
+ServiceBinary  = %13%\VirtualBoxDevice.dll
 
 [Strings]
 SPSVCINST_ASSOCSERVICE= 0x00000002
