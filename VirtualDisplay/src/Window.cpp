@@ -51,7 +51,7 @@ ReferenceCountingPointer<Window> Window::CreateWindow() noexcept
         0,
         WindowClassName,
         L"SoftGpu Display",
-        WS_OVERLAPPEDWINDOW,
+        WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME ^ WS_MAXIMIZEBOX,
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
         nullptr,
         nullptr,

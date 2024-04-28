@@ -27,6 +27,9 @@
     <ClCompile Include="src\DllMain.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\ConLogger.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\ConLogger.hpp">

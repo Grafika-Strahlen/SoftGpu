@@ -36,7 +36,7 @@ VkCommandBuffer FramebufferRenderer::Record(const u32 frameIndex, bool active) c
     }
     else
     {
-        (void) ::std::memcpy(static_cast<u8*>(m_StagingBufferAllocationInfo.pMappedData) + writeIndex, 0, frameSize);
+        (void) ::std::memset(static_cast<u8*>(m_StagingBufferAllocationInfo.pMappedData) + writeIndex, 0, frameSize);
     }
 
     VkCommandBuffer commandBuffer = m_CommandBuffers[frameIndex];

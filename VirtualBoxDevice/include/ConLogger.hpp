@@ -3,10 +3,15 @@
 #define RT_STRICT
 #include <VBox/log.h>
 #include <ConPrinter.hpp>
+#include <mutex>
+
+extern ::std::mutex LogMutex;
 
 template<typename Char>
 inline u32 ConLog(const Char* str) noexcept
 {
+    ::std::lock_guard lock(LogMutex);
+
     const u32 ret = ConPrinter::Print(str);
     LogRel((str));
     return ret;
@@ -15,6 +20,8 @@ inline u32 ConLog(const Char* str) noexcept
 template<typename Char>
 inline u32 ConLogLn(const Char* str) noexcept
 {
+    ::std::lock_guard lock(LogMutex);
+
     const u32 ret = ConPrinter::PrintLn(str);
     LogRel(("%s\n", str));
     return ret;
@@ -26,6 +33,9 @@ inline u32 ConLog(const Char* fmt, CurrArg currArg, const Args&... args) noexcep
     StringFormatContext<Char> ctx;
     const u32 ret = InternalFormat0(ctx, fmt, currArg, args...);
     const DynStringT<Char> str = ctx.Builder.ToString();
+
+    ::std::lock_guard lock(LogMutex);
+
     ConPrinter::Print(str);
     LogRel((StringCast<char>(str).String()));
     return ret;
@@ -37,6 +47,9 @@ inline u32 ConLogLn(const Char* fmt, CurrArg currArg, const Args&... args) noexc
     StringFormatContext<Char> ctx;
     const u32 ret = InternalFormat0(ctx, fmt, currArg, args...);
     const DynStringT<Char> str = ctx.Builder.Append('\n').ToString();
+
+    ::std::lock_guard lock(LogMutex);
+
     ConPrinter::Print(str);
     LogRel((StringCast<char>(str).String()));
     return ret;

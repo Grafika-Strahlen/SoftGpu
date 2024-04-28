@@ -1,5 +1,3 @@
-#pragma once
-
 #ifndef SOFTGPUGOPDXE_ROM_H
 #define SOFTGPUGOPDXE_ROM_H
 
@@ -1799,4 +1797,3 @@ static const unsigned char SoftGpuGopDxe_rom[] = {
 };
 
 #endif /* SOFTGPUGOPDXE_ROM_H */
-

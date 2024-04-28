@@ -247,6 +247,7 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\ConLogger.cpp" />
     <ClCompile Include="src\DllMain.c" />
     <ClCompile Include="src\PciConfigHandler.cpp" />
     <ClCompile Include="src\VBDevice.cpp" />

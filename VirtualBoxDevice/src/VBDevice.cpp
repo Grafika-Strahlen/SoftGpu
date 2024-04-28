@@ -27,6 +27,7 @@
 #include "vd/FramebufferRenderer.hpp"
 #include "vd/VulkanCommandPools.hpp"
 #include "vd/Window.hpp"
+#include <chrono>
 
 DebugManager GlobalDebug;
 
@@ -250,10 +251,13 @@ void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
     }
 
     ::std::atomic_bool displayActive = true;
+    constexpr u32 refreshRateNumerator = 60;
+    constexpr u32 refreshRateDenominator = 1;
+    ::std::atomic_uint32_t refreshRateMeanMs = refreshRateNumerator / refreshRateDenominator;
 
     pciFunction->Processor.GetDisplayManager().UpdateCallback() = [pciFunction, &displayActive](const u32 displayIndex, const DisplayData& displayData)
     {
-        ConLogLn("Updating display {} size: {}x{}", displayIndex, displayData.Width, displayData.Height);
+        ConLogLn("Updating display {} size: {}x{} Enabled: ", displayIndex, displayData.Width, displayData.Height, displayData.Enable);
         
         if(displayIndex != 0)
         {
@@ -302,12 +306,12 @@ void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
 
     pciFunction->Window->ResizeCallback() = [pciFunction](const u32 width, const u32 height)
     {
+        ConLogLn("Updating display size: {}x{}", width, height);
+
         if(pciFunction->Window->ShouldClose())
         {
             return;
         }
-
-        ConLogLn("Updating display size: {}x{}", width, height);
 
         // pciFunction->Processor.GetDisplayManager().GetDisplay(0).Width = width;
         // pciFunction->Processor.GetDisplayManager().GetDisplay(0).Height = height;
@@ -320,14 +324,32 @@ void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
         pciFunction->FramebufferRenderer->RebuildBuffers(pciFunction->VulkanManager->SwapchainImages(), pciFunction->Framebuffer);
     };
 
-    while(!pciFunction->Window->ShouldClose())
+    __try
     {
-        pciFunction->Window->PollMessages();
+        using namespace std::chrono;
 
-        const u32 frameIndex = pciFunction->VulkanManager->WaitForFrame();
-        VkCommandBuffer commandBuffer = pciFunction->FramebufferRenderer->Record(frameIndex, displayActive);
-        pciFunction->VulkanManager->SubmitCommandBuffers(1, &commandBuffer);
-        pciFunction->VulkanManager->Present(frameIndex);
+        milliseconds lastRender = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
+
+        while(!pciFunction->Window->ShouldClose())
+        {
+            pciFunction->Window->PollMessages();
+
+            const u32 frameIndex = pciFunction->VulkanManager->WaitForFrame();
+            VkCommandBuffer commandBuffer = pciFunction->FramebufferRenderer->Record(frameIndex, displayActive);
+            pciFunction->VulkanManager->SubmitCommandBuffers(1, &commandBuffer);
+            pciFunction->VulkanManager->Present(frameIndex);
+
+            const milliseconds frameTime = duration_cast<milliseconds>(system_clock::now().time_since_epoch()) - lastRender;
+
+            lastRender = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
+
+            const milliseconds waitTime = milliseconds(refreshRateMeanMs.load()) - frameTime;
+            ::std::this_thread::sleep_for(waitTime);
+        }
+    }
+    __except(EXCEPTION_EXECUTE_HANDLER)
+    {
+        ConLogLn(u8"Encountered exception in Vulkan render loop.");
     }
 
     ConLogLn(u8"Vulkan Thread Exiting");

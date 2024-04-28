@@ -9,7 +9,7 @@
 #include <PCIController.hpp>
 
 #ifndef SOFT_GPU_USE_EMBEDDED_ROM
-  #define SOFT_GPU_USE_EMBEDDED_ROM (1)
+  #define SOFT_GPU_USE_EMBEDDED_ROM (0)
 #endif
 
 #if SOFT_GPU_USE_EMBEDDED_ROM
