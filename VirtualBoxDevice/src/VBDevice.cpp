@@ -83,6 +83,18 @@ static DECLCALLBACK(VBOXSTRICTRC) softGpuMMIORead(PPDMDEVINS pDevIns, void* pvUs
 
     // pFun->Processor.PciMemRead(off, static_cast<u16>(cb), reinterpret_cast<u32*>(pv));
 
+    // Just fast-track BAR1 reads.
+    if constexpr(true)
+    {
+        if(pFun->Processor.GetPciController().GetBARFromAddress(off) == 1)
+        {
+            const u64 address = pFun->Processor.GetPciController().GetBAROffset(off, 1) + pFun->Processor.RamBaseAddress();
+            (void) ::std::memcpy(pv, reinterpret_cast<void*>(address), cb);
+
+            return VINF_SUCCESS;
+        }
+    }
+
     u16 response;
     pFun->Processor.PciMemReadSet(off, static_cast<u16>(cb), reinterpret_cast<u32*>(pv), &response);
 
@@ -117,6 +129,18 @@ static DECLCALLBACK(VBOXSTRICTRC) softGpuMMIOWrite(PPDMDEVINS pDevIns, void* pvU
     // }
 
     // pFun->Processor.PciMemWrite(off, static_cast<u16>(cb), reinterpret_cast<const u32*>(pv));
+
+    // Just fast-track BAR1 writes.
+    if constexpr(true)
+    {
+        if(pFun->Processor.GetPciController().GetBARFromAddress(off) == 1)
+        {
+            const u64 address = pFun->Processor.GetPciController().GetBAROffset(off, 1) + pFun->Processor.RamBaseAddress();
+            (void) ::std::memcpy(reinterpret_cast<void*>(address), pv, cb);
+
+            return VINF_SUCCESS;
+        }
+    }
 
     pFun->Processor.PciMemWriteSet(off, static_cast<u16>(cb), reinterpret_cast<const u32*>(pv));
 
@@ -215,9 +239,9 @@ void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
     edid.BlueY = 0;
     edid.WhiteX = 0;
     edid.WhiteY = 0;
-    edid.EstablishedTimings[0] = 0b00100001;
-    edid.EstablishedTimings[1] = 0b00001000;
-    edid.EstablishedTimings[2] = 0b00000000;
+    edid.EstablishedTimings[0] = 0b11111111;
+    edid.EstablishedTimings[1] = 0b11111111;
+    edid.EstablishedTimings[2] = 0b00000001;
     edid.StandardTimingIdentification[0x0] = 0;
     edid.StandardTimingIdentification[0x1] = 0;
     edid.StandardTimingIdentification[0x2] = 0;
@@ -251,13 +275,19 @@ void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
     }
 
     ::std::atomic_bool displayActive = true;
-    constexpr u32 refreshRateNumerator = 60;
-    constexpr u32 refreshRateDenominator = 1;
-    ::std::atomic_uint32_t refreshRateMeanMs = refreshRateNumerator / refreshRateDenominator;
+    u32 refreshRateNumerator = 60;
+    u32 refreshRateDenominator = 1;
+    ::std::atomic_uint32_t refreshRateMeanMs = 1000 / (refreshRateNumerator / refreshRateDenominator);
 
-    pciFunction->Processor.GetDisplayManager().UpdateCallback() = [pciFunction, &displayActive](const u32 displayIndex, const DisplayData& displayData)
+    pciFunction->Processor.GetDisplayManager().UpdateCallback() = [pciFunction, &displayActive, &refreshRateNumerator, &refreshRateDenominator, &refreshRateMeanMs](const u32 displayIndex, const DisplayData& displayData)
     {
-        ConLogLn("Updating display {} size: {}x{} Enabled: ", displayIndex, displayData.Width, displayData.Height, displayData.Enable);
+        u16 rrDenominator = displayData.RefreshRateDenominator;
+        if(rrDenominator == 0)
+        {
+            rrDenominator = 1;
+        }
+
+        ConLogLn("Updating display {} size: {}x{} Enabled: {}, Refresh Rate: {}", displayIndex, displayData.Width, displayData.Height, displayData.Enable, static_cast<float>(displayData.RefreshRateNumerator) / static_cast<float>(rrDenominator));
         
         if(displayIndex != 0)
         {
@@ -269,6 +299,17 @@ void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
         if(pciFunction->Window->FramebufferWidth() != displayData.Width || pciFunction->Window->FramebufferHeight() != displayData.Height)
         {
             pciFunction->Window->SetSize(displayData.Width, displayData.Height);
+        }
+
+        if(refreshRateNumerator != displayData.RefreshRateNumerator || refreshRateDenominator != rrDenominator)
+        {
+            if(displayData.RefreshRateNumerator != 0 && displayData.RefreshRateDenominator != 0)
+            {
+                refreshRateNumerator = displayData.RefreshRateNumerator;
+                refreshRateDenominator = rrDenominator;
+
+                refreshRateMeanMs = 1000 / (refreshRateNumerator / refreshRateDenominator);
+            }
         }
     };
 

@@ -75,8 +75,8 @@ ReferenceCountingPointer<Window> Window::CreateWindow() noexcept
     newRect.left = 0;
     newRect.top = 0;
     // newRect.right = 1032;
-    newRect.right = 800;
-    newRect.bottom = 600;
+    newRect.right = 1024;
+    newRect.bottom = 768;
     //
     // (void) AdjustWindowRect(&newRect, WS_OVERLAPPEDWINDOW, FALSE);
     (void) SetWindowPos(hWnd, nullptr, newRect.left, newRect.top, newRect.right, newRect.bottom, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOCOPYBITS | SWP_NOOWNERZORDER);

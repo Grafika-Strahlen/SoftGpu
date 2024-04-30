@@ -12,6 +12,8 @@ struct DisplayData final
     u32 Width : 16;
     u32 Height : 16;
     u32 BitsPerPixel;
+    u32 RefreshRateNumerator : 16;
+    u32 RefreshRateDenominator : 16;
     u32 Enable : 1;
     u32 Pad : 31;
 
@@ -19,6 +21,8 @@ struct DisplayData final
         : Width(0)
         , Height(0)
         , BitsPerPixel(0)
+        , RefreshRateNumerator(0)
+        , RefreshRateDenominator(0)
         , Enable(0)
         , Pad(0)
     { }
@@ -101,6 +105,8 @@ public:
     static constexpr u32 REGISTER_HEIGHT = 1;
     static constexpr u32 REGISTER_BPP = 2;
     static constexpr u32 REGISTER_ENABLE = 3;
+    static constexpr u32 REGISTER_REFRESH_RATE_NUMERATOR = 4;
+    static constexpr u32 REGISTER_REFRESH_RATE_DENOMINATOR = 5;
 public:
     void Reset() noexcept
     {
@@ -165,6 +171,12 @@ public:
                     case REGISTER_ENABLE:
                         *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].Enable;
                         break;
+                    case REGISTER_REFRESH_RATE_NUMERATOR:
+                        *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].RefreshRateNumerator;
+                        break;
+                    case REGISTER_REFRESH_RATE_DENOMINATOR:
+                        *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].RefreshRateDenominator;
+                        break;
                     default:
                         break;
                 }
@@ -184,6 +196,12 @@ public:
                         break;
                     case REGISTER_ENABLE:
                         m_Displays[m_CurrentPacket.DisplayIndex].Enable = *m_CurrentPacket.Value;
+                        break;
+                    case REGISTER_REFRESH_RATE_NUMERATOR:
+                        m_Displays[m_CurrentPacket.DisplayIndex].RefreshRateNumerator = *m_CurrentPacket.Value;
+                        break;
+                    case REGISTER_REFRESH_RATE_DENOMINATOR:
+                        m_Displays[m_CurrentPacket.DisplayIndex].RefreshRateDenominator = *m_CurrentPacket.Value;
                         break;
                     default:
                         break;

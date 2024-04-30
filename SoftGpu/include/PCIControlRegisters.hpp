@@ -75,11 +75,13 @@ public:
     static inline constexpr u16 REGISTER_VGA_HEIGHT         = 0x1018;
     
     static inline constexpr u16 BASE_REGISTER_DI            = 0x2000;
-    static inline constexpr u16 SIZE_REGISTER_DI            = 4 * 0x4;
+    static inline constexpr u16 SIZE_REGISTER_DI            = 6 * 0x4;
     static inline constexpr u16 OFFSET_REGISTER_DI_WIDTH    = 0x00;
     static inline constexpr u16 OFFSET_REGISTER_DI_HEIGHT   = 0x04;
     static inline constexpr u16 OFFSET_REGISTER_DI_BPP      = 0x08;
     static inline constexpr u16 OFFSET_REGISTER_DI_ENABLE   = 0x0C;
+    static inline constexpr u16 OFFSET_REGISTER_DI_REFRESH_RATE_NUMERATOR   = 0x10;
+    static inline constexpr u16 OFFSET_REGISTER_DI_REFRESH_RATE_DENOMINATOR = 0x14;
 
     static inline constexpr u16 BASE_REGISTER_EDID = 0x3000;
     static inline constexpr u16 SIZE_EDID = 128;
