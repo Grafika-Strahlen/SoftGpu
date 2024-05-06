@@ -120,6 +120,7 @@ void PciControlRegisters::ExecuteRead() noexcept
         case REGISTER_VRAM_SIZE_HIGH: m_Bus.ReadResponse = 0; break;
         case REGISTER_VGA_WIDTH: m_Bus.ReadResponse = m_VgaWidth; break;
         case REGISTER_VGA_HEIGHT: m_Bus.ReadResponse = m_VgaHeight; break;
+        case REGISTER_INTERRUPT_TYPE: m_Bus.ReadResponse = m_CurrentInterruptMessage; break;
         case REGISTER_DEBUG_PRINT: m_Bus.ReadResponse = 0; break;
         default: break;
     }
@@ -173,6 +174,7 @@ void PciControlRegisters::ExecuteWrite() noexcept
         case REGISTER_CONTROL: m_ControlRegister.Value = m_Bus.WriteValue & CONTROL_REGISTER_VALID_MASK; break;
         case REGISTER_VGA_WIDTH: m_VgaWidth = static_cast<u16>(m_Bus.WriteValue); break;
         case REGISTER_VGA_HEIGHT: m_VgaHeight = static_cast<u16>(m_Bus.WriteValue); break;
+        case REGISTER_INTERRUPT_TYPE: m_CurrentInterruptMessage = 0; break; // The CPU can only clear the interrupt.
         default: break;
     }
 

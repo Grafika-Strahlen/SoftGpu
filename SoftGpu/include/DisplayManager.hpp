@@ -1,11 +1,9 @@
 #pragma once
 
-#include <ConPrinter.hpp>
 #include <NumTypes.hpp>
 #include <Objects.hpp>
-#include <new>
-#include <cstring>
 #include <functional>
+#include <atomic>
 
 struct DisplayData final
 {
@@ -15,7 +13,8 @@ struct DisplayData final
     u32 RefreshRateNumerator : 16;
     u32 RefreshRateDenominator : 16;
     u32 Enable : 1;
-    u32 Pad : 31;
+    u32 VSyncEnable : 1;
+    u32 Pad : 30;
 
     DisplayData() noexcept
         : Width(0)
@@ -24,6 +23,7 @@ struct DisplayData final
         , RefreshRateNumerator(0)
         , RefreshRateDenominator(0)
         , Enable(0)
+        , VSyncEnable(0)
         , Pad(0)
     { }
 };
@@ -93,9 +93,11 @@ struct DisplayDataPacket final
 
 using DisplayUpdateCallback_f = ::std::function<void(u32 displayIndex, const DisplayData& displayData)>;
 
+class Processor;
+
 class DisplayManager final
 {
-    DEFAULT_CONSTRUCT_PU(DisplayManager);
+    //DEFAULT_CONSTRUCT_PU(DisplayManager);
     DEFAULT_DESTRUCT(DisplayManager);
     DELETE_CM(DisplayManager);
 public:
@@ -107,7 +109,17 @@ public:
     static constexpr u32 REGISTER_ENABLE = 3;
     static constexpr u32 REGISTER_REFRESH_RATE_NUMERATOR = 4;
     static constexpr u32 REGISTER_REFRESH_RATE_DENOMINATOR = 5;
+    static constexpr u32 REGISTER_VSYNC_ENABLE = 6;
 public:
+    DisplayManager(Processor* const processor) noexcept
+        : m_Processor(processor)
+        , m_DisplaysEdid{ }
+        , m_Displays{ }
+        , m_CurrentPacket()
+        , m_UpdateCallback(nullptr)
+        , m_VSyncEvent(0)
+    { }
+
     void Reset() noexcept
     {
         for(uSys i = 0; i < MaxDisplayCount; ++i)
@@ -118,98 +130,110 @@ public:
 
     void Clock(bool risingEdge = true) noexcept
     {
-        if(!m_CurrentPacket.BusActive)
-        {
-            return;
-        }
-
         if(!risingEdge)
         {
-            return;
+            HandleVSyncEvent();
         }
-
-        if(m_CurrentPacket.PacketType == 0)
+        else
         {
-            if(m_CurrentPacket.Read)
-            {
-                // Not required in hardware, we just represent the bus with a pointer.
-                if(m_CurrentPacket.EdidBusAssign)
-                {
-                    *m_CurrentPacket.EdidBusAssign = m_DisplaysEdid[m_CurrentPacket.DisplayIndex];
-                }
-            }
-            else
-            {
-                // Not required in hardware, we just represent the bus with a pointer.
-                if(m_CurrentPacket.EdidBusAssign)
-                {
-                    m_DisplaysEdid[m_CurrentPacket.DisplayIndex] = *m_CurrentPacket.EdidBusAssign;
-                }
-            }
-        }
-        else if(m_CurrentPacket.PacketType == 1)
-        {
-            // Not required in hardware, we just represent the bus with a pointer.
-            if(!m_CurrentPacket.Value)
+            if(!m_CurrentPacket.BusActive)
             {
                 return;
             }
 
-            if(m_CurrentPacket.Read)
+            if(m_CurrentPacket.PacketType == 0)
             {
-                switch(m_CurrentPacket.Register)
+                if(m_CurrentPacket.Read)
                 {
-                    case REGISTER_WIDTH:
-                        *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].Width;
-                        break;
-                    case REGISTER_HEIGHT:
-                        *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].Height;
-                        break;
-                    case REGISTER_BPP:
-                        *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].BitsPerPixel;
-                        break;
-                    case REGISTER_ENABLE:
-                        *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].Enable;
-                        break;
-                    case REGISTER_REFRESH_RATE_NUMERATOR:
-                        *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].RefreshRateNumerator;
-                        break;
-                    case REGISTER_REFRESH_RATE_DENOMINATOR:
-                        *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].RefreshRateDenominator;
-                        break;
-                    default:
-                        break;
+                    // Not required in hardware, we just represent the bus with a pointer.
+                    if(m_CurrentPacket.EdidBusAssign)
+                    {
+                        *m_CurrentPacket.EdidBusAssign = m_DisplaysEdid[m_CurrentPacket.DisplayIndex];
+                    }
+                }
+                else
+                {
+                    // Not required in hardware, we just represent the bus with a pointer.
+                    if(m_CurrentPacket.EdidBusAssign)
+                    {
+                        m_DisplaysEdid[m_CurrentPacket.DisplayIndex] = *m_CurrentPacket.EdidBusAssign;
+                    }
                 }
             }
-            else
+            else if(m_CurrentPacket.PacketType == 1)
             {
-                switch(m_CurrentPacket.Register)
+                // Not required in hardware, we just represent the bus with a pointer.
+                if(!m_CurrentPacket.Value)
                 {
-                    case REGISTER_WIDTH:
-                        m_Displays[m_CurrentPacket.DisplayIndex].Width = *m_CurrentPacket.Value;
-                        break;
-                    case REGISTER_HEIGHT:
-                        m_Displays[m_CurrentPacket.DisplayIndex].Height = *m_CurrentPacket.Value;
-                        break;
-                    case REGISTER_BPP:
-                        m_Displays[m_CurrentPacket.DisplayIndex].BitsPerPixel = *m_CurrentPacket.Value;
-                        break;
-                    case REGISTER_ENABLE:
-                        m_Displays[m_CurrentPacket.DisplayIndex].Enable = *m_CurrentPacket.Value;
-                        break;
-                    case REGISTER_REFRESH_RATE_NUMERATOR:
-                        m_Displays[m_CurrentPacket.DisplayIndex].RefreshRateNumerator = *m_CurrentPacket.Value;
-                        break;
-                    case REGISTER_REFRESH_RATE_DENOMINATOR:
-                        m_Displays[m_CurrentPacket.DisplayIndex].RefreshRateDenominator = *m_CurrentPacket.Value;
-                        break;
-                    default:
-                        break;
+                    return;
                 }
 
-                if(m_UpdateCallback)
+                if(m_CurrentPacket.Read)
                 {
-                    m_UpdateCallback(m_CurrentPacket.DisplayIndex, m_Displays[m_CurrentPacket.DisplayIndex]);
+                    switch(m_CurrentPacket.Register)
+                    {
+                        case REGISTER_WIDTH:
+                            *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].Width;
+                            break;
+                        case REGISTER_HEIGHT:
+                            *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].Height;
+                            break;
+                        case REGISTER_BPP:
+                            *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].BitsPerPixel;
+                            break;
+                        case REGISTER_ENABLE:
+                            *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].Enable;
+                            break;
+                        case REGISTER_REFRESH_RATE_NUMERATOR:
+                            *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].RefreshRateNumerator;
+                            break;
+                        case REGISTER_REFRESH_RATE_DENOMINATOR:
+                            *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].RefreshRateDenominator;
+                            break;
+                        case REGISTER_VSYNC_ENABLE:
+                            *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].VSyncEnable;
+                            break;
+                        default:
+                            break;
+                    }
+                }
+                else
+                {
+                    switch(m_CurrentPacket.Register)
+                    {
+                        case REGISTER_WIDTH:
+                            m_Displays[m_CurrentPacket.DisplayIndex].Width = *m_CurrentPacket.Value;
+                            break;
+                        case REGISTER_HEIGHT:
+                            m_Displays[m_CurrentPacket.DisplayIndex].Height = *m_CurrentPacket.Value;
+                            break;
+                        case REGISTER_BPP:
+                            m_Displays[m_CurrentPacket.DisplayIndex].BitsPerPixel = *m_CurrentPacket.Value;
+                            break;
+                        case REGISTER_ENABLE:
+                            m_Displays[m_CurrentPacket.DisplayIndex].Enable = *m_CurrentPacket.Value;
+                            break;
+                        case REGISTER_REFRESH_RATE_NUMERATOR:
+                            m_Displays[m_CurrentPacket.DisplayIndex].RefreshRateNumerator = *m_CurrentPacket.Value;
+                            break;
+                        case REGISTER_REFRESH_RATE_DENOMINATOR:
+                            m_Displays[m_CurrentPacket.DisplayIndex].RefreshRateDenominator = *m_CurrentPacket.Value;
+                            break;
+                        case REGISTER_VSYNC_ENABLE:
+                            m_Displays[m_CurrentPacket.DisplayIndex].VSyncEnable = *m_CurrentPacket.Value;
+                            if(m_Displays[m_CurrentPacket.DisplayIndex].VSyncEnable)
+                            {
+                                SetDisplayVSyncEvent(m_CurrentPacket.DisplayIndex);
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+
+                    if(m_UpdateCallback)
+                    {
+                        m_UpdateCallback(m_CurrentPacket.DisplayIndex, m_Displays[m_CurrentPacket.DisplayIndex]);
+                    }
                 }
             }
         }
@@ -234,10 +258,19 @@ public:
     // Intended only for VBDevice.
     [[nodiscard]] EdidBlock& GetDisplayEdid(const uSys index) noexcept { return m_DisplaysEdid[index]; }
     [[nodiscard]] DisplayUpdateCallback_f& UpdateCallback() noexcept { return m_UpdateCallback; }
+
+    void SetDisplayVSyncEvent(const u32 display) noexcept
+    {
+        m_VSyncEvent = display + 1;
+    }
 private:
+    void HandleVSyncEvent() noexcept;
+private:
+    Processor* m_Processor;
     EdidBlock m_DisplaysEdid[MaxDisplayCount];
     DisplayData m_Displays[MaxDisplayCount];
     DisplayDataPacket m_CurrentPacket;
 
     DisplayUpdateCallback_f m_UpdateCallback;
+    ::std::atomic_uint32_t m_VSyncEvent;
 };

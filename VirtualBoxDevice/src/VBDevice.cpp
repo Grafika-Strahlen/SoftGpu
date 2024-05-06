@@ -287,7 +287,7 @@ void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
             rrDenominator = 1;
         }
 
-        ConLogLn("Updating display {} size: {}x{} Enabled: {}, Refresh Rate: {}", displayIndex, displayData.Width, displayData.Height, displayData.Enable, static_cast<float>(displayData.RefreshRateNumerator) / static_cast<float>(rrDenominator));
+        ConLogLn("Updating display {} size: {}x{} Enabled: {}, Refresh Rate: {}, VSync: {}", displayIndex, displayData.Width, displayData.Height, displayData.Enable, static_cast<float>(displayData.RefreshRateNumerator) / static_cast<float>(rrDenominator), displayData.VSyncEnable);
         
         if(displayIndex != 0)
         {
@@ -369,10 +369,10 @@ void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
     {
         using namespace std::chrono;
 
-        milliseconds lastRender = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
-
         while(!pciFunction->Window->ShouldClose())
         {
+            const milliseconds frameBegin = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
+
             pciFunction->Window->PollMessages();
 
             const u32 frameIndex = pciFunction->VulkanManager->WaitForFrame();
@@ -380,9 +380,9 @@ void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
             pciFunction->VulkanManager->SubmitCommandBuffers(1, &commandBuffer);
             pciFunction->VulkanManager->Present(frameIndex);
 
-            const milliseconds frameTime = duration_cast<milliseconds>(system_clock::now().time_since_epoch()) - lastRender;
+            pciFunction->Processor.GetDisplayManager().SetDisplayVSyncEvent(0);
 
-            lastRender = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
+            const milliseconds frameTime = duration_cast<milliseconds>(system_clock::now().time_since_epoch()) - frameBegin;
 
             const milliseconds waitTime = milliseconds(refreshRateMeanMs.load()) - frameTime;
             ::std::this_thread::sleep_for(waitTime);
@@ -511,6 +511,16 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
     pciFunction->ProcessorSyncEvent = CreateEventA(nullptr, FALSE, FALSE, "SoftGpuSync");
     pciFunction->Processor.GetPciController().SetSimulationSyncEvent(pciFunction->ProcessorSyncEvent);
 
+    pciFunction->Processor.GetPciController().InterruptCallback() = [deviceInstance](const u16 messageData)
+    {
+        // We don't use this, VirtualBox manages it for us.
+        (void) messageData;
+        // Level is set to 1 (HIGH), IRQ is the offset into our MSI structure, not the actual IRQ.
+        //   We only have 1 interrupt type, so our IRQ is 0. VirtualBox (specifically the ICH9 bridge, or regular PCI bridge)
+        // will handle the sending the exact message data.
+        PDMDevHlpPCISetIrqEx(deviceInstance, deviceInstance->apPciDevs[0], 0, 1);
+    };
+
     ::new(&pciFunction->ProcessorThread) ::std::thread(ProcessorThreadFunc, pciFunction);
     (void) SetThreadDescription(pciFunction->ProcessorThread.native_handle(), L"SoftGpuProcessorThread");
 
@@ -567,6 +577,18 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
     AssertLogRelRCReturn(rc, rc);
 
     ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Registered PCI device.");
+
+    /* MSI Capability Header register. */
+    PDMMSIREG MsiReg;
+    RT_ZERO(MsiReg);
+    MsiReg.cMsiVectors = 1;
+    MsiReg.iMsiCapOffset = PciConfigOffsets::MessageSignalledInterruptsCapabilityOffsetBegin;
+    MsiReg.iMsiNextOffset = 0;
+    MsiReg.fMsi64bit = true;
+    MsiReg.fMsiNoMasking = true;
+
+    rc = PDMDevHlpPCIRegisterMsiEx(deviceInstance, pciDevice, &MsiReg);
+    AssertLogRelRCReturn(rc, rc);
 
     ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Registering config interceptor.");
     // Register a interceptor for PCI config reads and writes.

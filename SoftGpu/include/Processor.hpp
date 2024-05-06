@@ -21,7 +21,7 @@ public:
         , m_PciRegisters(this)
         , m_CacheController(this)
         , m_SMs { { this, 0 }, { this, 1 }, { this, 2 }, { this, 3 } }
-        , m_DisplayManager()
+        , m_DisplayManager(this)
         , m_ClockCycle(0)
         , m_RamBaseAddress(0)
     { }
@@ -265,6 +265,12 @@ public:
 
     u16 CommandRegister() noexcept { return m_PciController.CommandRegister(); }
     bool ExpansionRomEnable() noexcept { return m_PciController.ExpansionRomEnable(); }
+
+    void SetInterrupt(const u32 messageType) noexcept
+    {
+        m_PciController.SetInterrupt(messageType);
+        m_PciRegisters.SetInterrupt(messageType);
+    }
 
     [[nodiscard]] u32 Read(const u32 coreIndex, const u64 address, const bool cacheDisable = false, const bool external = false) noexcept
     {

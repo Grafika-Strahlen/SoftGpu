@@ -3,6 +3,7 @@
 #include <Objects.hpp>
 #include <NumTypes.hpp>
 #include <ConPrinter.hpp>
+#include <functional>
 
 #include <cstring>
 #include <mutex>
@@ -235,6 +236,47 @@ struct PowerManagementCapabilityStructure final
 
 static_assert(sizeof(PowerManagementCapabilityStructure) == 8, "PCI Power Management Capability Structure is not 8 bytes.");
 
+union MessageSignalledInterruptControlRegister final
+{
+    u16 Packed;
+    struct
+    {
+        u16 Enabled : 1;
+        u16 MultipleMessageCapable : 3;
+        u16 MultipleMessageEnabled : 3;
+        u16 Capable64Bit : 1;
+        u16 PerVectorMasking : 1;
+        u16 Reserved : 7;
+    };
+};
+
+static_assert(sizeof(MessageSignalledInterruptControlRegister) == 2, "Message Signalled Interrupt Control Register is not 2 bytes.");
+
+struct MessageSignalledInterruptCapabilityStructure final
+{
+    PciCapabilityHeader Header;
+    MessageSignalledInterruptControlRegister MessageControl;
+    u32 MessageAddress;
+    u32 MessageUpperAddress;
+    u16 MessageData;
+    u16 Reserved;
+    u32 MaskBits;
+    u32 PendingBits;
+};
+
+static_assert(sizeof(MessageSignalledInterruptCapabilityStructure) == 0x18, "Message Signalled Interrupt Capability Structure is not 24 bytes.");
+
+struct MessageSignalledInterruptXCapabilityStructure final
+{
+    PciCapabilityHeader Header;
+    u16 MessageControl;
+    u32 MessageUpperAddress;
+    u32 TableOffset : 29;
+    u32 BIR : 3;
+};
+
+static_assert(sizeof(MessageSignalledInterruptXCapabilityStructure) == 0x0C, "Message Signalled Interrupt X Capability Structure is not 12 bytes.");
+
 struct AdvancedErrorReportingCapabilityStructure final
 {
     PciExtendedCapabilityHeader Header;
@@ -279,15 +321,22 @@ public:
     static inline constexpr u16 DEVICE_CONTROL_REGISTER_MASK_BITS      = 0x7CFF;
     static inline constexpr u16 DEVICE_CONTROL_REGISTER_READ_ONLY_BITS = 0x0000;
 
-    static inline constexpr u16 LINK_CONTROL_REGISTER_MASK_BITS = 0x01C3;
+    static inline constexpr u16 LINK_CONTROL_REGISTER_MASK_BITS      = 0x01C3;
     static inline constexpr u16 LINK_CONTROL_REGISTER_READ_ONLY_BITS = 0x0000;
 
     static inline constexpr u16 PM_CONTROL_REGISTER_MASK_BITS      = 0x0003;
     static inline constexpr u16 PM_CONTROL_REGISTER_READ_ONLY_BITS = 0x0000;
 
+    static inline constexpr u16 MESSAGE_CONTROL_REGISTER_MASK_BITS      = 0x0071;
+    static inline constexpr u16 MESSAGE_CONTROL_REGISTER_READ_ONLY_BITS = 0x0080;
+    static inline constexpr u32 MESSAGE_ADDRESS_REGISTER_MASK_BITS      = 0xFFFFFFFC;
+    static inline constexpr u32 MESSAGE_ADDRESS_REGISTER_READ_ONLY_BITS = 0x00000000;
+
     static inline constexpr u16 COMMAND_REGISTER_MEMORY_SPACE_BIT = 0x0002;
 
     static inline constexpr u8 EXPANSION_ROM_BAR_ID = 0x7F;
+
+    using InterruptCallback_f = ::std::function<void(const u16 messageData)>;
 public:
     PciController(Processor* const processor) noexcept
         : m_Processor(processor)
@@ -310,6 +359,7 @@ public:
         InitConfigHeader();
         InitPcieCapabilityStructure();
         InitPowerManagementCapabilityStructure();
+        InitMessageSignalledInterruptCapabilityStructure();
         InitAdvancedErrorReportingCapabilityStructure();
     }
 
@@ -318,6 +368,10 @@ public:
         if(risingEdge)
         {
             ExecuteMemRead();
+        }
+        else
+        {
+            ExecuteInterrupt();
             ExecuteMemWrite();
         }
     }
@@ -428,6 +482,41 @@ public:
                 }
                 m_PowerManagementCapability.PowerManagementControlStatusRegister.Packed = (value & PM_CONTROL_REGISTER_MASK_BITS) | PM_CONTROL_REGISTER_READ_ONLY_BITS;
                 break;
+            case offsetof(PciController, m_MessageSignalledInterruptCapability) + offsetof(MessageSignalledInterruptCapabilityStructure, MessageControl):
+                if(size != 2)
+                {
+                    break;
+                }
+                m_MessageSignalledInterruptCapability.MessageControl.Packed = (value & MESSAGE_CONTROL_REGISTER_MASK_BITS) | MESSAGE_CONTROL_REGISTER_READ_ONLY_BITS;
+                break;
+            case offsetof(PciController, m_MessageSignalledInterruptCapability) + offsetof(MessageSignalledInterruptCapabilityStructure, MessageAddress):
+                if(size != 4)
+                {
+                    break;
+                }
+                m_MessageSignalledInterruptCapability.MessageAddress = (value & MESSAGE_ADDRESS_REGISTER_MASK_BITS) | MESSAGE_ADDRESS_REGISTER_READ_ONLY_BITS;
+                break;
+            case offsetof(PciController, m_MessageSignalledInterruptCapability) + offsetof(MessageSignalledInterruptCapabilityStructure, MessageUpperAddress):
+                if(size != 4)
+                {
+                    break;
+                }
+                m_MessageSignalledInterruptCapability.MessageUpperAddress = value;
+                break;
+            case offsetof(PciController, m_MessageSignalledInterruptCapability) + offsetof(MessageSignalledInterruptCapabilityStructure, MessageData):
+                if(size != 2)
+                {
+                    break;
+                }
+                m_MessageSignalledInterruptCapability.MessageData = static_cast<u16>(value);
+                break;
+            case offsetof(PciController, m_MessageSignalledInterruptCapability) + offsetof(MessageSignalledInterruptCapabilityStructure, MaskBits):
+                if(size != 4)
+                {
+                    break;
+                }
+                m_MessageSignalledInterruptCapability.MaskBits = value;
+                break;
             default: break;
         }
     }
@@ -449,6 +538,13 @@ public:
         m_WriteRequestAddress = address;
         m_WriteRequestSize = size;
         m_WriteRequestData = data;
+    }
+
+    void SetInterrupt(const u32 messageType) noexcept
+    {
+        (void) messageType;
+
+        m_InterruptSet = true;
     }
 
     [[nodiscard]] u8 GetBARFromAddress(const u64 address) noexcept
@@ -505,6 +601,9 @@ public:
     {
         m_SimulationSyncEvent = event;
     }
+
+    // Intended only for VBDevice.
+    [[nodiscard]] InterruptCallback_f& InterruptCallback() noexcept { return m_InterruptCallback; }
 private:
     /**
      * @brief Initializes the PCI configuration header.
@@ -658,7 +757,7 @@ private:
     {
         // PCI Power Management Capability ID
         m_PowerManagementCapability.Header.CapabilityId = 0x01;
-        m_PowerManagementCapability.Header.NextCapabilityPointer = 0x00;
+        m_PowerManagementCapability.Header.NextCapabilityPointer = offsetof(PciController, m_MessageSignalledInterruptCapability);;
         // The defined default version in PCI Bus Power Management Interface Specification Rev 1.2
         m_PowerManagementCapability.PowerManagementCapabilities.Version = 0b011;
         // PCI Express Base 1.1 requires this to be hardwired to 0
@@ -678,6 +777,21 @@ private:
         m_PowerManagementCapability.PowerManagementControlStatusRegister.DataSelect = 0x0;
         m_PowerManagementCapability.PowerManagementControlStatusRegister.DataScale = 0b00;
         m_PowerManagementCapability.PowerManagementControlStatusRegister.PmeStatus = 0b0;
+    }
+
+    void InitMessageSignalledInterruptCapabilityStructure() noexcept
+    {
+        // The defined ID for the MSI Capability in the PCI Local Bus 3.0 spec.
+        m_MessageSignalledInterruptCapability.Header.CapabilityId = 0x0005;
+        m_MessageSignalledInterruptCapability.Header.NextCapabilityPointer = 0x0;
+
+        m_MessageSignalledInterruptCapability.MessageControl.Packed = MESSAGE_CONTROL_REGISTER_READ_ONLY_BITS;
+        m_MessageSignalledInterruptCapability.MessageAddress = 0x00000000;
+        m_MessageSignalledInterruptCapability.MessageUpperAddress = 0x00000000;
+        m_MessageSignalledInterruptCapability.MessageData = 0x0000;
+        m_MessageSignalledInterruptCapability.Reserved = 0x0000;
+        m_MessageSignalledInterruptCapability.MaskBits = 0x00000000;
+        m_MessageSignalledInterruptCapability.PendingBits = 0x00000000;
     }
 
     void InitAdvancedErrorReportingCapabilityStructure() noexcept
@@ -701,13 +815,36 @@ private:
 
     void ExecuteMemRead() noexcept;
     void ExecuteMemWrite() noexcept;
+
+    void ExecuteInterrupt() noexcept
+    {
+        if(!m_MessageSignalledInterruptCapability.MessageControl.Enabled)
+        {
+            return;
+        }
+
+        if(!m_InterruptSet)
+        {
+            return;
+        }
+
+        m_InterruptSet = false;
+
+        if(!m_InterruptCallback)
+        {
+            return;
+        }
+
+        m_InterruptCallback(m_MessageSignalledInterruptCapability.MessageData);
+    }
 private:
     Processor* m_Processor;
 
     PciConfigHeader m_ConfigHeader;
     PcieCapabilityStructure m_PcieCapability;
     PowerManagementCapabilityStructure m_PowerManagementCapability;
-    u8 m_PciConfig[256 - sizeof(m_ConfigHeader) - sizeof(m_PcieCapability) - sizeof(m_PowerManagementCapability)];
+    MessageSignalledInterruptCapabilityStructure m_MessageSignalledInterruptCapability;
+    u8 m_PciConfig[256 - sizeof(m_ConfigHeader) - sizeof(m_PcieCapability) - sizeof(m_PowerManagementCapability) - sizeof(m_MessageSignalledInterruptCapability)];
     AdvancedErrorReportingCapabilityStructure m_AdvancedErrorReportingCapability;
     u8 m_PciExtendedConfig[4096 - 256 - sizeof(m_AdvancedErrorReportingCapability)];
 
@@ -721,10 +858,12 @@ private:
     u64 m_WriteRequestAddress;
     u16 m_WriteRequestSize;
     const u32* m_WriteRequestData;
+    InterruptCallback_f m_InterruptCallback;
 
     u32 m_ReadState : 1;
     u32 m_WriteState : 1;
-    u32 m_Pad0 : 30;
+    u32 m_InterruptSet : 1;
+    u32 m_Pad0 : 29; // NOLINT(clang-diagnostic-unused-private-field)
 
     ::std::mutex m_ReadDataMutex;
     ::std::mutex m_WriteDataMutex;
@@ -751,6 +890,9 @@ public:
 
     static inline constexpr u16 PowerManagementCapabilityOffsetBegin = offsetof(PciController, m_PowerManagementCapability);
     static inline constexpr u16 PowerManagementCapabilityOffsetEnd = PowerManagementCapabilityOffsetBegin + sizeof(PciController::m_PowerManagementCapability);
+
+    static inline constexpr u16 MessageSignalledInterruptsCapabilityOffsetBegin = offsetof(PciController, m_MessageSignalledInterruptCapability);
+    static inline constexpr u16 MessageSignalledInterruptsCapabilityOffsetEnd = MessageSignalledInterruptsCapabilityOffsetBegin + sizeof(PciController::m_MessageSignalledInterruptCapability);
 
     static inline constexpr u16 PciConfigOffsetBegin = offsetof(PciController, m_PciConfig);
     static inline constexpr u16 PciConfigOffsetEnd = PciConfigOffsetBegin + sizeof(PciController::m_PciConfig);
@@ -817,6 +959,23 @@ inline u32 PciController::ConfigRead(const u16 address, const u8 size) noexcept
 
         u32 ret;
         (void) ::std::memcpy(&ret, reinterpret_cast<u8*>(&m_PowerManagementCapability) + (address - PciConfigOffsets::PowerManagementCapabilityOffsetBegin), size);
+        return ret;
+    }
+
+    if(address < PciConfigOffsets::MessageSignalledInterruptsCapabilityOffsetEnd)
+    {
+        if(address > (PciConfigOffsets::MessageSignalledInterruptsCapabilityOffsetEnd - 4) && size == 4)
+        {
+            return 0;
+        }
+
+        if(address > (PciConfigOffsets::MessageSignalledInterruptsCapabilityOffsetEnd - 2) && size == 2)
+        {
+            return 0;
+        }
+
+        u32 ret;
+        (void) ::std::memcpy(&ret, reinterpret_cast<u8*>(&m_MessageSignalledInterruptCapability) + (address - PciConfigOffsets::MessageSignalledInterruptsCapabilityOffsetBegin), size);
         return ret;
     }
 
