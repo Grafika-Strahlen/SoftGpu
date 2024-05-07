@@ -757,7 +757,7 @@ private:
     {
         // PCI Power Management Capability ID
         m_PowerManagementCapability.Header.CapabilityId = 0x01;
-        m_PowerManagementCapability.Header.NextCapabilityPointer = offsetof(PciController, m_MessageSignalledInterruptCapability);;
+        m_PowerManagementCapability.Header.NextCapabilityPointer = offsetof(PciController, m_MessageSignalledInterruptCapability);
         // The defined default version in PCI Bus Power Management Interface Specification Rev 1.2
         m_PowerManagementCapability.PowerManagementCapabilities.Version = 0b011;
         // PCI Express Base 1.1 requires this to be hardwired to 0
