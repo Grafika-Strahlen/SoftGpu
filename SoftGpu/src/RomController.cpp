@@ -3,7 +3,9 @@
 
 u16 RomController::PciReadExpansionRom(const u64 address, const u16 size, u32* const data) noexcept
 {
-    if constexpr(false)
+    static constexpr bool AdditionalDebugLogging = false;
+
+    if constexpr(AdditionalDebugLogging)
     {
         ConPrinter::PrintLn(u8"Attempting to read from ROM. Address = 0x{XP0}, Size = {}", address, size);
     }
@@ -21,17 +23,17 @@ u16 RomController::PciReadExpansionRom(const u64 address, const u16 size, u32* c
         trueSize = sizeof(m_ExpansionRom) - address;
     }
 
-    ::std::memcpy(data, reinterpret_cast<u8*>(m_ExpansionRom) + address, trueSize);
+    (void) ::std::memcpy(data, reinterpret_cast<u8*>(m_ExpansionRom) + address, trueSize);
 
-    if constexpr(false)
+    if constexpr(AdditionalDebugLogging)
     {
         ConPrinter::PrintLn(u8"First Byte of Block: 0x{XP0}", m_ExpansionRom[address]);
     }
 
-    if constexpr(false)
+    if constexpr(AdditionalDebugLogging)
     {
         ConPrinter::PrintLn(u8"Read {} bytes from ROM.", trueSize);
     }
+
     return static_cast<u16>(trueSize);
 }
-

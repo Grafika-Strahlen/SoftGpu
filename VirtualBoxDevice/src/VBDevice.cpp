@@ -33,6 +33,8 @@ DebugManager GlobalDebug;
 
 #undef PDMPCIDEV_ASSERT_VALID
 
+//   The original version of this has a typo, making it dependent on a
+// variable name, rather than a macro parameter name.
 #define PDMPCIDEV_ASSERT_VALID(a_pDevIns, a_pPciDev) \
     do { \
         uintptr_t const offPciDevInTable = reinterpret_cast<uintptr_t>(a_pPciDev) - reinterpret_cast<uintptr_t>(a_pDevIns->apPciDevs[0]); \
@@ -84,6 +86,7 @@ static DECLCALLBACK(VBOXSTRICTRC) softGpuMMIORead(PPDMDEVINS pDevIns, void* pvUs
     // pFun->Processor.PciMemRead(off, static_cast<u16>(cb), reinterpret_cast<u32*>(pv));
 
     // Just fast-track BAR1 reads.
+    // This won't work once we have virtual memory running...
     if constexpr(true)
     {
         if(pFun->Processor.GetPciController().GetBARFromAddress(off) == 1)
@@ -131,6 +134,7 @@ static DECLCALLBACK(VBOXSTRICTRC) softGpuMMIOWrite(PPDMDEVINS pDevIns, void* pvU
     // pFun->Processor.PciMemWrite(off, static_cast<u16>(cb), reinterpret_cast<const u32*>(pv));
 
     // Just fast-track BAR1 writes.
+    // This won't work once we have virtual memory running...
     if constexpr(true)
     {
         if(pFun->Processor.GetPciController().GetBARFromAddress(off) == 1)
@@ -177,6 +181,15 @@ static DECLCALLBACK(int) softGpuMMIOMapUnmap(PPDMDEVINS pDevIns, PPDMPCIDEV pPci
     return VINF_SUCCESS;
 }
 
+/**
+ * Fills the framebuffer with a debug gradient.
+ *
+ *   This makes it easier to identify problems with framebuffer size,
+ * and whether a portion of the screen has been written to.
+ *
+ * @param window The window we will be filling, used for sizing information.
+ * @param framebuffer The framebuffer we will be filling.
+ */
 static void FillFramebufferGradient(const Ref<::tau::vd::Window>& window, u8* const framebuffer) noexcept
 {
     for(uSys y = 0; y < window->FramebufferHeight(); ++y)
@@ -353,10 +366,6 @@ void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
         {
             return;
         }
-
-        // pciFunction->Processor.GetDisplayManager().GetDisplay(0).Width = width;
-        // pciFunction->Processor.GetDisplayManager().GetDisplay(0).Height = height;
-        // pciFunction->Processor.GetDisplayManager().GetDisplay(0).BitsPerPixel = 24;
 
         pciFunction->VulkanManager->Device()->VkQueueWaitIdle(pciFunction->VulkanManager->Device()->GraphicsQueue());
         // FillFramebufferGradient(pciFunction->Window, reinterpret_cast<u8*>(pciFunction->Framebuffer));

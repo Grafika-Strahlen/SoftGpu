@@ -5,7 +5,6 @@
 #include "PciConfigHandler.hpp"
 #include <VBox/vmm/pdmdev.h>
 #include <VBox/err.h>
-#include <VBox/msi.h>
 
 #include <VBox/com/VirtualBox.h>
 
@@ -139,7 +138,7 @@ DECLCALLBACK(VBOXSTRICTRC) SoftGpuConfigWrite(const PPDMDEVINS deviceInstance, c
 static u16 ComputeRegionOffset(const uSys iRegion) noexcept
 {
     return iRegion == VBOX_PCI_ROM_SLOT
-        ? VBOX_PCI_ROM_ADDRESS : (VBOX_PCI_BASE_ADDRESS_0 + iRegion * 4);
+        ? VBOX_PCI_ROM_ADDRESS : (VBOX_PCI_BASE_ADDRESS_0 + static_cast<u16>(iRegion * 4));
 }
 
 #define INVALID_PCI_ADDRESS     UINT32_MAX
@@ -263,7 +262,7 @@ static void SoftGpuUpdateMappings(const PPDMDEVINS deviceInstance, PPDMPCIDEV pP
                         pPciDev->pszNameR3, currentBar, pciIoRegion->addr, newAddress, regionSize, regionSize);
                 }
 
-                int rc = SoftGpuR3UnmapRegion(pPciDev, currentBar);
+                int rc = SoftGpuR3UnmapRegion(pPciDev, static_cast<u32>(currentBar));
                 AssertLogRelRC(rc);
                 pciIoRegion->addr = newAddress;
                 if(newAddress != INVALID_PCI_ADDRESS)
@@ -275,7 +274,7 @@ static void SoftGpuUpdateMappings(const PPDMDEVINS deviceInstance, PPDMPCIDEV pP
                     }
                     else
                     {
-                        rc = pciIoRegion->pfnMap(pPciDev->Int.s.pDevInsR3, pPciDev, currentBar, newAddress, regionSize, static_cast<PCIADDRESSSPACE>(pciIoRegion->type));
+                        rc = pciIoRegion->pfnMap(pPciDev->Int.s.pDevInsR3, pPciDev, static_cast<u32>(currentBar), newAddress, regionSize, static_cast<PCIADDRESSSPACE>(pciIoRegion->type));
                         AssertLogRelRC(rc);
                     }
 
@@ -717,6 +716,64 @@ static void LogConfigName(const uint32_t address, const unsigned size, const u32
             if(size == 1)
             {
                 ConLogLn(u8"PCIe Power Management Capability Data.");
+            }
+            break;
+        case PciConfigOffsets::MessageSignalledInterruptsCapabilityOffsetBegin + offsetof(MessageSignalledInterruptCapabilityStructure, Header) + offsetof(PciCapabilityHeader, CapabilityId):
+            if(size == 1)
+            {
+                ConLogLn(u8"PCI Message Signalled Interrupt Capability ID.");
+            }
+            else if(size == 2)
+            {
+                ConLogLn(u8"PCI Message Signalled Interrupt Capability ID & Next Capability Pointer.");
+            }
+            break;
+        case PciConfigOffsets::MessageSignalledInterruptsCapabilityOffsetBegin + offsetof(MessageSignalledInterruptCapabilityStructure, Header) + offsetof(PciCapabilityHeader, NextCapabilityPointer):
+            if(size == 1)
+            {
+                ConLogLn(u8"PCI Message Signalled Interrupt Capability Next Capability Pointer.");
+            }
+            break;
+        case PciConfigOffsets::MessageSignalledInterruptsCapabilityOffsetBegin + offsetof(MessageSignalledInterruptCapabilityStructure, MessageControl):
+            if(size == 2)
+            {
+                ConLogLn(u8"PCI Message Signalled Interrupt Capability Message Control.");
+            }
+            break;
+        case PciConfigOffsets::MessageSignalledInterruptsCapabilityOffsetBegin + offsetof(MessageSignalledInterruptCapabilityStructure, MessageAddress):
+            if(size == 4)
+            {
+                ConLogLn(u8"PCI Message Signalled Interrupt Capability Message Address.");
+            }
+            break;
+        case PciConfigOffsets::MessageSignalledInterruptsCapabilityOffsetBegin + offsetof(MessageSignalledInterruptCapabilityStructure, MessageUpperAddress):
+            if(size == 4)
+            {
+                ConLogLn(u8"PCI Message Signalled Interrupt Capability Message Upper Address.");
+            }
+            break;
+        case PciConfigOffsets::MessageSignalledInterruptsCapabilityOffsetBegin + offsetof(MessageSignalledInterruptCapabilityStructure, MessageData):
+            if(size == 2 || size == 4)
+            {
+                ConLogLn(u8"PCI Message Signalled Interrupt Capability Message Data.");
+            }
+            break;
+        case PciConfigOffsets::MessageSignalledInterruptsCapabilityOffsetBegin + offsetof(MessageSignalledInterruptCapabilityStructure, Reserved):
+            if(size == 2)
+            {
+                ConLogLn(u8"PCI Message Signalled Interrupt Capability Reserved.");
+            }
+            break;
+        case PciConfigOffsets::MessageSignalledInterruptsCapabilityOffsetBegin + offsetof(MessageSignalledInterruptCapabilityStructure, MaskBits):
+            if(size == 4)
+            {
+                ConLogLn(u8"PCI Message Signalled Interrupt Capability Mask Bits.");
+            }
+            break;
+        case PciConfigOffsets::MessageSignalledInterruptsCapabilityOffsetBegin + offsetof(MessageSignalledInterruptCapabilityStructure, PendingBits):
+            if(size == 4)
+            {
+                ConLogLn(u8"PCI Message Signalled Interrupt Capability Pending Bits.");
             }
             break;
         case PciConfigOffsets::AdvancedErrorReportingCapabilityOffsetBegin + offsetof(AdvancedErrorReportingCapabilityStructure, Header) + offsetof(PciExtendedCapabilityHeader, CapabilityId):
