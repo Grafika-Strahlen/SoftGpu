@@ -42,7 +42,7 @@ Supports Advanced Error Reporting Extended Capability. The structure is at 0x100
 | ------- | ----------------------------- | ------ | ------------------------------------------------------------ |
 | 0x0000  | Magic                         | R      | A 32 bit magic indicator of the GPU. This should always return 0x4879666C. |
 | 0x0004  | Revision                      | R      | A 32 bit value indicating the revision of the chip.          |
-| 0x0008  | Emulation                     | R      | A 32 bit value indicating if this is emulated. 0 = Microprocessor, 1 = FPGA, 2 = Emulation |
+| 0x0008  | Emulation                     | R      | A 32 bit value indicating if this is emulated. 0 = Microprocessor, 1 = FPGA, 2 = Simulation |
 | 0x000C  | Reset                         | R      | Performing a 32 bit read on this register will cause the GPU to reset to the default state. |
 | 0x0010  | Control                       | RW     | Bit 0: Interrupt Enable.<br />Bits 1 - 31: Reserved.         |
 | 0x0014  | VRAM Size Low                 | R      | The low 32 bits of the VRAM Size.                            |

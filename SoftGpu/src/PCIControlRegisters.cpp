@@ -113,7 +113,7 @@ void PciControlRegisters::ExecuteRead() noexcept
     {
         case REGISTER_MAGIC: m_Bus.ReadResponse = REGISTER_MAGIC_VALUE; break;
         case REGISTER_REVISION: m_Bus.ReadResponse = REGISTER_REVISION_VALUE; break;
-        case REGISTER_EMULATION: m_Bus.ReadResponse = 2; break;
+        case REGISTER_EMULATION: m_Bus.ReadResponse = VALUE_REGISTER_EMULATION_SIMULATION; break;
         case REGISTER_RESET: m_Processor->Reset(); break;
         case REGISTER_CONTROL: m_Bus.ReadResponse = m_ControlRegister.Value; break;
         case REGISTER_VRAM_SIZE_LOW: m_Bus.ReadResponse = 256 * 1024 * 1024; break;

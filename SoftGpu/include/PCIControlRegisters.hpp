@@ -60,8 +60,11 @@ class PciControlRegisters final
     DEFAULT_DESTRUCT(PciControlRegisters);
     DELETE_CM(PciControlRegisters);
 public:
-    static inline constexpr u32 REGISTER_MAGIC_VALUE = 0x4879666C;
+    static inline constexpr u32 REGISTER_MAGIC_VALUE    = 0x4879666C;
     static inline constexpr u32 REGISTER_REVISION_VALUE = 0x00000001;
+    static inline constexpr u32 VALUE_REGISTER_EMULATION_MICROPROCESSOR = 0;
+    static inline constexpr u32 VALUE_REGISTER_EMULATION_FPGA           = 1;
+    static inline constexpr u32 VALUE_REGISTER_EMULATION_SIMULATION     = 2;
 
     static inline constexpr u16 REGISTER_MAGIC                  = 0x0000;
     static inline constexpr u16 REGISTER_REVISION               = 0x0004;

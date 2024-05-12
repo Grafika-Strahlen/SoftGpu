@@ -473,25 +473,25 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
         firstBAR = static_cast<RTGCPHYS>(configBAR0MB) * _1M;
     }
 
-    uint16_t frameBufferBAR1GB;
-    rc = pdmDeviceApi->pfnCFGMQueryU16Def(cfg, "FrameBufferBAR1GB", &frameBufferBAR1GB, 2);  /* Default to 2 GiB. */
+    uint16_t frameBufferBAR1MiB;
+    rc = pdmDeviceApi->pfnCFGMQueryU16Def(cfg, "FrameBufferBAR1MiB", &frameBufferBAR1MiB, 1024);  /* Default to 1 GiB. */
 
     if(RT_FAILURE(rc))
     {
-        return PDMDEV_SET_ERROR(deviceInstance, rc, N_("Configuration error: Failed to query integer value \"FrameBufferBAR1GB\""));
+        return PDMDEV_SET_ERROR(deviceInstance, rc, N_("Configuration error: Failed to query integer value \"FrameBufferBAR1MiB\""));
     }
 
-    if(frameBufferBAR1GB < 2 && frameBufferBAR1GB > 0)
+    if(frameBufferBAR1MiB < 256 && frameBufferBAR1MiB > 0)
     {
-        return PDMDEV_SET_ERROR(deviceInstance, rc, N_("Configuration error: Invalid \"FrameBufferBAR1GB\" value (must be at least 2)"));
+        return PDMDEV_SET_ERROR(deviceInstance, rc, N_("Configuration error: Invalid \"FrameBufferBAR1MiB\" value (must be at least 256 MiB)"));
     }
 
-    if(frameBufferBAR1GB > 16)
+    if(frameBufferBAR1MiB > 16 * 1024)
     {
-        return PDMDEV_SET_ERROR(deviceInstance, rc, N_("Configuration error: Invalid \"FrameBufferBAR1GB\" value (must be 16 or less)"));
+        return PDMDEV_SET_ERROR(deviceInstance, rc, N_("Configuration error: Invalid \"FrameBufferBAR1MiB\" value (must be 16 GiB or less)"));
     }
 
-    RTGCPHYS secondBAR = 256ull * _1M;
+    RTGCPHYS secondBAR = frameBufferBAR1MiB * _1M;
     // if(frameBufferBAR1GB)
     // {
     //     secondBAR = static_cast<RTGCPHYS>(frameBufferBAR1GB) * _1G64;
@@ -513,8 +513,8 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
 
     pciFunction->Processor.GetPciControlRegisters().RegisterDebugCallbacks(nullptr, PciControlWriteCallback);
     
-    pciFunction->Framebuffer = VirtualAlloc(nullptr, static_cast<uSys>(256 * 1024 * 1024), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-    pciFunction->Processor.TestSetRamBaseAddress(reinterpret_cast<uPtr>(pciFunction->Framebuffer));
+    pciFunction->Framebuffer = VirtualAlloc(nullptr, static_cast<uSys>(secondBAR), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    pciFunction->Processor.TestSetRamBaseAddress(reinterpret_cast<uPtr>(pciFunction->Framebuffer), secondBAR);
 
     ::new(&pciFunction->ProcessorShouldExit) ::std::atomic_bool(false);
     pciFunction->ProcessorSyncEvent = CreateEventA(nullptr, FALSE, FALSE, "SoftGpuSync");

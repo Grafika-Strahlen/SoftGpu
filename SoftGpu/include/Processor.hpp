@@ -116,9 +116,10 @@ public:
         m_SMs[sm].TestLoadRegister(dispatchPort, replicationIndex, registerIndex, registerValue);
     }
 
-    void TestSetRamBaseAddress(const u64 ramBaseAddress) noexcept
+    void TestSetRamBaseAddress(const u64 ramBaseAddress, const u64 size) noexcept
     {
         m_RamBaseAddress = ramBaseAddress;
+        m_RamSize = size;
     }
 
     [[nodiscard]] u32 MemReadPhy(const u64 address, const bool external = false) noexcept
@@ -329,6 +330,7 @@ public:
     }
 
     [[nodiscard]] u64 RamBaseAddress() const noexcept { return m_RamBaseAddress; }
+    [[nodiscard]] u64 RamSize() const noexcept { return m_RamSize; }
 
     [[nodiscard]] PciControlRegistersBus& PciControlRegistersBus() noexcept { return m_PciRegisters.Bus(); }
 
@@ -345,4 +347,5 @@ private:
     DisplayManager m_DisplayManager;
     u32 m_ClockCycle;
     u64 m_RamBaseAddress;
+    u64 m_RamSize;
 };
