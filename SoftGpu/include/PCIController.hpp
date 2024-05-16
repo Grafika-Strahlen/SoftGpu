@@ -299,7 +299,7 @@ public:
     static inline constexpr u16 COMMAND_REGISTER_MASK_BITS = 0x0446;
 
     static inline constexpr u32 BAR0_MASK_BITS = 0xFF000000;
-    static inline constexpr u32 BAR1_MASK_BITS = 0x80000000;
+    static inline constexpr u32 BAR1_MASK_BITS = 0xE0000000;
     static inline constexpr u32 BAR2_MASK_BITS = 0xFFFFFFFF;
     static inline constexpr u32 BAR3_MASK_BITS = 0x00000000;
     static inline constexpr u32 BAR4_MASK_BITS = 0x00000000;
