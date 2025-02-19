@@ -28,6 +28,7 @@ public:
         : m_Window(window)
         , m_Device(device)
         , m_RawFramebuffer(nullptr)
+        , m_FramebufferOffset(0)
         , m_ThreadIndex(threadIndex)
         , m_Frames(frames)
         , m_FrameLayout(frameLayout)
@@ -42,7 +43,10 @@ public:
 
     [[nodiscard]] VkCommandBuffer Record(const u32 frameIndex, bool active = false) const noexcept;
 
-    void RebuildBuffers(const DynArray<VkImage>& frames, const void* const rawFramebuffer) noexcept;
+    void RebuildBuffers(const DynArray<VkImage>& frames, const void* const rawFramebuffer, const u64 framebufferOffset) noexcept;
+
+    [[nodiscard]] u64& FramebufferOffset()       noexcept { return m_FramebufferOffset; }
+    [[nodiscard]] u64  FramebufferOffset() const noexcept { return m_FramebufferOffset; }
 public:
     [[nodiscard]] static Ref<FramebufferRenderer> CreateFramebufferRenderer(
         const Ref<Window>& window,
@@ -57,6 +61,7 @@ private:
     Ref<Window> m_Window;
     WeakRef<VulkanDevice> m_Device;
     const void* m_RawFramebuffer;
+    u64 m_FramebufferOffset;
     u32 m_ThreadIndex;
     DynArray<VkImage> m_Frames;
     VkImageLayout m_FrameLayout;

@@ -65,38 +65,42 @@
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\libs\conan\conandeps.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\libs\conan\conandeps.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\libs\conan\conandeps.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\libs\conan\conandeps.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\glm;$(VK_SDK_PATH)\Include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\glm;$(VK_SDK_PATH)\Include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\glm;$(VK_SDK_PATH)\Include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\glm;$(VK_SDK_PATH)\Include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\glm;$(VK_SDK_PATH)\Include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(VK_SDK_PATH)\Lib;$(SolutionDir)libs\TauUtils\bin\debug_win64-x64;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\glm;$(VK_SDK_PATH)\Include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(VK_SDK_PATH)\Lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)libs\glm;$(VK_SDK_PATH)\Include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(VK_SDK_PATH)\Lib;$(SolutionDir)libs\TauUtils\bin\release_win64-x64;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\glm;$(VK_SDK_PATH)\Include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(VK_SDK_PATH)\Lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -117,6 +121,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <BuildStlModules>false</BuildStlModules>
+      <AdditionalOptions>-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mpopcnt -mcrc32 -mavx -mavx2 -mfma -mf16c -Wno-unknown-attributes -Wno-unused-variable -Wno-unused-parameter </AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -145,6 +150,7 @@
       <FloatingPointModel>Fast</FloatingPointModel>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <BuildStlModules>false</BuildStlModules>
+      <AdditionalOptions>-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mpopcnt -mcrc32 -mavx -mavx2 -mfma -mf16c -Wno-unknown-attributes -Wno-unused-variable -Wno-unused-parameter </AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -172,6 +178,8 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <BuildStlModules>false</BuildStlModules>
+      <AdditionalOptions>-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mpopcnt -mcrc32 -mavx -mavx2 -mfma -mf16c -Wno-unknown-attributes -Wno-unused-variable -Wno-unused-parameter </AdditionalOptions>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -200,6 +208,7 @@
       <FloatingPointModel>Fast</FloatingPointModel>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <BuildStlModules>false</BuildStlModules>
+      <AdditionalOptions>-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mpopcnt -mcrc32 -mavx -mavx2 -mfma -mf16c -Wno-unknown-attributes -Wno-unused-variable -Wno-unused-parameter </AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

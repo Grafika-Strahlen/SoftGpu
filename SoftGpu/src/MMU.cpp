@@ -39,7 +39,7 @@ u64 Mmu::TranslateAddress(const u64 virtualAddress, bool* const success, bool* c
         {
             *success = false;
         }
-        // Return the optional page info bits. These will be done with out ports.
+        // Return the optional page info bits. These will be done without ports.
         if(readWrite)
         {
             *readWrite = false;

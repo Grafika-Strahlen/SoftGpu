@@ -544,3 +544,5 @@ FodyWeavers.xsd
 signing/setup.rpt
 signing/setup.inf
 signing/virtualboxdevice.cat
+
+libs/conan

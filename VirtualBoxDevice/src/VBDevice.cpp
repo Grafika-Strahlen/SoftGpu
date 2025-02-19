@@ -63,6 +63,10 @@ static void PciControlWriteCallback(const u32 address, const u32 value) noexcept
     {
         ConLogLn("SoftGpu/[0]: Writing Debug Register: {} [0x{XP0}]", value, value);
     }
+    else if(address == PciControlRegisters::REGISTER_DEBUG_LOG_MULTI)
+    {
+        ConLog("%c", value);
+    }
 }
 
 static DECLCALLBACK(VBOXSTRICTRC) softGpuMMIORead(PPDMDEVINS pDevIns, void* pvUser, RTGCPHYS off, void* pv, unsigned cb) noexcept
@@ -291,6 +295,7 @@ void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
     u32 refreshRateNumerator = 60;
     u32 refreshRateDenominator = 1;
     ::std::atomic_uint32_t refreshRateMeanMs = 1000 / (refreshRateNumerator / refreshRateDenominator);
+    ::new(&pciFunction->FramebufferRenderer) Ref<tau::vd::FramebufferRenderer>(nullptr);
 
     pciFunction->Processor.GetDisplayManager().UpdateCallback() = [pciFunction, &displayActive, &refreshRateNumerator, &refreshRateDenominator, &refreshRateMeanMs](const u32 displayIndex, const DisplayData& displayData)
     {
@@ -300,7 +305,7 @@ void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
             rrDenominator = 1;
         }
 
-        ConLogLn("Updating display {} size: {}x{} Enabled: {}, Refresh Rate: {}, VSync: {}", displayIndex, displayData.Width, displayData.Height, displayData.Enable, static_cast<float>(displayData.RefreshRateNumerator) / static_cast<float>(rrDenominator), displayData.VSyncEnable);
+        ConLogLn("Updating display {} size: {}x{} Enabled: {}, Refresh Rate: {}, VSync: {}, Framebuffer: 0x{XP0}", displayIndex, displayData.Width, displayData.Height, displayData.Enable, static_cast<float>(displayData.RefreshRateNumerator) / static_cast<float>(rrDenominator), displayData.VSyncEnable, displayData.Framebuffer);
         
         if(displayIndex != 0)
         {
@@ -323,6 +328,11 @@ void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
 
                 refreshRateMeanMs = 1000 / (refreshRateNumerator / refreshRateDenominator);
             }
+        }
+
+        if(pciFunction->FramebufferRenderer)
+        {
+            pciFunction->FramebufferRenderer->FramebufferOffset() = displayData.Framebuffer;
         }
     };
 
@@ -348,7 +358,17 @@ void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
 
     FillFramebufferGradient(pciFunction->Window, reinterpret_cast<u8*>(pciFunction->Framebuffer));
 
-    ::new(&pciFunction->FramebufferRenderer) Ref<tau::vd::FramebufferRenderer>(tau::vd::FramebufferRenderer::CreateFramebufferRenderer(
+    // ::new(&pciFunction->FramebufferRenderer) Ref<tau::vd::FramebufferRenderer>(tau::vd::FramebufferRenderer::CreateFramebufferRenderer(
+    //     pciFunction->Window,
+    //     pciFunction->VulkanManager->Device(),
+    //     pciFunction->Framebuffer,
+    //     0,
+    //     pciFunction->VulkanCommandPools,
+    //     pciFunction->VulkanManager->SwapchainImages(),
+    //     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+    // ));
+
+    pciFunction->FramebufferRenderer = tau::vd::FramebufferRenderer::CreateFramebufferRenderer(
         pciFunction->Window,
         pciFunction->VulkanManager->Device(),
         pciFunction->Framebuffer,
@@ -356,7 +376,7 @@ void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
         pciFunction->VulkanCommandPools,
         pciFunction->VulkanManager->SwapchainImages(),
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-    ));
+    );
 
     pciFunction->Window->ResizeCallback() = [pciFunction](const u32 width, const u32 height)
     {
@@ -371,7 +391,7 @@ void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
         // FillFramebufferGradient(pciFunction->Window, reinterpret_cast<u8*>(pciFunction->Framebuffer));
         pciFunction->VulkanManager->RebuildSwapchain();
         pciFunction->VulkanManager->TransitionSwapchain(pciFunction->VulkanCommandPools);
-        pciFunction->FramebufferRenderer->RebuildBuffers(pciFunction->VulkanManager->SwapchainImages(), pciFunction->Framebuffer);
+        pciFunction->FramebufferRenderer->RebuildBuffers(pciFunction->VulkanManager->SwapchainImages(), pciFunction->Framebuffer, pciFunction->FramebufferRenderer->FramebufferOffset());
     };
 
     __try
@@ -528,6 +548,14 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
         //   We only have 1 interrupt type, so our IRQ is 0. VirtualBox (specifically the ICH9 bridge, or regular PCI bridge)
         // will handle the sending the exact message data.
         PDMDevHlpPCISetIrqEx(deviceInstance, deviceInstance->apPciDevs[0], 0, 1);
+    };
+    pciFunction->Processor.GetPciController().BusMasterReadCallback() = [deviceInstance](const u64 address, const u16 size, void* const buffer)
+    {
+        PDMDevHlpPhysRead(deviceInstance, address, buffer, size);
+    };
+    pciFunction->Processor.GetPciController().BusMasterWriteCallback() = [deviceInstance](const u64 address, const u16 size, const void* const buffer)
+    {
+        PDMDevHlpPhysWrite(deviceInstance, address, buffer, size);
     };
 
     ::new(&pciFunction->ProcessorThread) ::std::thread(ProcessorThreadFunc, pciFunction);

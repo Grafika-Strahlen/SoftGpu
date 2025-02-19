@@ -12,7 +12,7 @@ void PciController::ExecuteMemRead() noexcept
 
     // ConPrinter::PrintLn(u8"ExecuteMemRead");
 
-    if(!(CommandRegister() & PciController::COMMAND_REGISTER_MEMORY_SPACE_BIT))
+    if(!(m_ConfigHeader.Command & PciController::COMMAND_REGISTER_MEMORY_SPACE_BIT))
     {
         ConPrinter::PrintLn("Attempted to Read over PCI while the Memory Space bit was not set.");
         *m_ReadCountResponse = 0;
@@ -127,7 +127,7 @@ void PciController::ExecuteMemWrite() noexcept
         return;
     }
 
-    if(!(CommandRegister() & PciController::COMMAND_REGISTER_MEMORY_SPACE_BIT))
+    if(!(m_ConfigHeader.Command & PciController::COMMAND_REGISTER_MEMORY_SPACE_BIT))
     {
         ConPrinter::PrintLn("Attempted to Write over PCI while the Memory Space bit was not set.");
         m_WriteRequestActive = false;

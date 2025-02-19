@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstring>
+#include <array>
 
 #include <Objects.hpp>
 #include <NumTypes.hpp>

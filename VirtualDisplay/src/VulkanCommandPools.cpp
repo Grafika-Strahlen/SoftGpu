@@ -1,5 +1,7 @@
 #include "vd/VulkanCommandPools.hpp"
 
+#include <StringFormat.hpp>
+
 namespace tau::vd {
 
 VulkanCommandPools::VulkanCommandPools(const WeakRef<VulkanDevice>& device, DynArray<VkCommandPool>&& pools, const u32 threadCount, const u32 frameCount) noexcept

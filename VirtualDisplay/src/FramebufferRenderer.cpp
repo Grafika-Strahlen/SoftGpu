@@ -32,7 +32,11 @@ VkCommandBuffer FramebufferRenderer::Record(const u32 frameIndex, bool active) c
 
     if(active)
     {
-        (void) ::std::memcpy(static_cast<u8*>(m_StagingBufferAllocationInfo.pMappedData) + writeIndex, m_RawFramebuffer, frameSize);
+        (void) ::std::memcpy(
+            static_cast<u8*>(m_StagingBufferAllocationInfo.pMappedData) + writeIndex, 
+            static_cast<const u8*>(m_RawFramebuffer) + m_FramebufferOffset,
+            frameSize
+        );
     }
     else
     {
@@ -125,10 +129,11 @@ VkCommandBuffer FramebufferRenderer::Record(const u32 frameIndex, bool active) c
     VK_ERROR_HANDLER_VK_NULL();
 }
 
-void FramebufferRenderer::RebuildBuffers(const DynArray<VkImage>& frames, const void* const rawFramebuffer) noexcept
+void FramebufferRenderer::RebuildBuffers(const DynArray<VkImage>& frames, const void* const rawFramebuffer, const u64 framebufferOffset) noexcept
 {
     m_Frames = frames;
     m_RawFramebuffer = rawFramebuffer;
+    m_FramebufferOffset = framebufferOffset;
 
     if(m_StagingBuffer)
     {
@@ -148,7 +153,10 @@ void FramebufferRenderer::RebuildBuffers(const DynArray<VkImage>& frames, const 
     bufferCreateInfo.pQueueFamilyIndices = nullptr;
 
     VmaAllocationCreateInfo bufferAllocationInfo { };
-    bufferAllocationInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    bufferAllocationInfo.flags = 
+        VMA_ALLOCATION_CREATE_MAPPED_BIT | 
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | 
+        VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     bufferAllocationInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
     bufferAllocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     bufferAllocationInfo.preferredFlags = 0;
@@ -213,7 +221,7 @@ Ref<FramebufferRenderer> FramebufferRenderer::CreateFramebufferRenderer(
         ::std::move(commandBuffers)
     );
 
-    framebufferRenderer->RebuildBuffers(frames, rawFramebuffer);
+    framebufferRenderer->RebuildBuffers(frames, rawFramebuffer, 0);
 
     return framebufferRenderer;
 
