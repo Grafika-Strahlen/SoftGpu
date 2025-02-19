@@ -234,7 +234,7 @@ class CComCritSectLock : public CComCritSectLockManual<TLock>
 {
 public:
     CComCritSectLock(CComCriticalSection &cs, bool fInitialLock = true)
-        : CComCritSectLockManual(cs)
+        : CComCritSectLockManual<TLock>(cs)
     {
         if (fInitialLock)
         {
@@ -894,6 +894,7 @@ private:
         }
         return hrc;
     }
+public:
     HRESULT GetTI(LCID lcid, ITypeInfo **ppTInfo)
     {
         AssertReturn(ppTInfo, E_POINTER);
@@ -908,6 +909,7 @@ private:
         *ppTInfo = m_pTInfo;
         return hrc;
     }
+private:
     HRESULT FetchTI(LCID lcid)
     {
         if (!m_pTInfo)
@@ -1328,7 +1330,7 @@ public:
             m_pObj->Release();
     }
     // IClassFactory
-    STDMETHOD(CreateInstance)(LPUNKNOWN pUnkOuter, REFIID riid, void **pvObj)
+    STDMETHOD(CreateInstance)(LPUNKNOWN pUnkOuter, REFIID riid, void ** ppvObj)
     {
         HRESULT hrc = E_POINTER;
         if (ppvObj)
