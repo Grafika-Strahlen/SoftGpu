@@ -9,6 +9,7 @@
 #include "PCIController.hpp"
 #include "RomController.hpp"
 #include "DisplayManager.hpp"
+#include "DMAController.hpp"
 
 class Processor final
 {
@@ -20,22 +21,28 @@ public:
         , m_RomController(this)
         , m_PciRegisters(this)
         , m_CacheController(this)
+        , m_DmaController(this)
         , m_SMs { { this, 0 }, { this, 1 }, { this, 2 }, { this, 3 } }
         , m_DisplayManager(this)
         , m_ClockCycle(0)
         , m_RamBaseAddress(0)
+        , m_RamSize(0)
     { }
 
     void Reset()
     {
-        m_PciRegisters.Reset();
+        m_PciRegisters.SetResetN(false);
         m_CacheController.Reset();
+        m_DmaController.SetResetN(false);
         m_SMs[0].Reset();
         m_SMs[1].Reset();
         m_SMs[2].Reset();
         m_SMs[3].Reset();
         m_DisplayManager.Reset();
         m_ClockCycle = 0;
+
+        m_PciRegisters.SetResetN(true);
+        m_DmaController.SetResetN(true);
     }
 
     void Clock() noexcept
@@ -88,7 +95,8 @@ public:
         }
 
         m_PciController.Clock(true);
-        m_PciRegisters.Clock(true);
+        m_PciRegisters.SetClock(true);
+        // m_DmaController.SetClock(true);
         m_DisplayManager.Clock(true);
 
         m_SMs[0].Clock();
@@ -97,7 +105,8 @@ public:
         m_SMs[3].Clock();
 
         m_PciController.Clock(false);
-        m_PciRegisters.Clock(false);
+        m_PciRegisters.SetClock(false);
+        // m_DmaController.SetClock(false);
         m_DisplayManager.Clock(false);
     }
 
@@ -140,6 +149,16 @@ public:
         // The memory granularity is 32 bits, thus we'll adjust to an 1 byte granularity for x86.
         const uintptr_t addressX86 = address << 2;
         (void) ::std::memcpy(reinterpret_cast<void*>(addressX86), &value, sizeof(u32));
+    }
+
+    void PciBusRead(const u64 cpuPhysicalAddress, const u16 size, u32 transferBlock[1024]) noexcept
+    {
+        m_PciController.PciBusMasterRead(cpuPhysicalAddress, size, transferBlock);
+    }
+
+    void PciBusWrite(const u64 cpuPhysicalAddress, const u16 size, const u32 transferBlock[1024]) noexcept
+    {
+        m_PciController.PciBusMasterWrite(cpuPhysicalAddress, size, transferBlock);
     }
 
     [[nodiscard]] u32 PciConfigRead(const u16 address, const u8 size) noexcept
@@ -331,8 +350,22 @@ public:
 
     [[nodiscard]] u64 RamBaseAddress() const noexcept { return m_RamBaseAddress; }
     [[nodiscard]] u64 RamSize() const noexcept { return m_RamSize; }
+    [[nodiscard]] u16 PCITransferLimit() const noexcept { return 1024; }
 
     [[nodiscard]] PciControlRegistersBus& PciControlRegistersBus() noexcept { return m_PciRegisters.Bus(); }
+    // [[nodiscard]] DMAChannelBus& DmaChannelBus(const u16 index) noexcept { return m_DmaController.Bus(index); }
+    // void UnlockDma(const u16 index) noexcept { m_PciRegisters.UnlockDma(index); }
+
+    [[nodiscard]] DMAController::BusState DmaGetBusState() const noexcept { return m_DmaController.GetBusState(); }
+    void DmaSetCPUPhysicalAddress(const u64 cpuPhysicalAddress) noexcept { m_DmaController.SetCPUPhysicalAddress(cpuPhysicalAddress); }
+    [[nodiscard]] u64 DmaGetCPUPhysicalAddress() const noexcept { return m_DmaController.GetCPUPhysicalAddress(); }
+    void DmaSetGPUVirtualAddress(const u64 gpuVirtualAddress) noexcept { m_DmaController.SetGPUVirtualAddress(gpuVirtualAddress); }
+    void DmaSetWordCount(const u64 wordCount) noexcept { m_DmaController.SetWordCount(wordCount); }
+    void DmaSetReadWrite(const bool readWrite) noexcept { m_DmaController.SetReadWrite(readWrite); }
+    void DmaSetAtomic(const bool atomic) noexcept { m_DmaController.SetAtomic(atomic); }
+    void DmaSetActive(const bool active) noexcept { m_DmaController.SetActive(active); }
+    void DmaSetReady(const u32 index, const bool ready) noexcept { m_DmaController.SetReady(index, ready); }
+    [[nodiscard]] u32 DmaGetBusSelect() const noexcept { return m_DmaController.GetBusSelect(); }
 
     // Intended only for VBDevice.
     [[nodiscard]] PciController& GetPciController() noexcept { return m_PciController; }
@@ -343,6 +376,7 @@ private:
     RomController m_RomController;
     PciControlRegisters m_PciRegisters;
     CacheController m_CacheController;
+    DMAController m_DmaController;
     StreamingMultiprocessor m_SMs[4];
     DisplayManager m_DisplayManager;
     u32 m_ClockCycle;

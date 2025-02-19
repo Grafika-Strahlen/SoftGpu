@@ -15,6 +15,8 @@ struct DisplayData final
     u32 Enable : 1;
     u32 VSyncEnable : 1;
     u32 Pad : 30;
+    u64 Framebuffer;
+    u32 FramebufferLowTmp;
 
     DisplayData() noexcept
         : Width(0)
@@ -25,7 +27,12 @@ struct DisplayData final
         , Enable(0)
         , VSyncEnable(0)
         , Pad(0)
+        , Framebuffer(0)
+        , FramebufferLowTmp(0)
     { }
+
+    [[nodiscard]] u32 FramebufferLow()  const noexcept { return static_cast<u32>(Framebuffer);       }
+    [[nodiscard]] u32 FramebufferHigh() const noexcept { return static_cast<u32>(Framebuffer >> 32); }
 };
 
 //
@@ -110,6 +117,8 @@ public:
     static constexpr u32 REGISTER_REFRESH_RATE_NUMERATOR = 4;
     static constexpr u32 REGISTER_REFRESH_RATE_DENOMINATOR = 5;
     static constexpr u32 REGISTER_VSYNC_ENABLE = 6;
+    static constexpr u32 REGISTER_FB_LOW = 7;
+    static constexpr u32 REGISTER_FB_HIGH = 8;
 public:
     DisplayManager(Processor* const processor) noexcept
         : m_Processor(processor)
@@ -193,6 +202,12 @@ public:
                         case REGISTER_VSYNC_ENABLE:
                             *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].VSyncEnable;
                             break;
+                        case REGISTER_FB_LOW:
+                            *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].FramebufferLow();
+                            break;
+                        case REGISTER_FB_HIGH:
+                            *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].FramebufferHigh();
+                            break;
                         default:
                             break;
                     }
@@ -226,6 +241,15 @@ public:
                                 SetDisplayVSyncEvent(m_CurrentPacket.DisplayIndex);
                             }
                             break;
+                        case REGISTER_FB_LOW:
+                            m_Displays[m_CurrentPacket.DisplayIndex].FramebufferLowTmp = *m_CurrentPacket.Value;
+                            break;
+                        case REGISTER_FB_HIGH:
+                        {
+                            m_Displays[m_CurrentPacket.DisplayIndex].Framebuffer = (static_cast<u64>(*m_CurrentPacket.Value) << 32) |
+                                m_Displays[m_CurrentPacket.DisplayIndex].FramebufferLowTmp;
+                            break;
+                        }
                         default:
                             break;
                     }

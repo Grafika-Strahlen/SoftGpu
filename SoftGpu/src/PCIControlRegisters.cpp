@@ -108,6 +108,18 @@ void PciControlRegisters::ExecuteRead() noexcept
             m_ReadState = 0;
         }
     }
+    else if(m_Bus.WriteAddress >= BASE_REGISTER_DMA && m_Bus.WriteAddress < BASE_REGISTER_DMA + SIZE_REGISTER_DMA * DMAController::DMA_CHANNEL_COUNT)
+    {
+        const u32 offset = m_Bus.WriteAddress - BASE_REGISTER_DI;
+
+        const u32 displayIndex = offset / SIZE_REGISTER_DI;
+        const u32 registerOffset = (offset % SIZE_REGISTER_DI) / sizeof(u32);
+
+        if(registerOffset == OFFSET_REGISTER_DMA_LOCK)
+        {
+            m_Bus.ReadResponse = m_DmaLock[displayIndex];
+        }
+    }
 
     switch(m_Bus.ReadAddress)
     {
@@ -118,10 +130,15 @@ void PciControlRegisters::ExecuteRead() noexcept
         case REGISTER_CONTROL: m_Bus.ReadResponse = m_ControlRegister.Value; break;
         case REGISTER_VRAM_SIZE_LOW: m_Bus.ReadResponse = 256 * 1024 * 1024; break;
         case REGISTER_VRAM_SIZE_HIGH: m_Bus.ReadResponse = 0; break;
+        // case REGISTER_VRAM_SIZE_LOW: m_Bus.ReadResponse = 0; break;
+        // case REGISTER_VRAM_SIZE_HIGH: m_Bus.ReadResponse = 1; break; // 8 GiB
         case REGISTER_VGA_WIDTH: m_Bus.ReadResponse = m_VgaWidth; break;
         case REGISTER_VGA_HEIGHT: m_Bus.ReadResponse = m_VgaHeight; break;
         case REGISTER_INTERRUPT_TYPE: m_Bus.ReadResponse = m_CurrentInterruptMessage; break;
+        case REGISTER_DMA_CHANNEL_COUNT: m_Bus.ReadResponse = DMA_CHANNEL_COUNT; break;
         case REGISTER_DEBUG_PRINT: m_Bus.ReadResponse = 0; break;
+        case REGISTER_DEBUG_LOG_LOCK: m_Bus.ReadResponse = m_DebugLogLock; break;
+        case REGISTER_DEBUG_LOG_MULTI: m_Bus.ReadResponse = 0; break;
         default: break;
     }
 
@@ -130,6 +147,8 @@ void PciControlRegisters::ExecuteRead() noexcept
 
 void PciControlRegisters::ExecuteWrite() noexcept
 {
+    HandleDmaBus();
+
     if(m_Bus.WriteBusLocked != 1)
     {
         return;
@@ -168,6 +187,79 @@ void PciControlRegisters::ExecuteWrite() noexcept
             m_WriteState = 0;
         }
     }
+    else if(m_Bus.WriteAddress >= BASE_REGISTER_DMA && m_Bus.WriteAddress < BASE_REGISTER_DMA + SIZE_REGISTER_DMA * DMAController::DMA_CHANNEL_COUNT)
+    {
+        const u32 offset = m_Bus.WriteAddress - BASE_REGISTER_DMA;
+
+        const u32 dmaIndex = offset / SIZE_REGISTER_DMA;
+        const u32 registerOffset = (offset % SIZE_REGISTER_DMA) / sizeof(u32);
+
+        DMAChannelBus& bus = m_DmaBuses[dmaIndex];
+        
+        switch(registerOffset)
+        {
+            case OFFSET_REGISTER_DMA_CPU_LOW:
+            {
+                u64 cpuAddress = bus.CPUPhysicalAddress & 0xFFFFFFFF'00000000ULL;
+                cpuAddress |= m_Bus.WriteValue;
+                bus.CPUPhysicalAddress = cpuAddress;
+                break;
+            }
+            case OFFSET_REGISTER_DMA_CPU_HIGH:
+            {
+                u64 cpuAddress = bus.CPUPhysicalAddress & 0x00000000'FFFFFFFFULL;
+                cpuAddress |= static_cast<u64>(m_Bus.WriteValue) << 32;
+                bus.CPUPhysicalAddress = cpuAddress;
+                break;
+            }
+            case OFFSET_REGISTER_DMA_GPU_LOW:
+            {
+                u64 gpuAddress = bus.GPUVirtualAddress & 0xFFFFFFFF'00000000ULL;
+                gpuAddress |= m_Bus.WriteValue;
+                bus.CPUPhysicalAddress = gpuAddress;
+                break;
+            }
+            case OFFSET_REGISTER_DMA_GPU_HIGH:
+            {
+                u64 gpuAddress = bus.GPUVirtualAddress & 0x00000000'FFFFFFFFULL;
+                gpuAddress |= static_cast<u64>(m_Bus.WriteValue) << 32;
+                bus.GPUVirtualAddress = gpuAddress;
+                break;
+            }
+            case OFFSET_REGISTER_DMA_SIZE_LOW:
+            {
+                u64 size = bus.WordCount & 0xFFFFFFFF'00000000ULL;
+                size |= m_Bus.WriteValue;
+                bus.WordCount = size;
+                break;
+            }
+            case OFFSET_REGISTER_DMA_SIZE_HIGH:
+            {
+                u64 size = bus.WordCount & 0x00000000'FFFFFFFFULL;
+                size |= static_cast<u64>(m_Bus.WriteValue) << 32;
+                bus.WordCount = size;
+                break;
+            }
+            case OFFSET_REGISTER_DMA_CONTROL:
+            {
+                bus.ReadWrite = m_Bus.WriteValue & 0x00000001;
+                bus.Atomic = m_Bus.WriteValue & 0x00000002;
+                bus.Active = 1;
+
+                m_Processor->DmaSetReady(DMAController::PCI_CONTROLLER_BUS_INDEX_BASE + dmaIndex, true);
+                break;
+            }
+            case OFFSET_REGISTER_DMA_LOCK:
+            {
+                if(m_DmaLock[dmaIndex] == VALUE_DMA_LOCK_UNLOCKED)
+                {
+                    m_DmaLock[dmaIndex] = m_Bus.WriteValue;
+                }
+                break;
+            }
+            default: break;
+        }
+    }
 
     switch(m_Bus.WriteAddress)
     {
@@ -175,8 +267,66 @@ void PciControlRegisters::ExecuteWrite() noexcept
         case REGISTER_VGA_WIDTH: m_VgaWidth = static_cast<u16>(m_Bus.WriteValue); break;
         case REGISTER_VGA_HEIGHT: m_VgaHeight = static_cast<u16>(m_Bus.WriteValue); break;
         case REGISTER_INTERRUPT_TYPE: m_CurrentInterruptMessage = 0; break; // The CPU can only clear the interrupt.
+        case REGISTER_DEBUG_LOG_LOCK:
+            if(m_DebugLogLock == VALUE_DEBUG_LOG_LOCK_UNLOCKED)
+            {
+                m_DebugLogLock = m_Bus.WriteValue;
+            }
+            else if(m_Bus.WriteValue == VALUE_DEBUG_LOG_LOCK_UNLOCKED)
+            {
+                m_DebugLogLock = VALUE_DEBUG_LOG_LOCK_UNLOCKED;
+            }
+            break;
         default: break;
     }
 
     m_Bus.WriteBusLocked = 2;
+}
+
+void PciControlRegisters::HandleDmaBus() noexcept
+{
+    if(m_Processor->DmaGetBusState() == DMAController::ReadyForInput)
+    {
+        const u32 busSelect = m_Processor->DmaGetBusSelect();
+
+        if(busSelect >= DMAController::PCI_CONTROLLER_BUS_INDEX_BASE && 
+           busSelect < DMAController::PCI_CONTROLLER_BUS_INDEX_BASE + DMA_CHANNEL_COUNT)
+        {
+            const u32 dmaIndex = busSelect - DMAController::PCI_CONTROLLER_BUS_INDEX_BASE;
+            const DMAChannelBus& bus = m_DmaBuses[dmaIndex];
+            m_Processor->DmaSetCPUPhysicalAddress(bus.CPUPhysicalAddress);
+            m_Processor->DmaSetGPUVirtualAddress(bus.GPUVirtualAddress);
+            m_Processor->DmaSetWordCount(bus.WordCount);
+            m_Processor->DmaSetReadWrite(bus.ReadWrite);
+            m_Processor->DmaSetAtomic(bus.Atomic);
+            m_Processor->DmaSetActive(bus.Active);
+            m_Processor->DmaSetReady(busSelect, false);
+
+            m_DmaLock[dmaIndex] = VALUE_DMA_LOCK_UNLOCKED;
+        }
+    }
+    else if(m_Processor->DmaGetBusState() == DMAController::RespondingRequestNumber)
+    {
+        const u32 busSelect = m_Processor->DmaGetBusSelect();
+
+        if(busSelect >= DMAController::PCI_CONTROLLER_BUS_INDEX_BASE &&
+            busSelect < DMAController::PCI_CONTROLLER_BUS_INDEX_BASE + DMA_CHANNEL_COUNT)
+        {
+            const u32 dmaIndex = busSelect - DMAController::PCI_CONTROLLER_BUS_INDEX_BASE;
+            m_DmaRequestNumbers[dmaIndex] = static_cast<u32>(m_Processor->DmaGetCPUPhysicalAddress());
+        }
+    }
+    else if(m_Processor->DmaGetBusState() == DMAController::CompletedRequest)
+    {
+        const u32 completedRequest = static_cast<u32>(m_Processor->DmaGetCPUPhysicalAddress());
+
+        for(u32 i = 0; i < DMA_CHANNEL_COUNT; ++i)
+        {
+            if(m_DmaRequestNumbers[i] == completedRequest)
+            {
+                m_Processor->SetInterrupt(MSG_INTERRUPT_DMA_COMPLETED);
+                break;
+            }
+        }
+    }
 }

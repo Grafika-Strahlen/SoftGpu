@@ -7,6 +7,7 @@
 
 #include <cstring>
 #include <mutex>
+#include <functional>
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
@@ -298,9 +299,14 @@ class PciController final
 public:
     static inline constexpr u16 COMMAND_REGISTER_MASK_BITS = 0x0446;
 
+    static inline constexpr u16 COMMAND_REGISTER_MEMORY_SPACE_BIT = 0x0002;
+    static inline constexpr u16 COMMAND_REGISTER_BUS_MASTER_BIT   = 0x0004;
+
     static inline constexpr u32 BAR0_MASK_BITS = 0xFF000000;
     static inline constexpr u32 BAR1_MASK_BITS = 0xE0000000;
     static inline constexpr u32 BAR2_MASK_BITS = 0xFFFFFFFF;
+    // static inline constexpr u32 BAR1_MASK_BITS = 0x00000000;
+    // static inline constexpr u32 BAR2_MASK_BITS = 0xFFFFFFFE;
     static inline constexpr u32 BAR3_MASK_BITS = 0x00000000;
     static inline constexpr u32 BAR4_MASK_BITS = 0x00000000;
     static inline constexpr u32 BAR5_MASK_BITS = 0x00000000;
@@ -332,11 +338,11 @@ public:
     static inline constexpr u32 MESSAGE_ADDRESS_REGISTER_MASK_BITS      = 0xFFFFFFFC;
     static inline constexpr u32 MESSAGE_ADDRESS_REGISTER_READ_ONLY_BITS = 0x00000000;
 
-    static inline constexpr u16 COMMAND_REGISTER_MEMORY_SPACE_BIT = 0x0002;
-
     static inline constexpr u8 EXPANSION_ROM_BAR_ID = 0x7F;
 
     using InterruptCallback_f = ::std::function<void(const u16 messageData)>;
+    using BusMasterReadCallback_f = ::std::function<void(const u64 address, const u16 size, void* const buffer)>;
+    using BusMasterWriteCallback_f = ::std::function<void(const u64 address, const u16 size, const void* const buffer)>;
 public:
     PciController(Processor* const processor) noexcept
         : m_Processor(processor)
@@ -352,6 +358,9 @@ public:
         , m_WriteRequestAddress(0)
         , m_WriteRequestSize(0)
         , m_WriteRequestData(nullptr)
+        , m_InterruptCallback(nullptr)
+        , m_BusMasterReadCallback(nullptr)
+        , m_BusMasterWriteCallback(nullptr)
         , m_ReadState(0)
         , m_WriteState(0)
         , m_Pad0{}
@@ -540,6 +549,36 @@ public:
         m_WriteRequestData = data;
     }
 
+    void PciBusMasterRead(const u64 address, const u16 sizeInWords, u32 transferBlock[1024]) noexcept
+    {
+        if((m_ConfigHeader.Command & COMMAND_REGISTER_BUS_MASTER_BIT) != COMMAND_REGISTER_BUS_MASTER_BIT)
+        {
+            return;
+        }
+
+        if(!m_BusMasterReadCallback)
+        {
+            return;
+        }
+
+        m_BusMasterReadCallback(address, sizeInWords * sizeof(u32), transferBlock);
+    }
+
+    void PciBusMasterWrite(const u64 address, const u16 sizeInWords, const u32 transferBlock[1024]) noexcept
+    {
+        if((m_ConfigHeader.Command & COMMAND_REGISTER_BUS_MASTER_BIT) != COMMAND_REGISTER_BUS_MASTER_BIT)
+        {
+            return;
+        }
+
+        if(m_BusMasterWriteCallback)
+        {
+            return;
+        }
+
+        m_BusMasterWriteCallback(address, sizeInWords * sizeof(u32), transferBlock);
+    }
+
     void SetInterrupt(const u32 messageType) noexcept
     {
         (void) messageType;
@@ -595,15 +634,20 @@ public:
     }
 
     [[nodiscard]] u16 CommandRegister() const noexcept { return m_ConfigHeader.Command; }
-    [[nodiscard]] bool ExpansionRomEnable() const noexcept { return m_ConfigHeader.ExpansionROMBaseAddress & EXPANSION_ROM_BAR_ENABLE_BIT; }
+    [[nodiscard]] bool ExpansionRomEnable() const noexcept
+    {
+        return (m_ConfigHeader.ExpansionROMBaseAddress & EXPANSION_ROM_BAR_ENABLE_BIT) == EXPANSION_ROM_BAR_ENABLE_BIT;
+    }
 
+    // Intended only for VBDevice.
     void SetSimulationSyncEvent(HANDLE event) noexcept
     {
         m_SimulationSyncEvent = event;
     }
 
-    // Intended only for VBDevice.
     [[nodiscard]] InterruptCallback_f& InterruptCallback() noexcept { return m_InterruptCallback; }
+    [[nodiscard]] BusMasterReadCallback_f& BusMasterReadCallback() noexcept { return m_BusMasterReadCallback; }
+    [[nodiscard]] BusMasterWriteCallback_f& BusMasterWriteCallback() noexcept { return m_BusMasterWriteCallback; }
 private:
     /**
      * @brief Initializes the PCI configuration header.
@@ -859,6 +903,8 @@ private:
     u16 m_WriteRequestSize;
     const u32* m_WriteRequestData;
     InterruptCallback_f m_InterruptCallback;
+    BusMasterReadCallback_f m_BusMasterReadCallback;
+    BusMasterWriteCallback_f m_BusMasterWriteCallback;
 
     u32 m_ReadState : 1;
     u32 m_WriteState : 1;
