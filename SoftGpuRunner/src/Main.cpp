@@ -1,3 +1,5 @@
+#include <bit>
+
 #include "Processor.hpp"
 #include <ConPrinter.hpp>
 #include "DebugManager.hpp"
@@ -12,12 +14,15 @@
 
 #include <numeric>
 #include <Safeties.hpp>
+#include <TauUnit.hpp>
 
 static Processor processor;
 DebugManager GlobalDebug;
 
 static u32 BAR0 = 0;
 static u64 BAR1 = 0;
+
+void ClockGateTestBench() noexcept;
 
 static void InitEnvironment() noexcept;
 static int InitCommandRegister() noexcept;
@@ -93,7 +98,7 @@ static void FillFramebufferGradient(const Ref<::tau::vd::Window>& window, u8* co
 
             framebuffer[index + 0] = static_cast<u8>((x * 256) / window->FramebufferWidth());
             framebuffer[index + 1] = static_cast<u8>((y * 256) / window->FramebufferHeight());
-            framebuffer[index + 2] = 0xFF - static_cast<u8>((x * y * 256) / (window->FramebufferWidth() * window->FramebufferHeight()));
+            framebuffer[index + 2] = 0xFF - static_cast<u8>((x * y * 256) / (static_cast<uSys>(window->FramebufferWidth()) * window->FramebufferHeight()));
             framebuffer[index + 3] = 0xFF;
         }
     }
@@ -110,6 +115,13 @@ int main(int argCount, char* args[])
 {
     UNUSED2(argCount, args);
     InitEnvironment();
+
+    if constexpr(true)
+    {
+        ClockGateTestBench();
+        tau::TestContainer::Instance().PrintTotals();
+        return 0;
+    }
 
 #if 0
     ::tau::test::register_allocator::RunTests();
@@ -150,7 +162,7 @@ int main(int argCount, char* args[])
         framebuffer = BuildFramebuffer(window);
         vulkanManager->RebuildSwapchain();
         vulkanManager->TransitionSwapchain(vulkanCommandPools);
-        frameBufferRenderer->RebuildBuffers(vulkanManager->SwapchainImages(), framebuffer);
+        frameBufferRenderer->RebuildBuffers(vulkanManager->SwapchainImages(), framebuffer, 0);
     };
 
     {
@@ -178,7 +190,7 @@ int main(int argCount, char* args[])
     }
 
     u32 resetRead;
-    processor.PciMemRead(BAR0 + PciControlRegisters::REGISTER_RESET, 4, &resetRead);
+    // processor.PciMemRead(BAR0 + PciControlRegisters::REGISTER_RESET, 4, &resetRead);
 
     while(!window->ShouldClose())
     {
@@ -206,7 +218,7 @@ int main(int argCount, char* args[])
     // TestMul2FReplicated();
     // processor.PciMemRead(BAR0 + REGISTER_RESET, 4, &resetRead);
     TestMul2FReplicatedDualDispatch();
-    processor.PciMemRead(BAR0 + PciControlRegisters::REGISTER_RESET, 4, &resetRead);
+    // processor.PciMemRead(BAR0 + PciControlRegisters::REGISTER_RESET, 4, &resetRead);
 
     ReleaseMmu();
 
@@ -226,7 +238,7 @@ static void TestMove() noexcept
 
     constexpr u32 initialValue = 42;
 
-    processor.PciMemWrite(BAR1 + GpuPageSize * 2 + 0, 4, &initialValue);
+    // processor.PciMemWrite(BAR1 + GpuPageSize * 2 + 0, 4, &initialValue);
 
     u32* const dataBuffer = reinterpret_cast<u32*>(RawBuffer);
     
@@ -817,7 +829,7 @@ static int InitBAR() noexcept
     processor.PciConfigWrite(0x10, 4, BAR0);
     processor.PciConfigWrite(0x14, 4, static_cast<u32>(BAR1));
     processor.PciConfigWrite(0x18, 4, static_cast<u32>(BAR1 >> 32));
-    processor.TestSetRamBaseAddress(BAR1);
+    processor.TestSetRamBaseAddress(BAR1, bar1Size);
 
     ConPrinter::PrintLn("Loaded BAR0 at 0x{XP0}.", BAR0);
     ConPrinter::PrintLn("Loaded BAR1 at 0x{XP0}.", BAR1);

@@ -65,41 +65,45 @@
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\libs\conan\conandeps.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\libs\conan\conandeps.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\libs\conan\conandeps.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\libs\conan\conandeps.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)SoftGpu\include;$(VK_SDK_PATH)\Include;$(SolutionDir)VirtualDisplay\include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)HardwareCommon\include;$(SolutionDir)RISCV\include;$(SolutionDir)SoftGpu\include;$(VK_SDK_PATH)\Include;$(SolutionDir)VirtualDisplay\include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(OutDir);$(VK_SDK_PATH)\Lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)SoftGpu\include;$(VK_SDK_PATH)\Include;$(SolutionDir)VirtualDisplay\include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)HardwareCommon\include;$(SolutionDir)RISCV\include;$(SolutionDir)SoftGpu\include;$(VK_SDK_PATH)\Include;$(SolutionDir)VirtualDisplay\include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(OutDir);$(VK_SDK_PATH)\Lib;$(LibraryPath)</LibraryPath>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)SoftGpu\include;$(VK_SDK_PATH)\Include;$(SolutionDir)VirtualDisplay\include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(OutDir);$(VK_SDK_PATH)\Lib;$(SolutionDir)libs\TauUtils\build\TauUtilsDynamic\Debug;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)HardwareCommon\include;$(SolutionDir)RISCV\include;$(SolutionDir)SoftGpu\include;$(VK_SDK_PATH)\Include;$(SolutionDir)VirtualDisplay\include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(OutDir);$(VK_SDK_PATH)\Lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(ProjectDir)include;$(SolutionDir)libs\TauUtils\TauUtilsDynamic\include;$(SolutionDir)SoftGpu\include;$(VK_SDK_PATH)\Include;$(SolutionDir)VirtualDisplay\include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(OutDir);$(VK_SDK_PATH)\Lib;$(SolutionDir)libs\TauUtils\build\TauUtilsDynamic\Release;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(ProjectDir)include;$(SolutionDir)HardwareCommon\include;$(SolutionDir)RISCV\include;$(SolutionDir)SoftGpu\include;$(VK_SDK_PATH)\Include;$(SolutionDir)VirtualDisplay\include;$(SolutionDir)libs\VulkanMemoryAllocator\include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(OutDir);$(VK_SDK_PATH)\Lib;$(LibraryPath)</LibraryPath>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -110,7 +114,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <AdditionalOptions>-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mpopcnt -mcrc32 -mavx -mavx2 -mfma -mf16c %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mpopcnt -mcrc32 -mavx -mavx2 -mfma -mf16c -Wno-unknown-attributes -Wno-unused-variable -Wno-unused-parameter %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(IncludePath);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <IntrinsicFunctions>true</IntrinsicFunctions>
@@ -126,7 +130,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(LibraryPath);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>TauUtilsDynamicStatic.lib;SoftGpu.lib;VirtualDisplay.lib;vulkan-1.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>SoftGpu.lib;VirtualDisplay.lib;vulkan-1.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LargeAddressAware>true</LargeAddressAware>
       <TargetMachine>MachineX86</TargetMachine>
     </Link>
@@ -141,7 +145,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <AdditionalOptions>-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mpopcnt -mcrc32 -mavx -mavx2 -mfma -mf16c %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mpopcnt -mcrc32 -mavx -mavx2 -mfma -mf16c -Wno-unknown-attributes -Wno-unused-variable -Wno-unused-parameter %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(IncludePath);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <OmitFramePointers>false</OmitFramePointers>
@@ -159,7 +163,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(LibraryPath);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>TauUtilsDynamicStatic.lib;SoftGpu.lib;VirtualDisplay.lib;vulkan-1.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>SoftGpu.lib;VirtualDisplay.lib;vulkan-1.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LargeAddressAware>true</LargeAddressAware>
       <TargetMachine>MachineX86</TargetMachine>
     </Link>
@@ -172,7 +176,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <AdditionalOptions>-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mpopcnt -mcrc32 -mavx -mavx2 -mfma -mf16c %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mpopcnt -mcrc32 -mavx -mavx2 -mfma -mf16c -Wno-unknown-attributes -Wno-unused-variable -Wno-unused-parameter %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(IncludePath);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <IntrinsicFunctions>true</IntrinsicFunctions>
@@ -188,7 +192,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(LibraryPath);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>TauUtilsDynamicStatic.lib;SoftGpu.lib;VirtualDisplay.lib;vulkan-1.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>SoftGpu.lib;VirtualDisplay.lib;vulkan-1.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LargeAddressAware>true</LargeAddressAware>
       <TargetMachine>MachineX64</TargetMachine>
     </Link>
@@ -203,7 +207,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <AdditionalOptions>-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mpopcnt -mcrc32 -mavx -mavx2 -mfma -mf16c %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mpopcnt -mcrc32 -mavx -mavx2 -mfma -mf16c -Wno-unknown-attributes -Wno-unused-variable -Wno-unused-parameter %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(IncludePath);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <OmitFramePointers>false</OmitFramePointers>
@@ -221,12 +225,13 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(LibraryPath);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>TauUtilsDynamicStatic.lib;SoftGpu.lib;VirtualDisplay.lib;vulkan-1.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>SoftGpu.lib;VirtualDisplay.lib;vulkan-1.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LargeAddressAware>true</LargeAddressAware>
       <TargetMachine>MachineX64</TargetMachine>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\ClockGateTestBench.cpp" />
     <ClCompile Include="src\Main.cpp" />
     <ClCompile Include="src\RegisterAllocatorTests.cpp" />
   </ItemGroup>
