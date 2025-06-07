@@ -18,7 +18,12 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
         }
     }
 
-    if(::std::strstr(callbackData->pMessage, "uses API version 1.2 which is older than the application specified API version of 1.3. May cause issues."))
+    if(!callbackData)
+    {
+        return VK_FALSE;
+    }
+
+    if(callbackData->pMessage && ::std::strstr(callbackData->pMessage, "uses API version 1.2 which is older than the application specified API version of 1.3. May cause issues."))
     {
         return VK_FALSE;
     }
