@@ -4,18 +4,14 @@
 
 namespace riscv {
 
+// Mostly just implemented from http://www.sunburst-design.com/papers/CummingsSNUG2002SJ_FIFO1.pdf
 template<typename DataType = u32, u32 ElementCountExponent = 2, bool SyncRead = false, bool Safe = false>
 class FIFO final
 {
     DEFAULT_DESTRUCT(FIFO);
     DELETE_CM(FIFO);
 private:
-    enum class Sensitivity
-    {
-        Reset = 0,
-        Clock,
-        Level
-    };
+    SENSITIVITY_DECL(p_Reset_n, p_Clock, Level);
 
     SIGNAL_ENTITIES();
 public:
@@ -45,14 +41,14 @@ public:
     {
         p_Reset_n = BOOL_TO_BIT(reset_n);
 
-        Processes(Sensitivity::Reset);
+        TRIGGER_SENSITIVITY(p_Reset_n);
     }
 
     void SetClock(const bool clock) noexcept
     {
         p_Clock = BOOL_TO_BIT(clock);
 
-        Processes(Sensitivity::Clock);
+        TRIGGER_SENSITIVITY(p_Clock);
     }
 
     void SetClear(const bool clear) noexcept
@@ -267,43 +263,44 @@ private:
         }
     }
 private:
-    void Processes(const Sensitivity trigger) noexcept
+    PROCESSES_DECL()
     {
-        PointersHandler(trigger);
-        LevelHandler(trigger);
-        WriteHandler(trigger);
+        PROCESS_ENTER(PointersHandler, p_Reset_n, p_Clock);
+        PROCESS_ENTER(LevelHandler, Level);
+        PROCESS_ENTER(WriteHandler, p_Reset_n, p_Clock);
+        PROCESS_ENTER(ReadHandler, p_Reset_n, p_Clock);
+
         if constexpr(SyncRead)
         {
-            SyncStatusHandler(trigger);
+            PROCESS_ENTER(SyncStatusHandler, p_Reset_n, p_Clock);
         }
     }
 
-    void PointersHandler(const Sensitivity trigger) noexcept
+    PROCESS_DECL(PointersHandler)
     {
         if(!BIT_TO_BOOL(p_Reset_n))
         {
             m_WritePointer = 0;
             m_ReadPointer = 0;
+
+            TRIGGER_SENSITIVITY(Level);
         }
-        else if(RisingEdge<Sensitivity::Clock>(p_Clock, trigger))
+        else if(RISING_EDGE(p_Clock))
         {
             m_WritePointer = NextWrite();
             m_ReadPointer = NextRead();
-        }
 
-        Processes(Sensitivity::Level);
+            TRIGGER_SENSITIVITY(Level);
+        }
     }
 
-    void LevelHandler(const Sensitivity trigger) noexcept
+    PROCESS_DECL(LevelHandler)
     {
-        if(Event<Sensitivity::Level>(trigger))
-        {
-            p_out_Level = 0;
-            p_out_Level = Level();
-        }
+        p_out_Level = 0;
+        p_out_Level = Level();
     }
 
-    void WriteHandler(const Sensitivity trigger) noexcept
+    PROCESS_DECL(WriteHandler)
     {
         if constexpr(ElementCount == 1)
         {
@@ -311,7 +308,7 @@ private:
             {
                 m_Memory[0] = DataType{};
             }
-            else if(RisingEdge<Sensitivity::Clock>(p_Clock, trigger))
+            else if(RISING_EDGE(p_Clock))
             {
                 if(WriteEnable())
                 {
@@ -328,7 +325,7 @@ private:
                     m_Memory[i] = DataType {};
                 }
             }
-            else if(RisingEdge<Sensitivity::Clock>(p_Clock, trigger))
+            else if(RISING_EDGE(p_Clock))
             {
                 if(WriteEnable())
                 {
@@ -338,13 +335,13 @@ private:
         }
     }
 
-    void ReadHandler(const Sensitivity trigger) noexcept
+    PROCESS_DECL(ReadHandler)
     {
         if constexpr(SyncRead)
         {
             if constexpr(ElementCount > 1)
             {
-                if(RisingEdge<Sensitivity::Clock>(p_Clock, trigger))
+                if(RISING_EDGE(p_Clock))
                 {
                     m_ReadPointer0 = NextRead();
                 }
@@ -354,7 +351,7 @@ private:
         {
             if constexpr(ElementCount > 1)
             {
-                if(RisingEdge<Sensitivity::Clock>(p_Clock, trigger))
+                if(RISING_EDGE(p_Clock))
                 {
                     p_out_ReadData = m_Memory[m_ReadPointer];
                 }
@@ -362,7 +359,7 @@ private:
         }
     }
 
-    void SyncStatusHandler(const Sensitivity trigger) noexcept
+    PROCESS_DECL(SyncStatusHandler)
     {
         if(!BIT_TO_BOOL(p_Reset_n))
         {
@@ -370,7 +367,7 @@ private:
             p_out_Free = 0;
             p_out_Available = 0;
         }
-        else if(RisingEdge<Sensitivity::Clock>(p_Clock, trigger))
+        else if(RISING_EDGE(p_Clock))
         {
             p_out_HalfFull = Half();
             p_out_Free = Free();
