@@ -15,14 +15,9 @@ public:
         CpuToGpu = 2
     };
 private:
-    enum class Sensitivity
-    {
-        Reset = 0,
-        Clock,
-        Active
-    };
+    SENSITIVITY_DECL(p_Reset_n, p_Clock, p_Active);
 
-    SIGNAL_ENTITIES()
+    SIGNAL_ENTITIES();
 public:
     TextureTransferUnit(Processor* const processor, const u32 index) noexcept
         : m_Processor(processor)
@@ -57,14 +52,14 @@ public:
     {
         p_Reset_n = BOOL_TO_BIT(reset_n);
 
-        Processes(Sensitivity::Reset);
+        TRIGGER_SENSITIVITY(p_Reset_n);
     }
 
     void SetClock(const bool clock) noexcept
     {
         p_Clock = BOOL_TO_BIT(clock);
 
-        Processes(Sensitivity::Clock);
+        TRIGGER_SENSITIVITY(p_Clock);
     }
 
     void SetTransferMode(const TransferMode transferMode) noexcept
@@ -76,7 +71,7 @@ public:
     {
         p_Active = BOOL_TO_BIT(active);
 
-        Processes(Sensitivity::Active);
+        TRIGGER_SENSITIVITY(p_Active);
     }
 
     [[nodiscard]] bool GetFinished() const noexcept { return BIT_TO_BOOL(p_out_Finished); }
@@ -166,16 +161,15 @@ public:
         p_CopyDepth = copyDepth;
     }
 private:
-    void Processes(const Sensitivity trigger) noexcept
+    PROCESSES_DECL()
     {
-        ResetHandler(trigger);
-        ClockHandler(trigger);
-        ActiveHandler(trigger);
+        PROCESS_ENTER(ClockHandler, p_Reset_n, p_Clock);
+        PROCESS_ENTER(ActiveHandler, p_Active);
     }
 
-    void ResetHandler(const Sensitivity trigger) noexcept
+    PROCESS_DECL(ClockHandler)
     {
-        if(FallingEdge<Sensitivity::Reset>(p_Reset_n, trigger))
+        if(!BIT_TO_BOOL(p_Reset_n))
         {
             p_TransferMode = TransferMode::GpuToGpu;
             p_Active = 0;
@@ -198,18 +192,14 @@ private:
             p_CopyHeight = 0;
             p_CopyDepth = 0;
         }
-    }
-
-    void ClockHandler(const Sensitivity trigger) noexcept
-    {
-        if(RisingEdge<Sensitivity::Clock>(p_Clock, trigger))
+        else if(RISING_EDGE(p_Clock))
         {
         }
     }
 
     void ActiveHandler(const Sensitivity trigger) noexcept
     {
-        if(RisingEdge<Sensitivity::Active>(p_Active, trigger))
+        if(RISING_EDGE(p_Active))
         {
             p_out_Finished = 0;
         }
@@ -261,7 +251,7 @@ private:
         Clock
     };
 
-    SIGNAL_ENTITIES()
+    SIGNAL_ENTITIES(Sensitivity);
 public:
     TextureTransferController(Processor* const processor) noexcept
         : m_Processor(processor)
@@ -423,13 +413,15 @@ public:
 private:
     void Processes(const Sensitivity trigger) noexcept
     {
-        ResetHandler(trigger);
-        ClockHandler(trigger);
+        PROCESS_BEGIN(Sensitivity::Clock, Sensitivity::Reset)
+        {
+            ClockHandler(trigger);
+        }
     }
 
-    void ResetHandler(const Sensitivity trigger) noexcept
+    void ClockHandler(const Sensitivity trigger) noexcept
     {
-        if(FallingEdge<Sensitivity::Reset>(p_Reset_n, trigger))
+        if(!BIT_TO_BOOL(p_Reset_n))
         {
             p_TransferMode = TransferMode::GpuToGpu;
             p_Active = 0;
@@ -451,11 +443,7 @@ private:
             p_CopyHeight = 0;
             p_CopyDepth = 0;
         }
-    }
-
-    void ClockHandler(const Sensitivity trigger) noexcept
-    {
-        if(RisingEdge<Sensitivity::Clock>(p_Clock, trigger))
+        else if(RisingEdge<Sensitivity::Clock>(p_Clock, trigger))
         {
             if(m_BusArbiter.GetFinished())
             {
