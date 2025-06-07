@@ -220,7 +220,6 @@
   <ItemGroup>
     <ClCompile Include="src\FramebufferRenderer.cpp" />
     <ClCompile Include="src\MemoryRecovery.cpp" />
-    <ClCompile Include="src\VirtaulDisplay.cpp" />
     <ClCompile Include="src\VMA.cpp" />
     <ClCompile Include="src\VulkanCommandPools.cpp" />
     <ClCompile Include="src\VulkanDebug.cpp" />
