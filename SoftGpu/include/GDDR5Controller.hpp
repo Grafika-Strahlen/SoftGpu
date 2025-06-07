@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Objects.hpp>
+#include <Common.hpp>
 #include <NumTypes.hpp>
 
 struct GDDR5BusSpec final
@@ -30,28 +30,14 @@ struct GDDR5BusSpec final
 class GDDR5ChipController final
 {
 private:
-    enum class Sensitivity
-    {
-        Reset = 0,
-        Clock
-    };
+    SENSITIVITY_DECL(p_Reset_n, p_Clock);
 
-    template<Sensitivity TargetSense>
-    bool RisingEdge(const u32 bit, const Sensitivity sensitivity) noexcept
-    {
-        return bit && sensitivity == TargetSense;
-    }
-
-    template<Sensitivity TargetSense>
-    bool FallingEdge(const u32 bit, const Sensitivity sensitivity) noexcept
-    {
-        return !bit && sensitivity == TargetSense;
-    }
+    SIGNAL_ENTITIES();
 public:
     GDDR5ChipController()
         : p_Reset_n(0)
         , p_Clock(0)
-        , p_Pad0(0)
+        , m_Pad0(0)
         , m_Chip{}
         , m_InReset(1)
         , m_Pad1(0)
@@ -73,38 +59,34 @@ public:
     {
         p_Reset_n = reset_n;
 
-        OnProcess(Sensitivity::Reset);
+        TRIGGER_SENSITIVITY(p_Reset_n);
     }
 
     void SetClock(const bool clock) noexcept
     {
         p_Clock = clock;
 
-        OnProcess(Sensitivity::Clock);
+        TRIGGER_SENSITIVITY(p_Clock);
     }
 private:
-    void OnProcess(const Sensitivity trigger)
+    PROCESSES_DECL()
     {
-        if(FallingEdge<Sensitivity::Reset>(p_Reset_n, trigger))
-        {
-            OnResetProcess();
-        }
+        PROCESS_ENTER(ResetProcess, p_Reset_n);
+        PROCESS_ENTER(ClockProcess, p_Clock);
+    }
 
-        if(trigger == Sensitivity::Clock)
+    PROCESS_DECL(ResetProcess)
+    {
+        if(FALLING_EDGE(p_Reset_n))
         {
-            OnClockProcess();
+            // Tell the chip to reset.
+            m_Chip.RESET_n = 0;
+            // Wait until the next rising clock cycle to clear the reset.
+            m_InReset = 1;
         }
     }
 
-    void OnResetProcess() noexcept
-    {
-        // Tell the chip to reset.
-        m_Chip.RESET_n = 0;
-        // Wait until the next rising clock cycle to clear the reset.
-        m_InReset = 1;
-    }
-
-    void OnClockProcess() noexcept
+    PROCESS_DECL(ClockProcess)
     {
         if(m_InReset)
         {
@@ -131,7 +113,7 @@ private:
 private:
     u32 p_Reset_n : 1;
     u32 p_Clock : 1;
-    u32 p_Pad0 : 30;
+    u32 m_Pad0 : 30;
 
     GDDR5BusSpec m_Chip;
     u32 m_InReset : 1;
