@@ -11,11 +11,8 @@ class RegisterFile final
     DEFAULT_DESTRUCT(RegisterFile);
     DELETE_CM(RegisterFile);
 private:
-    enum class Sensitivity
-    {
-        Reset = 0,
-        Clock
-    };
+    // ReSharper disable once CppInconsistentNaming
+    SENSITIVITY_DECL(p_Reset_n, p_Clock);
 
     SIGNAL_ENTITIES();
 public:
@@ -39,14 +36,14 @@ public:
     {
         p_Reset_n = BOOL_TO_BIT(reset_n);
 
-        Processes(Sensitivity::Reset);
+        TRIGGER_SENSITIVITY(p_Reset_n);
     }
 
     void SetClock(const bool clock) noexcept
     {
         p_Clock = BOOL_TO_BIT(clock);
 
-        Processes(Sensitivity::Clock);
+        TRIGGER_SENSITIVITY(p_Clock);
     }
 
     void SetControlBus(const ControlBus& controlBus) noexcept
@@ -63,57 +60,51 @@ public:
     [[nodiscard]] u32 GetRS2() const noexcept { return p_out_RS2; }
     [[nodiscard]] u32 GetRS3() const noexcept { return p_out_RS3; }
 private:
-    void Processes(const Sensitivity trigger) noexcept
+    PROCESSES_DECL()
     {
-        WriteHandler(trigger);
-        SynchronousReadHandler(trigger);
+        PROCESS_ENTER(WriteHandler, p_Reset_n, p_Clock);
+        PROCESS_ENTER(SynchronousReadHandler, p_Reset_n, p_Clock);
         if constexpr(EnableRS3)
         {
-            Rs3ReadHandler(trigger);
+            PROCESS_ENTER(Rs3ReadHandler, p_Clock);
         }
     }
 
-    void WriteHandler(const Sensitivity trigger) noexcept
+    PROCESS_DECL(WriteHandler)
     {
-        if(Event<Sensitivity::Reset>(trigger) || Event<Sensitivity::Clock>(trigger))
-        {
-            for(u32 i = 1; i < NumRegisters; ++i)
-            {
-                if(!BIT_TO_BOOL(p_Reset_n))
-                {
-                    m_Registers[i] = 0;
-                }
-                else if(RisingEdge<Sensitivity::Clock>(p_Clock, trigger))
-                {
-                    if(p_ControlBus.RF_WriteBackEnable && (p_ControlBus.RF_RD_Address & RegisterMask) == i)
-                    {
-                        m_Registers[i] = p_RD;
-                    }
-                }
-            }
-        }
-    }
-
-    void SynchronousReadHandler(const Sensitivity trigger) noexcept
-    {
-        if(Event<Sensitivity::Reset>(trigger) || Event<Sensitivity::Clock>(trigger))
+        for(u32 i = 1; i < NumRegisters; ++i)
         {
             if(!BIT_TO_BOOL(p_Reset_n))
             {
-                p_out_RS1 = 0;
-                p_out_RS2 = 0;
+                m_Registers[i] = 0;
             }
-            else if(RisingEdge<Sensitivity::Clock>(p_Clock, trigger))
+            else if(RISING_EDGE(p_Clock))
             {
-                p_out_RS1 = m_Registers[p_ControlBus.RF_RS1_Address & RegisterMask];
-                p_out_RS2 = m_Registers[p_ControlBus.RF_RS2_Address & RegisterMask];
+                if(p_ControlBus.RF_WriteBackEnable && (p_ControlBus.RF_RD_Address & RegisterMask) == i)
+                {
+                    m_Registers[i] = p_RD;
+                }
             }
         }
     }
 
-    void Rs3ReadHandler(const Sensitivity trigger) noexcept
+    PROCESS_DECL(SynchronousReadHandler)
     {
-        if(RisingEdge<Sensitivity::Clock>(p_Clock, trigger))
+        if(!BIT_TO_BOOL(p_Reset_n))
+        {
+            p_out_RS1 = 0;
+            p_out_RS2 = 0;
+        }
+        else if(RISING_EDGE(p_Clock))
+        {
+            p_out_RS1 = m_Registers[p_ControlBus.RF_RS1_Address & RegisterMask];
+            p_out_RS2 = m_Registers[p_ControlBus.RF_RS2_Address & RegisterMask];
+        }
+    }
+
+    PROCESS_DECL(Rs3ReadHandler)
+    {
+        if(RISING_EDGE(p_Clock))
         {
             p_out_RS3 = m_Registers[(p_ControlBus.IR_Funct12 >> 7) & RegisterMask];
         }
