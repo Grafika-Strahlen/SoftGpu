@@ -3,7 +3,7 @@ from conan.tools.microsoft import MSBuildDeps
 
 class SoftGpu(ConanFile):
     settings = "os", "compiler", "arch", "build_type"
-    requires = "tauutils/[^1.3.8]"
+    requires = "tauutils/[^1.3.10]"
 
     def generate(self):
         ms = MSBuildDeps(self)
