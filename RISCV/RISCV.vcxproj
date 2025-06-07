@@ -173,6 +173,8 @@
     <ClInclude Include="include\riscv\DualClockFIFO\Synchronizer.hpp" />
     <ClInclude Include="include\riscv\DualClockFIFO\WritePointer.hpp" />
     <ClInclude Include="include\riscv\FIFO.hpp" />
+    <ClInclude Include="include\riscv\InstructionFetch.hpp" />
+    <ClInclude Include="include\riscv\MemoryBus.hpp" />
     <ClInclude Include="include\riscv\RegisterFile.hpp" />
   </ItemGroup>
   <ItemGroup>
