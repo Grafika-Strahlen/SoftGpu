@@ -166,6 +166,12 @@
     <ClInclude Include="include\riscv\ClockGate.hpp" />
     <ClInclude Include="include\riscv\ControlBus.hpp" />
     <ClInclude Include="include\riscv\CpuCore.hpp" />
+    <ClInclude Include="include\riscv\DualClockFIFO\DualClockFIFO.hpp" />
+    <ClInclude Include="include\riscv\DualClockFIFO\Memory.hpp" />
+    <ClInclude Include="include\riscv\DualClockFIFO\Memory.TestBench.hpp" />
+    <ClInclude Include="include\riscv\DualClockFIFO\ReadPointer.hpp" />
+    <ClInclude Include="include\riscv\DualClockFIFO\Synchronizer.hpp" />
+    <ClInclude Include="include\riscv\DualClockFIFO\WritePointer.hpp" />
     <ClInclude Include="include\riscv\FIFO.hpp" />
     <ClInclude Include="include\riscv\RegisterFile.hpp" />
   </ItemGroup>

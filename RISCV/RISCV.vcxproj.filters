@@ -36,6 +36,30 @@
     <ClInclude Include="include\riscv\CpuCore.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="include\riscv\MemoryBus.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\riscv\InstructionFetch.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\riscv\DualClockFIFO\DualClockFIFO.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\riscv\DualClockFIFO\Synchronizer.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\riscv\DualClockFIFO\Memory.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\riscv\DualClockFIFO\WritePointer.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\riscv\DualClockFIFO\ReadPointer.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\riscv\DualClockFIFO\Memory.TestBench.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source.cpp">

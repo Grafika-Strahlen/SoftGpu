@@ -16,6 +16,8 @@
 #include <Safeties.hpp>
 #include <TauUnit.hpp>
 
+#include <riscv/DualClockFIFO/Memory.TestBench.hpp>
+
 static Processor processor;
 DebugManager GlobalDebug;
 
@@ -118,7 +120,11 @@ int main(int argCount, char* args[])
 
     if constexpr(true)
     {
-        ClockGateTestBench();
+        // ClockGateTestBench();
+        riscv::fifo::test::MemorySimpleSet();
+        riscv::fifo::test::MemoryFullSet();
+        riscv::fifo::test::MemoryWrapSet();
+        riscv::fifo::test::MemoryLargeSet();
         tau::TestContainer::Instance().PrintTotals();
         return 0;
     }
