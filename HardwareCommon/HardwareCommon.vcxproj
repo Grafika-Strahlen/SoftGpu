@@ -163,6 +163,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="include\BitSetToData.hpp" />
     <ClInclude Include="include\Common.hpp" />
   </ItemGroup>
   <ItemGroup>
