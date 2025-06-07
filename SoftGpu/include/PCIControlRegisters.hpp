@@ -122,13 +122,9 @@ public:
 
     static inline constexpr u32 DMA_CHANNEL_COUNT = 4;
 private:
-    enum class Sensitivity
-    {
-        Reset = 0,
-        Clock
-    };
+    SENSITIVITY_DECL(p_Reset_n, p_Clock);
 
-    SIGNAL_ENTITIES()
+    SIGNAL_ENTITIES();
 public:
     PciControlRegisters(Processor* const processor) noexcept
         : p_Reset_n(1)
@@ -160,14 +156,14 @@ public:
     {
         p_Reset_n = BOOL_TO_BIT(reset_n);
 
-        Processes(Sensitivity::Reset);
+        TRIGGER_SENSITIVITY(p_Reset_n);
     }
 
     void SetClock(const bool clock) noexcept
     {
         p_Clock = BOOL_TO_BIT(clock);
 
-        Processes(Sensitivity::Clock);
+        TRIGGER_SENSITIVITY(p_Clock);
     }
 
     [[nodiscard]] PciControlRegistersBus& Bus() noexcept { return m_Bus; }
@@ -183,15 +179,14 @@ public:
         m_DebugWriteCallback = debugWriteCallback;
     }
 private:
-    void Processes(const Sensitivity trigger) noexcept
+    PROCESSES_DECL()
     {
-        ResetHandler(trigger);
-        ClockHandler(trigger);
+        PROCESS_ENTER(ClockHandler, p_Reset_n, p_Clock);
     }
 
-    void ResetHandler(const Sensitivity trigger) noexcept
+    PROCESS_DECL(ClockHandler)
     {
-        if(FallingEdge<Sensitivity::Reset>(p_Reset_n, trigger))
+        if(!BIT_TO_BOOL(p_Reset_n))
         {
             m_ControlRegister.Value = 0;
             m_VgaWidth = DEFAULT_VGA_WIDTH;
@@ -215,15 +210,11 @@ private:
                 m_DmaRequestNumbers[i] = 0;
             }
         }
-    }
-
-    void ClockHandler(const Sensitivity trigger) noexcept
-    {
-        if(RisingEdge<Sensitivity::Clock>(p_Clock, trigger))
+        else if(RISING_EDGE(p_Clock))
         {
             ExecuteRead();
         }
-        else if(FallingEdge<Sensitivity::Clock>(p_Clock, trigger))
+        else if(FALLING_EDGE(p_Clock))
         {
             ExecuteWrite();
         }
