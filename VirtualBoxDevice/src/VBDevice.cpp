@@ -341,7 +341,7 @@ void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
     // pciFunction->Processor.GetDisplayManager().GetDisplay(0).BitsPerPixel = 24;
 
     ::new(&pciFunction->VulkanManager) Ref<tau::vd::VulkanManager>(tau::vd::VulkanManager::CreateVulkanManager(pciFunction->Window));
-    ConPrinter::PrintLn("Created vulkan manager.");
+    ConLogLn("Created vulkan manager.");
     ::new(&pciFunction->VulkanCommandPools) Ref<tau::vd::VulkanCommandPools>(::tau::vd::VulkanCommandPools::CreateCommandPools(
         pciFunction->VulkanManager->Device(),
         1,
@@ -356,7 +356,7 @@ void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
 
     pciFunction->VulkanManager->TransitionSwapchain(pciFunction->VulkanCommandPools);
 
-    FillFramebufferGradient(pciFunction->Window, reinterpret_cast<u8*>(pciFunction->Framebuffer));
+    FillFramebufferGradient(pciFunction->Window, static_cast<u8*>(pciFunction->Framebuffer));
 
     // ::new(&pciFunction->FramebufferRenderer) Ref<tau::vd::FramebufferRenderer>(tau::vd::FramebufferRenderer::CreateFramebufferRenderer(
     //     pciFunction->Window,
@@ -451,6 +451,7 @@ static DECLCALLBACK(int) softGpuConstruct(PPDMDEVINS deviceInstance, int instanc
 
     ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: u32Version={XP}, iInstance={}", deviceInstance->u32Version, deviceInstance->iInstance);
     ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: Function Address: {}", reinterpret_cast<void*>(softGpuConstruct));
+    ConLogLn("VBoxSoftGpuEmulator::softGpuConstruct: {} {}", __DATE__, __TIME__);
 
     /*
      * Initialize the instance data so that the destructor won't mess up.
