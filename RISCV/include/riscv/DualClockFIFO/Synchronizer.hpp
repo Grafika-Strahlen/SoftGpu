@@ -4,23 +4,28 @@
 
 namespace riscv::fifo {
 
-template<u32 ElementCountExponent = 2>
+class SynchronizerReceiverSample
+{
+    void ReceiveSynchronizer_Pointer(const u32 index, const u64 pointer) noexcept { }
+};
+
+template<typename Receiver = SynchronizerReceiverSample, u32 ElementCountExponent = 2>
 class Synchronizer final
 {
     DEFAULT_DESTRUCT(Synchronizer);
     DELETE_CM(Synchronizer);
 private:
-    /* ReSharper disable once CppInconsistentNaming */
     SENSITIVITY_DECL(p_Reset_n, p_Clock);
 
     SIGNAL_ENTITIES();
 public:
-    Synchronizer() noexcept
-        : p_Reset_n(0)
+    Synchronizer(Receiver* const parent, const u32 index = 0) noexcept
+        : m_Parent(parent)
+        , m_Index(index)
+        , p_Reset_n(0)
         , p_Clock(0)
         , m_Pad0(0)
         , p_Pointer(0)
-        , p_out_Pointer(0)
         , m_PointerStaging(0)
         , m_Pad1(0)
     { }
@@ -43,11 +48,6 @@ public:
     {
         p_Pointer = pointer;
     }
-
-    [[nodiscard]] u64 GetPointerOut() const noexcept
-    {
-        return p_out_Pointer;
-    }
 private:
     PROCESSES_DECL()
     {
@@ -58,25 +58,27 @@ private:
     {
         if(!BIT_TO_BOOL(p_Reset_n))
         {
+            m_Parent->ReceiveSynchronizer_Pointer(m_Index, 0);
             m_PointerStaging = 0;
-            p_out_Pointer = 0;
         }
         else if(RISING_EDGE(p_Clock))
         {
+            m_Parent->ReceiveSynchronizer_Pointer(m_Index, m_PointerStaging);
             m_PointerStaging = p_Pointer;
-            p_out_Pointer = m_PointerStaging;
         }
     }
 
 private:
+    Receiver* m_Parent;
+    u32 m_Index;
+
     u32 p_Reset_n : 1;
     u32 p_Clock : 1;
     u32 m_Pad0 : 30;
 
     u64 p_Pointer : ElementCountExponent + 1;
-    u64 p_out_Pointer : ElementCountExponent + 1;
     u64 m_PointerStaging : ElementCountExponent + 1;
-    u64 m_Pad1 : 64 - 3 * (ElementCountExponent + 1);
+    u64 m_Pad1 : 64 - 2 * (ElementCountExponent + 1);
 };
 
 }

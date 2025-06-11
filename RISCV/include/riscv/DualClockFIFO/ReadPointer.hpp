@@ -4,7 +4,14 @@
 
 namespace riscv::fifo {
 
-template<u32 ElementCountExponent = 2>
+class ReadPointerReceiverSample
+{
+    void ReceiveReadPointer_ReadEmpty(const u32 index, const bool readEmpty) noexcept { }
+    void ReceiveReadPointer_ReadPointer(const u32 index, const u64 readPointer) noexcept { }
+    void ReceiveReadPointer_ReadAddress(const u32 index, const u64 readAddress) noexcept { }
+};
+
+template<typename Receiver = ReadPointerReceiverSample, u32 ElementCountExponent = 2>
 class ReadPointer final
 {
     DEFAULT_DESTRUCT(ReadPointer);
@@ -17,8 +24,10 @@ private:
 public:
     static inline constexpr u32 ElementCount = 1 << ElementCountExponent;
 public:
-    ReadPointer() noexcept
-        : p_ReadReset_n(0)
+    ReadPointer(Receiver* const parent, const u32 index = 0) noexcept
+        : m_Parent(parent)
+        , m_Index(0)
+        , p_ReadReset_n(0)
         , p_ReadClock(0)
         , p_ReadIncoming(0)
         , m_ReadEmptyIntermediate0(0)
@@ -49,24 +58,14 @@ public:
         p_ReadIncoming = readIncoming;
 
         // p_WriteIncrement is one of the values that affects ReadGrayNext
-        TRIGGER_SENSITIVITY(ReadGrayNext);
+        // TRIGGER_SENSITIVITY(ReadGrayNext);
     }
 
     void SetReadClockWriteAddress(const u64 readClockWriteAddress) noexcept
     {
         p_ReadClockWritePointer = readClockWriteAddress;
 
-        TRIGGER_SENSITIVITY(p_ReadClockWritePointer);
-    }
-
-    [[nodiscard]] bool GetEmpty() const noexcept
-    {
-        return m_ReadEmptyIntermediate1;
-    }
-
-    [[nodiscard]] u64 GetReadAddress() const noexcept
-    {
-        return m_ReadBin & ~(1 << ElementCountExponent);
+        // TRIGGER_SENSITIVITY(p_ReadClockWritePointer);
     }
 private:
     void SetReadBin(const u64 readBin) noexcept
@@ -74,7 +73,9 @@ private:
         m_ReadBin = readBin;
 
         // m_WriteBin is one of the values that affects WriteGrayNext
-        TRIGGER_SENSITIVITY(ReadGrayNext);
+        // TRIGGER_SENSITIVITY(ReadGrayNext);
+
+        m_Parent->ReceiveReadPointer_ReadAddress(m_Index, m_ReadBin & ~(1 << ElementCountExponent));
     }
 
     void SetReadEmptyIntermediate1(const bool readEmptyIntermediate1) noexcept
@@ -82,17 +83,19 @@ private:
         m_ReadEmptyIntermediate1 = BOOL_TO_BIT(readEmptyIntermediate1);
 
         // m_WriteFullIntermediate1 is one of the values that affects WriteGrayNext
-        TRIGGER_SENSITIVITY(ReadGrayNext);
+        // TRIGGER_SENSITIVITY(ReadGrayNext);
+
+        m_Parent->ReceiveReadPointer_ReadEmpty(m_Index, readEmptyIntermediate1);
     }
 
-    [[nodiscard]] bool ReadIncrementNotEmpty() const noexcept
+    [[nodiscard]] bool ReadIncomingNotEmpty() const noexcept
     {
         return BIT_TO_BOOL(p_ReadIncoming) && !BIT_TO_BOOL(m_ReadEmptyIntermediate1);
     }
 
     [[nodiscard]] u64 ReadBinNext() const noexcept
     {
-        return m_ReadBin + BOOL_TO_BIT(ReadIncrementNotEmpty());
+        return m_ReadBin + BOOL_TO_BIT(ReadIncomingNotEmpty());
     }
 
     [[nodiscard]] u64 ReadGrayNext() const noexcept
@@ -100,12 +103,17 @@ private:
         const u64 readBinNext = ReadBinNext();
         return (readBinNext >> 1) ^ readBinNext;
     }
+
+    [[nodiscard]] bool GetReadEmpty() const noexcept
+    {
+        return ReadGrayNext() == p_ReadClockWritePointer;
+    }
 private:
     PROCESSES_DECL()
     {
-        PROCESS_ENTER(BinPortHandler, Sensitivity::p_ReadClock, Sensitivity::p_ReadReset_n);
-        PROCESS_ENTER(EmptyIntermediate0Handler, Sensitivity::ReadGrayNext, Sensitivity::p_ReadClockWritePointer);
-        PROCESS_ENTER(EmptyIntermediate1Handler, Sensitivity::p_ReadClock, Sensitivity::p_ReadReset_n);
+        PROCESS_ENTER(BinPortHandler, p_ReadClock, p_ReadReset_n);
+        // PROCESS_ENTER(EmptyIntermediate0Handler, ReadGrayNext, p_ReadClockWritePointer);
+        // PROCESS_ENTER(EmptyIntermediate1Handler, p_ReadClock, p_ReadReset_n);
     }
 
     PROCESS_DECL(BinPortHandler)
@@ -113,32 +121,41 @@ private:
         if(!BIT_TO_BOOL(p_ReadReset_n))
         {
             SetReadBin(0);
-            p_out_ReadPointer = 0;
-        }
-        else if(RISING_EDGE(p_ReadClock))
-        {
-            SetReadBin(ReadBinNext());
-            p_out_ReadPointer = ReadGrayNext();
-        }
-    }
-
-    PROCESS_DECL(EmptyIntermediate0Handler)
-    {
-        m_ReadEmptyIntermediate0 = BOOL_TO_BIT(ReadGrayNext() == p_ReadClockWritePointer);
-    }
-
-    PROCESS_DECL(EmptyIntermediate1Handler)
-    {
-        if(!BIT_TO_BOOL(p_ReadReset_n))
-        {
+            m_Parent->ReceiveReadPointer_ReadPointer(m_Index, 0);
             SetReadEmptyIntermediate1(true);
         }
         else if(RISING_EDGE(p_ReadClock))
         {
-            SetReadEmptyIntermediate1(m_ReadEmptyIntermediate0);
+            const u64 readBinNext = ReadBinNext();
+            const u64 readGrayNext = ReadGrayNext();
+            const bool empty = GetReadEmpty();
+
+            SetReadBin(readBinNext);
+            m_Parent->ReceiveReadPointer_ReadPointer(m_Index, readGrayNext);
+            SetReadEmptyIntermediate1(empty);
         }
     }
+
+    // PROCESS_DECL(EmptyIntermediate0Handler)
+    // {
+    //     m_ReadEmptyIntermediate0 = BOOL_TO_BIT(ReadGrayNext() == p_ReadClockWritePointer);
+    // }
+    //
+    // PROCESS_DECL(EmptyIntermediate1Handler)
+    // {
+    //     if(!BIT_TO_BOOL(p_ReadReset_n))
+    //     {
+    //         SetReadEmptyIntermediate1(true);
+    //     }
+    //     else if(RISING_EDGE(p_ReadClock))
+    //     {
+    //         SetReadEmptyIntermediate1(m_ReadEmptyIntermediate0);
+    //     }
+    // }
 private:
+    Receiver* m_Parent;
+    u32 m_Index;
+
     u32 p_ReadReset_n : 1;
     u32 p_ReadClock : 1;
     u32 p_ReadIncoming : 1;

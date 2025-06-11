@@ -1,35 +1,38 @@
 #pragma once
 
 #include <Common.hpp>
-#include <BitSet.hpp>
 
 namespace riscv::fifo {
 
-template<u32 DataBits, u32 ElementCountExponent = 2>
+template<typename DataType>
+class MemoryReceiverSample
+{
+    void ReceiveMemory_ReadData(const u32 index, const DataType& data) noexcept { }
+};
+
+template<typename Receiver = MemoryReceiverSample<u32>, typename DataType = u32, u32 ElementCountExponent = 2>
 class Memory final
 {
     DEFAULT_DESTRUCT(Memory);
     DELETE_CM(Memory);
 private:
-    /* ReSharper disable once CppInconsistentNaming */
     SENSITIVITY_DECL(p_WriteClock);
 
     SIGNAL_ENTITIES();
 public:
-    static inline constexpr uSys DataBitsSys = DataBits;
     static inline constexpr u32 ElementCount = 1 << ElementCountExponent;
-    using RawDataT = BitSetC<DataBitsSys>;
 public:
-    Memory() noexcept
-        : p_WriteClock(0)
+    Memory(Receiver* const parent, const u32 index = 0) noexcept
+        : m_Parent(parent)
+        , m_Index(0)
+        , p_WriteClock(0)
         , p_WriteClockEnable(0)
         , p_WriteFull(0)
         , m_Pad0(0)
         , p_WriteAddress(0)
         , p_ReadAddress(0)
         , m_Pad1(0)
-        , p_WriteData(false)
-        , p_out_ReadData(false)
+        , p_WriteData{}
         , m_RamBlock()
     { }
 
@@ -58,16 +61,13 @@ public:
     void SetReadAddress(const u64 readAddress) noexcept
     {
         p_ReadAddress = readAddress;
+
+        m_Parent->ReceiveMemory_ReadData(m_Index, m_RamBlock[p_ReadAddress]);
     }
 
-    void SetWriteData(const BitSetC<DataBitsSys>& writeData) noexcept
+    void SetWriteData(const DataType& writeData) noexcept
     {
         p_WriteData = writeData;
-    }
-
-    [[nodiscard]] RawDataT GetReadData() const noexcept
-    {
-        return p_out_ReadData;
     }
 private:
     [[nodiscard]] bool WriteEnable() const noexcept
@@ -87,13 +87,22 @@ private:
             if(WriteEnable())
             {
                 m_RamBlock[p_WriteAddress] = p_WriteData;
+
+                // This is triggered outside of a process anytime the memory changes,
+                // Thus we know that it only changes when the write address and read address
+                // are equal. Or when read address changes.
+                if(p_WriteAddress == p_ReadAddress)
+                {
+                    m_Parent->ReceiveMemory_ReadData(m_Index, m_RamBlock[p_ReadAddress]);
+                }
             }
         }
-
-        p_out_ReadData = m_RamBlock[p_ReadAddress];
     }
 
 private:
+    Receiver* m_Parent;
+    u32 m_Index;
+
     u32 p_WriteClock : 1;
     u32 p_WriteClockEnable : 1;
     u32 p_WriteFull : 1;
@@ -102,9 +111,24 @@ private:
     u64 p_WriteAddress : ElementCountExponent;
     u64 p_ReadAddress : ElementCountExponent;
     u64 m_Pad1 : 64 - 2 * (ElementCountExponent);
-    RawDataT p_WriteData;
-    RawDataT p_out_ReadData;
-    RawDataT m_RamBlock[ElementCount];
+    DataType p_WriteData;
+    DataType m_RamBlock[ElementCount];
+    u8 OverFlow0 = 0xCC;
+    u8 OverFlow1 = 0xCC;
+    u8 OverFlow2 = 0xCC;
+    u8 OverFlow3 = 0xCC;
+    u8 OverFlow4 = 0xCC;
+    u8 OverFlow5 = 0xCC;
+    u8 OverFlow6 = 0xCC;
+    u8 OverFlow7 = 0xCC;
+    u8 OverFlow8 = 0xCC;
+    u8 OverFlow9 = 0xCC;
+    u8 OverFlowA = 0xCC;
+    u8 OverFlowB = 0xCC;
+    u8 OverFlowC = 0xCC;
+    u8 OverFlowD = 0xCC;
+    u8 OverFlowE = 0xCC;
+    u8 OverFlowF = 0xCC;
 };
 
 }
