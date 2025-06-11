@@ -60,6 +60,12 @@
     <ClInclude Include="include\riscv\DualClockFIFO\Memory.TestBench.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="include\riscv\DualClockFIFO\DualClockFIFO.TestBench.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\riscv\DualClockFIFO\Synchronizer.TestBench.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source.cpp">

@@ -1,5 +1,8 @@
 #include <bit>
 
+#include <riscv/DualClockFIFO/Memory.TestBench.hpp>
+#include <riscv/DualClockFIFO/Synchronizer.TestBench.hpp>
+#include <riscv/DualClockFIFO/DualClockFIFO.TestBench.hpp>
 #include "Processor.hpp"
 #include <ConPrinter.hpp>
 #include "DebugManager.hpp"
@@ -16,7 +19,6 @@
 #include <Safeties.hpp>
 #include <TauUnit.hpp>
 
-#include <riscv/DualClockFIFO/Memory.TestBench.hpp>
 
 static Processor processor;
 DebugManager GlobalDebug;
@@ -121,10 +123,17 @@ int main(int argCount, char* args[])
     if constexpr(true)
     {
         // ClockGateTestBench();
-        riscv::fifo::test::MemorySimpleSet();
-        riscv::fifo::test::MemoryFullSet();
-        riscv::fifo::test::MemoryWrapSet();
-        riscv::fifo::test::MemoryLargeSet();
+        riscv::fifo::test::SynchronizerResetTest();
+        riscv::fifo::test::SynchronizerSingleTest();
+        riscv::fifo::test::SynchronizerIncrementSingleBitTest();
+        riscv::fifo::test::SynchronizerIncrementDualBitTest();
+        riscv::fifo::test::SynchronizerIncrement6BitTest();
+        // riscv::fifo::test::MemorySimpleSet();
+        // riscv::fifo::test::MemoryFullSet();
+        // riscv::fifo::test::MemoryWrapSet();
+        // riscv::fifo::test::MemoryLargeSet();
+        // riscv::fifo::test::FifoTestFastRead();
+        // riscv::fifo::test::FifoTestFastWrite();
         tau::TestContainer::Instance().PrintTotals();
         return 0;
     }
