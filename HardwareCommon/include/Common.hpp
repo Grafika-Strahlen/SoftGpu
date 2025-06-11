@@ -15,6 +15,19 @@
     return b != 0;
 }
 
+template<typename T, typename TBit>
+static T SetBit(const T data, const TBit bit, const bool set) noexcept
+{
+    if(set)
+    {
+        return data | (1 << bit);
+    }
+    else
+    {
+        return data & ~(1 << bit);
+    }
+}
+
 template<typename Sensitivity, Sensitivity TargetSense>
 [[nodiscard]] bool EventVHDL(const Sensitivity trigger) noexcept
 {
