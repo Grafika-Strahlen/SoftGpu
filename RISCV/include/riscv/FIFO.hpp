@@ -4,8 +4,17 @@
 
 namespace riscv {
 
-// Mostly just implemented from http://www.sunburst-design.com/papers/CummingsSNUG2002SJ_FIFO1.pdf
-template<typename DataType = u32, u32 ElementCountExponent = 2, bool SyncRead = false, bool Safe = false>
+template<typename DataType>
+class FIFOReceiverSample
+{
+    void ReceiveFIFO_HalfFull(const u32 index, const bool halfFull) noexcept { }
+    void ReceiveFIFO_Level(const u32 index, const u32 level) noexcept { }
+    void ReceiveFIFO_Free(const u32 index, const bool free) noexcept { }
+    void ReceiveFIFO_ReadData(const u32 index, const DataType& data) noexcept { }
+    void ReceiveFIFO_Available(const u32 index, const bool available) noexcept { }
+};
+
+template<typename Receiver = FIFOReceiverSample<u32>, typename DataType = u32, u32 ElementCountExponent = 2, bool SyncRead = false, bool Safe = false, bool FullReset = false>
 class FIFO final
 {
     DEFAULT_DESTRUCT(FIFO);
@@ -16,20 +25,18 @@ private:
     SIGNAL_ENTITIES();
 public:
     static inline constexpr u32 ElementCount = 1 << ElementCountExponent;
+    static inline constexpr u32 PointerMask = (1 << ElementCountExponent) - 1;
 public:
-    FIFO() noexcept
-        : p_Reset_n(0)
+    FIFO(Receiver* const parent, const u32 index = 0) noexcept
+        : m_Parent(parent)
+        , m_Index(index)
+        , p_Reset_n(0)
         , p_Clock(0)
         , p_Clear(0)
         , p_WriteEnable(0)
         , p_ReadEnable(0)
-        , p_out_HalfFull(0)
-        , p_out_Free(0)
-        , p_out_Available(0)
         , m_Pad0(0)
-        , p_out_Level(0)
         , p_WriteData{ }
-        , p_out_ReadData{ }
         , m_Memory{ }
         , m_WritePointer(0)
         , m_ReadPointer(0)
@@ -69,61 +76,6 @@ public:
     void SetWriteData(const DataType writeData) noexcept
     {
         p_WriteData = writeData;
-    }
-
-    [[nodiscard]] DataType GetReadData() const noexcept
-    {
-        if constexpr(ElementCount == 1)
-        {
-            return m_Memory[0];
-        }
-        else
-        {
-            if constexpr(!SyncRead)
-            {
-                return m_Memory[m_ReadPointer0];
-            }
-            else
-            {
-                return p_out_ReadData;
-            }
-        }
-    }
-
-    [[nodiscard]] bool GetHalfFull() const noexcept
-    {
-        if constexpr(!SyncRead)
-        {
-            return Half();
-        }
-        else
-        {
-            return p_out_HalfFull;
-        }
-    }
-
-    [[nodiscard]] bool GetFree() const noexcept
-    {
-        if constexpr(!SyncRead)
-        {
-            return Free();
-        }
-        else
-        {
-            return p_out_Free;
-        }
-    }
-
-    [[nodiscard]] bool GetAvailable() const noexcept
-    {
-        if constexpr(!SyncRead)
-        {
-            return Available();
-        }
-        else
-        {
-            return p_out_Available;
-        }
     }
 private:
     // Muxes
@@ -192,9 +144,7 @@ private:
         }
         else
         {
-            constexpr u32 BitMask = (1 << (ElementCountExponent - 1)) - 1;
-
-            return (m_WritePointer & BitMask) == (m_ReadPointer & BitMask);
+            return (m_WritePointer & PointerMask) == (m_ReadPointer & PointerMask);
         }
     }
 
@@ -206,9 +156,7 @@ private:
         }
         else
         {
-            constexpr u32 BitMask = (1 << (ElementCountExponent - 1));
-
-            return Match() && ((m_WritePointer & BitMask) != (m_ReadPointer & BitMask));
+            return Match() && ((m_WritePointer & PointerMask) != (m_ReadPointer & PointerMask));
         }
     }
 
@@ -267,12 +215,28 @@ private:
     {
         PROCESS_ENTER(PointersHandler, p_Reset_n, p_Clock);
         PROCESS_ENTER(LevelHandler, Level);
-        PROCESS_ENTER(WriteHandler, p_Reset_n, p_Clock);
-        PROCESS_ENTER(ReadHandler, p_Reset_n, p_Clock);
+
+        if constexpr(FullReset)
+        {
+            PROCESS_ENTER(FullResetWriteHandler, p_Reset_n, p_Clock);
+        }
+        else
+        {
+            PROCESS_ENTER(NoResetWriteHandler, p_Clock);
+        }
 
         if constexpr(SyncRead)
         {
-            PROCESS_ENTER(SyncStatusHandler, p_Reset_n, p_Clock);
+            PROCESS_ENTER(SyncReadHandler, p_Clock);
+        }
+        else
+        {
+            PROCESS_ENTER(AsyncReadHandler, p_Clock);
+        }
+
+        if constexpr(SyncRead)
+        {
+            PROCESS_ENTER(SyncStatusHandler, p_Clock);
         }
     }
 
@@ -283,6 +247,14 @@ private:
             m_WritePointer = 0;
             m_ReadPointer = 0;
 
+            if constexpr(!SyncRead)
+            {
+                // HalfFull Free, and Available are muxes in this case.
+                m_Parent->ReceiveFIFO_HalfFull(m_Index, Half());
+                m_Parent->ReceiveFIFO_Free(m_Index, Free());
+                m_Parent->ReceiveFIFO_Available(m_Index, Available());
+            }
+
             TRIGGER_SENSITIVITY(Level);
         }
         else if(RISING_EDGE(p_Clock))
@@ -290,52 +262,98 @@ private:
             m_WritePointer = NextWrite();
             m_ReadPointer = NextRead();
 
+            if constexpr(!SyncRead)
+            {
+                // HalfFull Free, and Available are muxes in this case.
+                m_Parent->ReceiveFIFO_HalfFull(m_Index, Half());
+                m_Parent->ReceiveFIFO_Free(m_Index, Free());
+                m_Parent->ReceiveFIFO_Available(m_Index, Available());
+            }
+
             TRIGGER_SENSITIVITY(Level);
         }
     }
 
     PROCESS_DECL(LevelHandler)
     {
-        p_out_Level = 0;
-        p_out_Level = Level();
+        m_Parent.ReceiveFIFO_Level(m_Index, Level());
     }
 
-    PROCESS_DECL(WriteHandler)
+    PROCESS_DECL(FullResetWriteHandler)
     {
-        if constexpr(ElementCount == 1)
+        if constexpr(FullReset)
         {
-            if(!BIT_TO_BOOL(p_Reset_n))
+            if constexpr(ElementCount == 1)
             {
-                m_Memory[0] = DataType{};
-            }
-            else if(RISING_EDGE(p_Clock))
-            {
-                if(WriteEnable())
+                if(!BIT_TO_BOOL(p_Reset_n))
                 {
-                    m_Memory[0] = p_WriteData;
+                    m_Memory[0] = DataType {};
+
+                    // ReadData is a mux in this case.
+                    m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[0]);
+                }
+                else if(RISING_EDGE(p_Clock))
+                {
+                    if(WriteEnable())
+                    {
+                        m_Memory[0] = p_WriteData;
+
+                        // ReadData is a mux in this case.
+                        m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[0]);
+                    }
                 }
             }
-        }
-        else
-        {
-            if(!BIT_TO_BOOL(p_Reset_n))
+            else
             {
-                for(u32 i = 0; i < ElementCount; ++i)
+                if(!BIT_TO_BOOL(p_Reset_n))
                 {
-                    m_Memory[i] = DataType {};
+                    for(u32 i = 0; i < ElementCount; ++i)
+                    {
+                        m_Memory[i] = DataType {};
+                    }
                 }
-            }
-            else if(RISING_EDGE(p_Clock))
-            {
-                if(WriteEnable())
+                else if(RISING_EDGE(p_Clock))
                 {
-                    m_Memory[m_WritePointer] = p_WriteData;
+                    if(WriteEnable())
+                    {
+                        m_Memory[m_WritePointer & (ElementCount - 1)] = p_WriteData;
+                    }
                 }
             }
         }
     }
 
-    PROCESS_DECL(ReadHandler)
+    PROCESS_DECL(NoResetWriteHandler)
+    {
+        if constexpr(!FullReset)
+        {
+            if constexpr(ElementCount == 1)
+            {
+                if(RISING_EDGE(p_Clock))
+                {
+                    if(WriteEnable())
+                    {
+                        m_Memory[0] = p_WriteData;
+
+                        // ReadData is a mux in this case.
+                        m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[0]);
+                    }
+                }
+            }
+            else
+            {
+                if(RISING_EDGE(p_Clock))
+                {
+                    if(WriteEnable())
+                    {
+                        m_Memory[m_WritePointer] = p_WriteData;
+                    }
+                }
+            }
+        }
+    }
+
+    PROCESS_DECL(SyncReadHandler)
     {
         if constexpr(SyncRead)
         {
@@ -343,17 +361,24 @@ private:
             {
                 if(RISING_EDGE(p_Clock))
                 {
-                    m_ReadPointer0 = NextRead();
+                    m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[m_ReadPointer & PointerMask]);
                 }
             }
         }
-        else
+    }
+
+    PROCESS_DECL(AsyncReadHandler)
+    {
+        if constexpr(!SyncRead)
         {
             if constexpr(ElementCount > 1)
             {
                 if(RISING_EDGE(p_Clock))
                 {
-                    p_out_ReadData = m_Memory[m_ReadPointer];
+                    m_ReadPointer0 = NextRead();
+
+                    // ReadData is a mux in this case.
+                    m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[m_ReadPointer0 & PointerMask]);
                 }
             }
         }
@@ -361,39 +386,40 @@ private:
 
     PROCESS_DECL(SyncStatusHandler)
     {
-        if(!BIT_TO_BOOL(p_Reset_n))
+        if constexpr(SyncRead)
         {
-            p_out_HalfFull = 0;
-            p_out_Free = 0;
-            p_out_Available = 0;
-        }
-        else if(RISING_EDGE(p_Clock))
-        {
-            p_out_HalfFull = Half();
-            p_out_Free = Free();
-            p_out_Available = Available();
+            if(!BIT_TO_BOOL(p_Reset_n))
+            {
+                m_Parent.ReceiveFIFO_HalfFull(m_Index, 0);
+                m_Parent.ReceiveFIFO_Free(m_Index, 0);
+                m_Parent.ReceiveFIFO_Available(m_Index, 0);
+            }
+            else if(RISING_EDGE(p_Clock))
+            {
+                m_Parent.ReceiveFIFO_HalfFull(m_Index, Half());
+                m_Parent.ReceiveFIFO_Free(m_Index, Free());
+                m_Parent.ReceiveFIFO_Available(m_Index, Available());
+            }
         }
     }
 private:
+    Receiver* m_Parent;
+    u32 m_Index;
+
     u32 p_Reset_n : 1;
     u32 p_Clock : 1;
     u32 p_Clear : 1;
     u32 p_WriteEnable : 1;
     u32 p_ReadEnable : 1;
-    u32 p_out_HalfFull : 1;
-    u32 p_out_Free : 1;
-    u32 p_out_Available : 1;
-    u32 m_Pad0 : 24;
+    u32 m_Pad0 : 27;
 
-    u32 p_out_Level;
     DataType p_WriteData;
-    DataType p_out_ReadData;
 
     DataType m_Memory[ElementCount];
-    u32 m_WritePointer : ElementCountExponent + 1;
-    u32 m_ReadPointer : ElementCountExponent + 1;
-    u32 m_ReadPointer0 : ElementCountExponent + 1;
-    u32 m_Pad1 : 32 - 3 * (ElementCountExponent + 1);
+    u64 m_WritePointer : ElementCountExponent + 1;
+    u64 m_ReadPointer : ElementCountExponent + 1;
+    u64 m_ReadPointer0 : ElementCountExponent + 1;
+    u64 m_Pad1 : 64 - 3 * (ElementCountExponent + 1);
 };
 
 }
