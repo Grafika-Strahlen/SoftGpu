@@ -14,11 +14,12 @@ public:
     u32 WriteData;
     u32 ByteEnable : 4;
     u32 ReadWrite : 1; // Read = 0, Write = 1
+    u32 Strobe : 1;
     u32 Source : 1; // Data Access = 0, Instruction Fetch = 1
     u32 Atomic : 1;
     u32 AtomicOperation : 4;
     u32 Fence : 1;
-    u32 Pad0 : 20;
+    u32 Pad0 : 19;
 };
 
 struct MemoryBusResponse final
