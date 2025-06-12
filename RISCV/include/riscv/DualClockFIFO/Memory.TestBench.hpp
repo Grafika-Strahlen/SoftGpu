@@ -62,11 +62,11 @@ static void MemorySimpleSet()
     TAU_UNIT_TEST();
 
     using DataType = u16;
-    using MemRec = MemoryReceiver<DataType>;
-    using MemoryTest = Memory<MemRec, DataType, 5>;
+    using RecType = MemoryReceiver<DataType>;
+    using IpType = Memory<RecType, DataType, 5>;
 
-    MemRec receiver {};
-    MemoryTest memory(&receiver);
+    RecType receiver {};
+    IpType memory(&receiver);
 
     // Trigger an initial clock cycle to force a clear.
     memory.SetWriteClock(true);
@@ -126,11 +126,11 @@ static void MemoryFullSet()
     TAU_UNIT_TEST();
 
     using DataType = u16;
-    using MemRec = MemoryReceiver<DataType>;
-    using MemoryTest = Memory<MemRec, DataType, 5>;
+    using RecType = MemoryReceiver<DataType>;
+    using IpType = Memory<RecType, DataType, 5>;
 
-    MemRec receiver {};
-    MemoryTest memory(&receiver);
+    RecType receiver {};
+    IpType memory(&receiver);
 
     // Trigger an initial clock cycle to force a clear.
     memory.SetWriteClock(true);
@@ -192,11 +192,11 @@ static void MemoryWrapSet()
     TAU_UNIT_TEST();
 
     using DataType = u16;
-    using MemRec = MemoryReceiver<DataType>;
-    using MemoryTest = Memory<MemRec, DataType, 5>;
+    using RecType = MemoryReceiver<DataType>;
+    using IpType = Memory<RecType, DataType, 5>;
 
-    MemRec receiver {};
-    MemoryTest memory(&receiver);
+    RecType receiver {};
+    IpType memory(&receiver);
 
     // Trigger an initial clock cycle to force a clear.
     memory.SetWriteClock(true);
@@ -244,11 +244,11 @@ static void MemoryLargeSet()
     constexpr u64 TestB = 0x3141'1592'6535'8979;
 
     using DataType = TestStruct;
-    using MemRec = MemoryReceiver<DataType>;
-    using MemoryTest = Memory<MemRec, DataType, 5>;
+    using RecType = MemoryReceiver<DataType>;
+    using IpType = Memory<RecType, DataType, 5>;
 
-    MemRec receiver {};
-    MemoryTest memory(&receiver);
+    RecType receiver {};
+    IpType memory(&receiver);
 
     // Trigger an initial clock cycle to force a clear.
     memory.SetWriteClock(true);

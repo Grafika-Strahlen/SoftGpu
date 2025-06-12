@@ -38,11 +38,11 @@ static void SynchronizerResetTest()
 {
     TAU_UNIT_TEST();
 
-    using SyncRec = SynchronizerReceiver;
-    using SyncTest = Synchronizer<SyncRec>;
+    using RecType = SynchronizerReceiver;
+    using IpType = Synchronizer<RecType>;
 
-    SyncRec receiver {};
-    SyncTest sync(&receiver);
+    RecType receiver {};
+    IpType sync(&receiver);
 
     sync.SetPointer(1);
 
@@ -71,11 +71,11 @@ static void SynchronizerSingleTest()
 {
     TAU_UNIT_TEST();
 
-    using SyncRec = SynchronizerReceiver;
-    using SyncTest = Synchronizer<SyncRec>;
+    using RecType = SynchronizerReceiver;
+    using IpType = Synchronizer<RecType>;
 
-    SyncRec receiver {};
-    SyncTest sync(&receiver);
+    RecType receiver {};
+    IpType sync(&receiver);
 
     sync.SetPointer(1);
 
@@ -130,11 +130,11 @@ static void SynchronizerIncrementSingleBitTest()
 {
     TAU_UNIT_TEST();
 
-    using SyncRec = SynchronizerReceiver;
-    using SyncTest = Synchronizer<SyncRec, 0>;
+    using RecType = SynchronizerReceiver;
+    using IpType = Synchronizer<RecType, 0>;
 
-    SyncRec receiver {};
-    SyncTest sync(&receiver);
+    RecType receiver {};
+    IpType sync(&receiver);
 
     sync.SetResetN(true);
 
@@ -177,11 +177,11 @@ static void SynchronizerIncrementDualBitTest()
 {
     TAU_UNIT_TEST();
 
-    using SyncRec = SynchronizerReceiver;
-    using SyncTest = Synchronizer<SyncRec, 1>;
+    using RecType = SynchronizerReceiver;
+    using IpType = Synchronizer<RecType, 1>;
 
-    SyncRec receiver {};
-    SyncTest sync(&receiver);
+    RecType receiver {};
+    IpType sync(&receiver);
 
     sync.SetResetN(true);
 
@@ -224,11 +224,11 @@ static void SynchronizerIncrement6BitTest()
 {
     TAU_UNIT_TEST();
 
-    using SyncRec = SynchronizerReceiver;
-    using SyncTest = Synchronizer<SyncRec, 6>;
+    using RecType = SynchronizerReceiver;
+    using IpType = Synchronizer<RecType, 6>;
 
-    SyncRec receiver {};
-    SyncTest sync(&receiver);
+    RecType receiver {};
+    IpType sync(&receiver);
     receiver.Log = false;
 
     sync.SetResetN(true);
