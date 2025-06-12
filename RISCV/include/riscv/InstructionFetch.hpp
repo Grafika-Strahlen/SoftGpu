@@ -20,19 +20,36 @@ public:
     u32 Pad0 : 29;
 };
 
+struct InstructionDataPacked final
+{
+    DEFAULT_CONSTRUCT_PU(InstructionDataPacked);
+    DEFAULT_DESTRUCT(InstructionDataPacked);
+    DEFAULT_CM_PU(InstructionDataPacked);
+public:
+    u16 Data;
+    u16 Error : 1;
+    u16 Pad : 15;
+};
+
 struct InstructionPrefetchBuffer final
 {
     DEFAULT_CONSTRUCT_PU(InstructionPrefetchBuffer);
     DEFAULT_DESTRUCT(InstructionPrefetchBuffer);
     DEFAULT_CM_PU(InstructionPrefetchBuffer);
 public:
-    u16 Data[2];
-    u32 Error : 2;
+    InstructionDataPacked Data[2];
     u32 Enable : 2;
     u32 State : 2;
     u32 Pad0 : 26;
 };
 
+class InstructionFetchReceiverSample
+{
+    void ReceiveInstructionFetch_Bus(const u32 index, const InstructionFetchBus& bus) noexcept { }
+    void ReceiveInstructionFetch_MemoryRequest(const u32 index, const MemoryBusRequest& bus) noexcept { }
+};
+
+template<typename Receiver = InstructionFetchReceiverSample>
 class InstructionFetch final
 {
     DEFAULT_DESTRUCT(InstructionFetch);
@@ -49,8 +66,10 @@ private:
         Pending
     };
 public:
-    InstructionFetch() noexcept
-        : p_Reset_n(0)
+    InstructionFetch(Receiver* const parent, const u32 index = 0) noexcept
+        : m_Parent(parent)
+        , m_Index(index)
+        , p_Reset_n(0)
         , p_Clock(0)
         , m_Pad0(0)
         , p_ControlBus()
@@ -86,6 +105,16 @@ public:
         TRIGGER_SENSITIVITY(p_Clock);
     }
 
+    void SetControlBus(const ControlBus& controlBus) noexcept
+    {
+        p_ControlBus = controlBus;
+
+        UpdateMemoryRequest();
+
+        m_PrefetchFifo[0].SetReadEnable(ReadPrefetchBuffer_Enable0());
+        m_PrefetchFifo[1].SetReadEnable(ReadPrefetchBuffer_Enable1());
+    }
+
     void SetMemoryResponse(const MemoryBusResponse& response) noexcept
     {
         p_MemoryResponse = response;
@@ -100,17 +129,17 @@ public:
         m_PrefetchFifo[1].SetReadEnable(ReadPrefetchBuffer_Enable1());
     }
 
-    [[nodiscard]] const MemoryBusRequest& GetMemoryRequest() noexcept
-    {
-        p_out_MemoryRequest.Address = MemoryRequest_Address();
-        p_out_MemoryRequest.Strobe = BOOL_TO_BIT(MemoryRequest_Strobe());
-        return p_out_MemoryRequest;
-    }
-
-    [[nodiscard]] const InstructionFetchBus& GetInstructionFetch() const noexcept
-    {
-        return p_out_InstructionFetch;
-    }
+    // [[nodiscard]] const MemoryBusRequest& GetMemoryRequest() noexcept
+    // {
+    //     p_out_MemoryRequest.Address = MemoryRequest_Address();
+    //     p_out_MemoryRequest.Strobe = BOOL_TO_BIT(MemoryRequest_Strobe());
+    //     return p_out_MemoryRequest;
+    // }
+    //
+    // [[nodiscard]] const InstructionFetchBus& GetInstructionFetch() const noexcept
+    // {
+    //     return p_out_InstructionFetch;
+    // }
 public:
     void ReceiveFIFO_HalfFull(const u32 index, const bool halfFull) noexcept
     { }
@@ -121,18 +150,76 @@ public:
     void ReceiveFIFO_Free(const u32 index, const bool free) noexcept
     {
         m_WritePrefetchBuffer.State = SetBit(m_WritePrefetchBuffer.State, index, free);
+
+        UpdateMemoryRequest();
+        UpdateInstructionFetchBus();
     }
 
-    void ReceiveFIFO_ReadData(const u32 index, const u16 data) noexcept
+    void ReceiveFIFO_ReadData(const u32 index, const InstructionDataPacked& data) noexcept
     {
         m_ReadPrefetchBuffer.Data[index] = data;
+
+        UpdateInstructionFetchBus();
     }
 
     void ReceiveFIFO_Available(const u32 index, const bool available) noexcept
     {
         m_ReadPrefetchBuffer.State = SetBit(m_ReadPrefetchBuffer.State, index, available);
+
+        UpdateInstructionFetchBus();
     }
 private:
+    void SetFetchState(const FetchState fetchState) noexcept
+    {
+        m_FetchState = fetchState;
+
+        UpdateMemoryRequest();
+        UpdateInstructionFetchBus();
+
+        m_PrefetchFifo[0].SetWriteEnable(WritePrefetchBuffer_Enable0());
+        m_PrefetchFifo[1].SetWriteEnable(WritePrefetchBuffer_Enable1());
+    }
+
+    void SetRestart(const bool restart) noexcept
+    {
+        m_Restart = restart;
+
+        m_PrefetchFifo[0].SetClear(restart);
+        m_PrefetchFifo[1].SetClear(restart);
+    }
+
+    void SetProgramCounter(const u32 programCounter) noexcept
+    {
+        m_ProgramCounter = programCounter;
+
+        UpdateMemoryRequest();
+    }
+
+    void UpdateMemoryRequest() noexcept
+    {
+        p_out_MemoryRequest.Address = MemoryRequest_Address();
+        p_out_MemoryRequest.WriteData = 0;
+        p_out_MemoryRequest.ByteEnable = 0;
+        p_out_MemoryRequest.ReadWrite = 0; // Read Only
+        p_out_MemoryRequest.Strobe = BOOL_TO_BIT(MemoryRequest_Strobe());
+        p_out_MemoryRequest.Source = 1; // Instruction Fetch
+        p_out_MemoryRequest.Atomic = 0; // Not Atomic
+        p_out_MemoryRequest.AtomicOperation = 0; // Not Atomic
+        p_out_MemoryRequest.Fence = p_ControlBus.IF_Fence; // Not Atomic
+
+        m_Parent->ReceiveInstructionFetch_MemoryRequest(0, p_out_MemoryRequest);
+    }
+
+    void UpdateInstructionFetchBus() noexcept
+    {
+        p_out_InstructionFetch.Instruction = InstructionFetch_Instruction();
+        p_out_InstructionFetch.Valid = BOOL_TO_BIT(InstructionFetch_Valid());
+        p_out_InstructionFetch.Error = BOOL_TO_BIT(InstructionFetch_Error());
+        p_out_InstructionFetch.Halted = BOOL_TO_BIT(InstructionFetch_Halted());
+
+        m_Parent->ReceiveInstructionFetch_Bus(0, p_out_InstructionFetch);
+    }
+
     [[nodiscard]] u32 MemoryRequest_Address() const noexcept
     {
         // Align the PC to the 4 byte boundary.
@@ -191,12 +278,49 @@ private:
 
     [[nodiscard]] bool ReadPrefetchBuffer_Enable0() const noexcept
     {
-        return true && p_ControlBus.IF_Acknowledge;
+        return BIT_TO_BOOL(Issue_Valid() & 0x1) && p_ControlBus.IF_Acknowledge;
     }
 
     [[nodiscard]] bool ReadPrefetchBuffer_Enable1() const noexcept
     {
-        return true && p_ControlBus.IF_Acknowledge;
+        return BIT_TO_BOOL((Issue_Valid() >> 1) & 0x1) && p_ControlBus.IF_Acknowledge;
+    }
+
+    [[nodiscard]] u32 Issue_Valid() const noexcept
+    {
+        const u32 statusBit = InstructionPrefetchBus_Available() & 0x1;
+        return statusBit | (statusBit << 1);
+    }
+
+    [[nodiscard]] bool Issue_Error() const noexcept
+    {
+        return m_ReadPrefetchBuffer.Data[0].Error;
+    }
+
+    [[nodiscard]] u32 Issue_Instruction() const noexcept
+    {
+        return (static_cast<u32>(m_ReadPrefetchBuffer.Data[1].Data) << 16) | m_ReadPrefetchBuffer.Data[0].Data;
+    }
+
+    [[nodiscard]] u32 InstructionFetch_Instruction() const noexcept
+    {
+        return Issue_Instruction();
+    }
+
+    [[nodiscard]] bool InstructionFetch_Valid() const noexcept
+    {
+        const u32 issueValid = Issue_Valid();
+        return BIT_TO_BOOL((issueValid >> 1) & 0x1) || BIT_TO_BOOL(issueValid & 0x1);
+    }
+
+    [[nodiscard]] bool InstructionFetch_Error() const noexcept
+    {
+        return Issue_Error();
+    }
+
+    [[nodiscard]] bool InstructionFetch_Halted() const noexcept
+    {
+        return m_FetchState == FetchState::Request && (InstructionPrefetchBus_Free() & 0x3) != 0x3;
     }
 private:
     PROCESSES_DECL()
@@ -208,56 +332,55 @@ private:
     {
         if(!BIT_TO_BOOL(p_Reset_n))
         {
-            m_FetchState = FetchState::Restart;
-            m_Restart = 1;
-            m_ProgramCounter = 0;
+            SetFetchState(FetchState::Restart);
+            SetRestart(true);
+            SetProgramCounter(0);
         }
         else if(RISING_EDGE(p_Clock))
         {
             switch(m_FetchState)
             {
                 case FetchState::Request:
-                    m_Restart |= p_ControlBus.IF_Reset;
+                    SetRestart(m_Restart || BIT_TO_BOOL(p_ControlBus.IF_Reset));
 
-                    // Does the Instruction Prefetch Buffer have space.
+                    // Does the Instruction Prefetch Buffer have space?
                     if(InstructionPrefetchBus_Free() == 0b11)
                     {
-                        m_FetchState = FetchState::Pending;
+                        SetFetchState(FetchState::Pending);
                     }
                     if(BIT_TO_BOOL(m_Restart) || BIT_TO_BOOL(p_ControlBus.IF_Reset))
                     {
-                        m_FetchState = FetchState::Restart;
+                        SetFetchState(FetchState::Restart);
                     }
                     break;
                 case FetchState::Pending:
-                    m_Restart |= p_ControlBus.IF_Reset;
+                    SetRestart(m_Restart || BIT_TO_BOOL(p_ControlBus.IF_Reset));
                     if(BusResponse())
                     {
-                        m_ProgramCounter += 4;
-                        m_ProgramCounter &= 0xFFFFFFFC;
+                        SetProgramCounter((m_ProgramCounter + 4) & 0xFFFFFFFC);
                         if(BIT_TO_BOOL(m_Restart) || BIT_TO_BOOL(p_ControlBus.IF_Reset))
                         {
-                            m_FetchState = FetchState::Restart;
+                            SetFetchState(FetchState::Restart);
                         }
                         else
                         {
-                            m_FetchState = FetchState::Request;
+                            SetFetchState(FetchState::Request);
                         }
                     }
                     break;
                 case FetchState::Restart:
                 default:
-                    m_Restart = 0;
-                    m_ProgramCounter = p_ControlBus.PC_Next;
-                    m_FetchState = FetchState::Request;
+                    SetRestart(false);
+                    SetProgramCounter(p_ControlBus.PC_Next);
+                    SetFetchState(FetchState::Request);
                     break;
             }
         }
-
-        m_PrefetchFifo[0].SetClear(BIT_TO_BOOL(m_Restart));
-        m_PrefetchFifo[1].SetClear(BIT_TO_BOOL(m_Restart));
     }
 private:
+    Receiver* m_Parent;
+    u32 m_Index;
+
     u32 p_Reset_n : 1;
     u32 p_Clock : 1;
     u32 m_Pad0 : 30;  // NOLINT(clang-diagnostic-unused-private-field)
