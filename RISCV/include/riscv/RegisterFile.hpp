@@ -5,7 +5,14 @@
 
 namespace riscv {
 
-template<bool EnableE = true, bool EnableRS3 = true>
+class RegisterFileReceiverSample
+{
+    void ReceiveRegisterFile_RS1(const u32 index, const u32 rs1) noexcept { }
+    void ReceiveRegisterFile_RS2(const u32 index, const u32 rs2) noexcept { }
+    void ReceiveRegisterFile_RS3(const u32 index, const u32 rs3) noexcept { }
+};
+
+template<typename Receiver = RegisterFileReceiverSample, bool EnableE = true, bool EnableRS3 = true>
 class RegisterFile final
 {
     DEFAULT_DESTRUCT(RegisterFile);
@@ -19,15 +26,14 @@ public:
     constexpr static inline u32 NumRegisters = 1 << AddressBitCount;
     constexpr static inline u32 RegisterMask = NumRegisters - 1;
 public:
-    RegisterFile()
-        : p_Reset_n(0)
+    RegisterFile(Receiver* const parent, const u32 index = 0) noexcept
+        : m_Parent(parent)
+        , m_Index(index)
+        , p_Reset_n(0)
         , p_Clock(0)
         , m_Pad0(0)
         , p_ControlBus{ }
         , p_RD(0)
-        , p_out_RS1(0)
-        , p_out_RS2(0)
-        , p_out_RS3(0)
         , m_Registers{ }
     { }
 
@@ -54,10 +60,6 @@ public:
     {
         p_RD = rd;
     }
-
-    [[nodiscard]] u32 GetRS1() const noexcept { return p_out_RS1; }
-    [[nodiscard]] u32 GetRS2() const noexcept { return p_out_RS2; }
-    [[nodiscard]] u32 GetRS3() const noexcept { return p_out_RS3; }
 private:
     PROCESSES_DECL()
     {
@@ -91,13 +93,13 @@ private:
     {
         if(!BIT_TO_BOOL(p_Reset_n))
         {
-            p_out_RS1 = 0;
-            p_out_RS2 = 0;
+            m_Parent->ReceiveRegisterFile_RS1(0);
+            m_Parent->ReceiveRegisterFile_RS2(0);
         }
         else if(RISING_EDGE(p_Clock))
         {
-            p_out_RS1 = m_Registers[p_ControlBus.RF_RS1_Address & RegisterMask];
-            p_out_RS2 = m_Registers[p_ControlBus.RF_RS2_Address & RegisterMask];
+            m_Parent->ReceiveRegisterFile_RS1(m_Registers[p_ControlBus.RF_RS1_Address & RegisterMask]);
+            m_Parent->ReceiveRegisterFile_RS2(m_Registers[p_ControlBus.RF_RS2_Address & RegisterMask]);
         }
     }
 
@@ -105,19 +107,19 @@ private:
     {
         if(RISING_EDGE(p_Clock))
         {
-            p_out_RS3 = m_Registers[(p_ControlBus.IR_Funct12 >> 7) & RegisterMask];
+            m_Parent->ReceiveRegisterFile_RS3(m_Index, m_Registers[(p_ControlBus.IR_Funct12 >> 7) & RegisterMask]);
         }
     }
 private:
+    Receiver* m_Parent;
+    u32 m_Index;
+
     u32 p_Reset_n : 1;
     u32 p_Clock : 1;
     u32 m_Pad0 : 30;
     ControlBus p_ControlBus;
 
     u32 p_RD;
-    u32 p_out_RS1;
-    u32 p_out_RS2;
-    u32 p_out_RS3;
 
     u32 m_Registers[NumRegisters];
 };

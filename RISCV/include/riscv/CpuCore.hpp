@@ -59,7 +59,7 @@ public:
         , m_Pad0(0)
         , m_ControlBus{ }
         , m_ClockGate(this)
-        , m_RegisterFile{ }
+        , m_RegisterFile(this)
     { }
 
     void SetResetN(const bool reset_n) noexcept
@@ -83,6 +83,21 @@ private:
     {
         (void) index;
         m_ClockGated = BOOL_TO_BIT(clock);
+    }
+
+    void ReceiveRegisterFile_RS1(const u32 index, const u32 rs1) noexcept
+    {
+        
+    }
+
+    void ReceiveRegisterFile_RS2(const u32 index, const u32 rs2) noexcept
+    {
+        
+    }
+
+    void ReceiveRegisterFile_RS3(const u32 index, const u32 rs3) noexcept
+    {
+        
     }
 private:
     // Muxes
@@ -118,7 +133,7 @@ private:
 
     ControlBus m_ControlBus;
     ClockGate<CPUCore> m_ClockGate;
-    RegisterFile<EnableISA_E, EnableRS3> m_RegisterFile;
+    RegisterFile<CPUCore, EnableISA_E, EnableRS3> m_RegisterFile;
     
 };
 
