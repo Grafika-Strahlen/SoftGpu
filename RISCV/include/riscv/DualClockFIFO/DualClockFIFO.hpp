@@ -28,7 +28,7 @@ class DualClockFIFO final
 public:
     DualClockFIFO(Receiver* const parent, const u32 index = 0) noexcept
         : m_Parent(parent)
-        , m_Index(0)
+        , m_Index(index)
         , m_WritePointer(this)
         , m_ReadPointer(this)
         , m_Memory(this)

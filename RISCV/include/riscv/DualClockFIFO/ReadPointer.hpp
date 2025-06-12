@@ -17,23 +17,18 @@ class ReadPointer final
     DEFAULT_DESTRUCT(ReadPointer);
     DELETE_CM(ReadPointer);
 private:
-    /* ReSharper disable once CppInconsistentNaming */
-    SENSITIVITY_DECL(p_ReadReset_n, p_ReadClock, ReadGrayNext, p_ReadClockWritePointer);
+    SENSITIVITY_DECL(p_ReadReset_n, p_ReadClock);
 
     SIGNAL_ENTITIES();
 public:
-    static inline constexpr u32 ElementCount = 1 << ElementCountExponent;
-public:
     ReadPointer(Receiver* const parent, const u32 index = 0) noexcept
         : m_Parent(parent)
-        , m_Index(0)
+        , m_Index(index)
         , p_ReadReset_n(0)
         , p_ReadClock(0)
         , p_ReadIncoming(0)
-        , m_ReadEmptyIntermediate0(0)
-        , m_ReadEmptyIntermediate1(0)
+        , m_ReadEmptyIntermediate(0)
         , m_Pad0(0)
-        , p_out_ReadPointer(0)
         , p_ReadClockWritePointer(0)
         , m_ReadBin(0)
         , m_Pad1(0)
@@ -56,16 +51,11 @@ public:
     void SetReadIncoming(const bool readIncoming) noexcept
     {
         p_ReadIncoming = readIncoming;
-
-        // p_WriteIncrement is one of the values that affects ReadGrayNext
-        // TRIGGER_SENSITIVITY(ReadGrayNext);
     }
 
     void SetReadClockWriteAddress(const u64 readClockWriteAddress) noexcept
     {
         p_ReadClockWritePointer = readClockWriteAddress;
-
-        // TRIGGER_SENSITIVITY(p_ReadClockWritePointer);
     }
 private:
     void SetReadBin(const u64 readBin) noexcept
@@ -73,24 +63,20 @@ private:
         m_ReadBin = readBin;
 
         // m_WriteBin is one of the values that affects WriteGrayNext
-        // TRIGGER_SENSITIVITY(ReadGrayNext);
 
         m_Parent->ReceiveReadPointer_ReadAddress(m_Index, m_ReadBin & ~(1 << ElementCountExponent));
     }
 
-    void SetReadEmptyIntermediate1(const bool readEmptyIntermediate1) noexcept
+    void SetReadEmptyIntermediate(const bool readEmpty) noexcept
     {
-        m_ReadEmptyIntermediate1 = BOOL_TO_BIT(readEmptyIntermediate1);
+        m_ReadEmptyIntermediate = BOOL_TO_BIT(readEmpty);
 
-        // m_WriteFullIntermediate1 is one of the values that affects WriteGrayNext
-        // TRIGGER_SENSITIVITY(ReadGrayNext);
-
-        m_Parent->ReceiveReadPointer_ReadEmpty(m_Index, readEmptyIntermediate1);
+        m_Parent->ReceiveReadPointer_ReadEmpty(m_Index, readEmpty);
     }
 
     [[nodiscard]] bool ReadIncomingNotEmpty() const noexcept
     {
-        return BIT_TO_BOOL(p_ReadIncoming) && !BIT_TO_BOOL(m_ReadEmptyIntermediate1);
+        return BIT_TO_BOOL(p_ReadIncoming) && !BIT_TO_BOOL(m_ReadEmptyIntermediate);
     }
 
     [[nodiscard]] u64 ReadBinNext() const noexcept
@@ -112,8 +98,6 @@ private:
     PROCESSES_DECL()
     {
         PROCESS_ENTER(BinPortHandler, p_ReadClock, p_ReadReset_n);
-        // PROCESS_ENTER(EmptyIntermediate0Handler, ReadGrayNext, p_ReadClockWritePointer);
-        // PROCESS_ENTER(EmptyIntermediate1Handler, p_ReadClock, p_ReadReset_n);
     }
 
     PROCESS_DECL(BinPortHandler)
@@ -122,7 +106,7 @@ private:
         {
             SetReadBin(0);
             m_Parent->ReceiveReadPointer_ReadPointer(m_Index, 0);
-            SetReadEmptyIntermediate1(true);
+            SetReadEmptyIntermediate(true);
         }
         else if(RISING_EDGE(p_ReadClock))
         {
@@ -132,26 +116,9 @@ private:
 
             SetReadBin(readBinNext);
             m_Parent->ReceiveReadPointer_ReadPointer(m_Index, readGrayNext);
-            SetReadEmptyIntermediate1(empty);
+            SetReadEmptyIntermediate(empty);
         }
     }
-
-    // PROCESS_DECL(EmptyIntermediate0Handler)
-    // {
-    //     m_ReadEmptyIntermediate0 = BOOL_TO_BIT(ReadGrayNext() == p_ReadClockWritePointer);
-    // }
-    //
-    // PROCESS_DECL(EmptyIntermediate1Handler)
-    // {
-    //     if(!BIT_TO_BOOL(p_ReadReset_n))
-    //     {
-    //         SetReadEmptyIntermediate1(true);
-    //     }
-    //     else if(RISING_EDGE(p_ReadClock))
-    //     {
-    //         SetReadEmptyIntermediate1(m_ReadEmptyIntermediate0);
-    //     }
-    // }
 private:
     Receiver* m_Parent;
     u32 m_Index;
@@ -159,14 +126,12 @@ private:
     u32 p_ReadReset_n : 1;
     u32 p_ReadClock : 1;
     u32 p_ReadIncoming : 1;
-    u32 m_ReadEmptyIntermediate0 : 1;
-    u32 m_ReadEmptyIntermediate1 : 1;
-    u32 m_Pad0 : 27;
+    u32 m_ReadEmptyIntermediate : 1;
+    u32 m_Pad0 : 28;
 
-    u64 p_out_ReadPointer : ElementCountExponent + 1;
     u64 p_ReadClockWritePointer : ElementCountExponent + 1;
     u64 m_ReadBin : ElementCountExponent + 1;
-    u64 m_Pad1 : 64 - 3 * (ElementCountExponent + 1);
+    u64 m_Pad1 : 64 - 2 * (ElementCountExponent + 1);
 };
 
 }

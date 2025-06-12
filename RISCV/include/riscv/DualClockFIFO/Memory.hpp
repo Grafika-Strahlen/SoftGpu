@@ -24,7 +24,7 @@ public:
 public:
     Memory(Receiver* const parent, const u32 index = 0) noexcept
         : m_Parent(parent)
-        , m_Index(0)
+        , m_Index(index)
         , p_WriteClock(0)
         , p_WriteClockEnable(0)
         , p_WriteFull(0)
