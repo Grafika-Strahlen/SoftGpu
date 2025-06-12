@@ -20,48 +20,36 @@ struct FifoReceiver
     void ReceiveDualClockFIFO_WriteFull(const u32 index, const bool writeFull) noexcept
     {
         Full = writeFull;
-        auto message = Format<char>("Full: {}\n", Full);
-        ConPrinter::Print(message);
+        // auto message = Format<char>("Full: {}\n", Full);
+        // ConPrinter::Print(message);
     }
 
     void ReceiveDualClockFIFO_ReadData(const u32 index, const DataType& data) noexcept
     {
         Data = data;
-        auto message = Format<char>("Data: {}\n", Data);
-        ConPrinter::Print(message);
+        // auto message = Format<char>("Data: {}\n", Data);
+        // ConPrinter::Print(message);
     }
 
     void ReceiveDualClockFIFO_ReadEmpty(const u32 index, const bool readEmpty) noexcept
     {
         Empty = readEmpty;
-        auto message = Format<char>("Empty: {}\n", Empty);
-        ConPrinter::Print(message);
+        // auto message = Format<char>("Empty: {}\n", Empty);
+        // ConPrinter::Print(message);
     }
 
     void ReceiveDualClockFIFO_WriteAddress(const u32 index, const u64 writeAddress) noexcept
     {
         WriteAddress = writeAddress;
-        auto message = Format<char>("WriteAddress: {}\n", WriteAddress);
-        ConPrinter::Print(message);
+        // auto message = Format<char>("WriteAddress: {}\n", WriteAddress);
+        // ConPrinter::Print(message);
     }
 
     void ReceiveDualClockFIFO_ReadAddress(const u32 index, const u64 readAddress) noexcept
     {
         ReadAddress = readAddress;
-        auto message = Format<char>("ReadAddress: {}\n", ReadAddress);
-        ConPrinter::Print(message);
-    }
-
-    void ReceiveDualClockFIFO_WritePointer(const u32 index, const u64 writePointer) noexcept
-    {
-        auto message = Format<char>("WritePointer: {}\n", writePointer);
-        ConPrinter::Print(message);
-    }
-
-    void ReceiveDualClockFIFO_ReadPointer(const u32 index, const u64 readPointer) noexcept
-    {
-        auto message = Format<char>("ReadPointer: {}\n", readPointer);
-        ConPrinter::Print(message);
+        // auto message = Format<char>("ReadAddress: {}\n", ReadAddress);
+        // ConPrinter::Print(message);
     }
 };
 
@@ -89,15 +77,15 @@ static u32 TargetDataSet[]
     1153, 1163, 1171, 1181, 1187, 1193, 1201, 1213, 1217, 1223
 };
 
-template<u32 WriterDelay, u32 ReaderDelay>
+template<u32 WriterDelay, u32 ReaderDelay, u32 BitCount>
 static void FifoTestRunner()
 {
     using DataType = u32;
-    using FifoRec = FifoReceiver<DataType>;
-    using FifoTest = DualClockFIFO<FifoRec, DataType, 1>;
+    using RecType = FifoReceiver<DataType>;
+    using IpType = DualClockFIFO<RecType, DataType, BitCount>;
 
-    FifoRec receiver {};
-    FifoTest fifo(&receiver);
+    RecType receiver {};
+    IpType fifo(&receiver);
 
     ::std::vector<u32> receivedValues;
 
@@ -190,7 +178,7 @@ static void FifoTestRunner()
                     if(receivedValues.size() > 2)
                     {
                         int x = 0;
-                        break;
+                        // break;
                     }
                 }
 
@@ -216,18 +204,74 @@ static void FifoTestRunner()
     }
 }
 
-static void FifoTestFastRead()
+static void FifoTestFastRead1Bit()
 {
     TAU_UNIT_TEST();
 
-    FifoTestRunner<31, 7>();
+    FifoTestRunner<31, 7, 1>();
 }
 
-static void FifoTestFastWrite()
+static void FifoTestFastWrite1Bit()
 {
     TAU_UNIT_TEST();
 
-    FifoTestRunner<7, 31>();
+    FifoTestRunner<7, 31, 1>();
+}
+
+static void FifoTestFastRead2Bit()
+{
+    TAU_UNIT_TEST();
+
+    FifoTestRunner<31, 7, 2>();
+}
+
+static void FifoTestFastWrite2Bit()
+{
+    TAU_UNIT_TEST();
+
+    FifoTestRunner<7, 31, 2>();
+}
+
+static void FifoTestFastRead3Bit()
+{
+    TAU_UNIT_TEST();
+
+    FifoTestRunner<31, 7, 3>();
+}
+
+static void FifoTestFastWrite3Bit()
+{
+    TAU_UNIT_TEST();
+
+    FifoTestRunner<7, 31, 3>();
+}
+
+static void FifoTestFastRead4Bit()
+{
+    TAU_UNIT_TEST();
+
+    FifoTestRunner<31, 7, 3>();
+}
+
+static void FifoTestFastWrite4Bit()
+{
+    TAU_UNIT_TEST();
+
+    FifoTestRunner<7, 31, 3>();
+}
+
+static void FifoTestFastRead5Bit()
+{
+    TAU_UNIT_TEST();
+
+    FifoTestRunner<31, 7, 5>();
+}
+
+static void FifoTestFastWrite5Bit()
+{
+    TAU_UNIT_TEST();
+
+    FifoTestRunner<7, 31, 5>();
 }
 
 }

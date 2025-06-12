@@ -89,7 +89,6 @@ public:
     {
         (void) index;
         m_SyncWriteToRead.SetPointer(writePointer);
-        m_Parent->ReceiveDualClockFIFO_WritePointer(m_Index, writePointer);
     }
 
     void ReceiveWritePointer_WriteAddress(const u32 index, const u64 writeAddress) noexcept
@@ -109,7 +108,6 @@ public:
     {
         (void) index;
         m_SyncReadToWrite.SetPointer(readPointer);
-        m_Parent->ReceiveDualClockFIFO_ReadPointer(m_Index, readPointer);
     }
 
     void ReceiveReadPointer_ReadAddress(const u32 index, const u64 readAddress) noexcept
