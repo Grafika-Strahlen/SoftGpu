@@ -1,34 +1,34 @@
 #pragma once
 
-#include "ReadPointer.hpp"
+#include "WritePointer.hpp"
 #include <TauUnit.hpp>
 
 namespace riscv::fifo::test {
 
-struct ReadPointerReceiver
+struct WritePointerReceiver
 {
     bool Log = true;
 
-    bool Empty = false;
+    bool Full = false;
     u64 Pointer = 0;
     u64 Address = 0;
     int ReceivedCount = 0;
 
-    void ReceiveReadPointer_ReadEmpty(const u32 index, const bool readEmpty) noexcept
+    void ReceiveWritePointer_WriteFull(const u32 index, const bool writeFull) noexcept
     {
         (void) index;
-        Empty = readEmpty;
+        Full = writeFull;
         ++ReceivedCount;
         if(Log)
         {
-            ConPrinter::Print("Received Empty: {}\n", Empty);
+            ConPrinter::Print("Received Full: {}\n", Full);
         }
     }
 
-    void ReceiveReadPointer_ReadPointer(const u32 index, const u64 readPointer) noexcept
+    void ReceiveWritePointer_WritePointer(const u32 index, const u64 writePointer) noexcept
     {
         (void) index;
-        Pointer = readPointer;
+        Pointer = writePointer;
         ++ReceivedCount;
         if(Log)
         {
@@ -36,10 +36,10 @@ struct ReadPointerReceiver
         }
     }
 
-    void ReceiveReadPointer_ReadAddress(const u32 index, const u64 readAddress) noexcept
+    void ReceiveWritePointer_WriteAddress(const u32 index, const u64 writeAddress) noexcept
     {
         (void) index;
-        Address = readAddress;
+        Address = writeAddress;
         ++ReceivedCount;
         if(Log)
         {
@@ -58,24 +58,24 @@ struct ReadPointerReceiver
     }
 };
 
-static void ReadPointerResetTest(const bool log = false)
+static void WritePointerResetTest(const bool log = false)
 {
     TAU_UNIT_TEST();
 
-    using RecType = ReadPointerReceiver;
-    using IpType = ReadPointer<RecType>;
+    using RecType = WritePointerReceiver;
+    using IpType = WritePointer<RecType>;
 
     RecType receiver {};
     IpType ip(&receiver);
 
     receiver.Log = log;
 
-    ip.SetReadIncoming(false);
-    ip.SetReadClockWriteAddress(0);
+    ip.SetWriteIncoming(false);
+    ip.SetWriteClockReadAddress(0);
 
-    ip.SetReadResetN(false);
+    ip.SetWriteResetN(false);
 
-    TAU_UNIT_EQ(receiver.Empty, true, "Empty should be true during reset. {}");
+    TAU_UNIT_EQ(receiver.Full, true, "Full should be true during reset. {}");
     TAU_UNIT_EQ(receiver.Pointer, 0, "Pointer should be 0 during reset. {}");
     TAU_UNIT_EQ(receiver.Address, 0, "Address should be 0 during reset. {}");
     TAU_UNIT_EQ(receiver.ReceivedCount, 3, "Should have received 3 updates after reset. {}");
@@ -86,209 +86,211 @@ static void ReadPointerResetTest(const bool log = false)
     {
         receiver.ResetReceive();
 
-        ip.SetReadClock(true);
+        ip.SetWriteClock(true);
 
-        TAU_UNIT_EQ(receiver.Empty, true, "Empty should be true during reset. {}");
+        TAU_UNIT_EQ(receiver.Full, true, "Full should be true during reset. {}");
         TAU_UNIT_EQ(receiver.Pointer, 0, "Pointer should be 0 during reset. {}");
         TAU_UNIT_EQ(receiver.Address, 0, "Address should be 0 during reset. {}");
         TAU_UNIT_EQ(receiver.ReceivedCount, 3, "Should have received {} updates after reset and clock raise. {}", 3);
 
         receiver.ResetReceive();
 
-        ip.SetReadClock(false);
+        ip.SetWriteClock(false);
 
-        TAU_UNIT_EQ(receiver.Empty, true, "Empty should be true during reset. {}");
+        TAU_UNIT_EQ(receiver.Full, true, "Full should be true during reset. {}");
         TAU_UNIT_EQ(receiver.Pointer, 0, "Pointer should be 0 during reset. {}");
         TAU_UNIT_EQ(receiver.Address, 0, "Address should be 0 during reset. {}");
         TAU_UNIT_EQ(receiver.ReceivedCount, 3, "Should have received {} updates after reset and clock raise and lower. {}", 3);
     }
 }
 
-static void ReadPointer1BitEmptyTest(const bool log = false)
+static void WritePointer1BitFullTest(const bool log = false)
 {
     TAU_UNIT_TEST();
 
-    using RecType = ReadPointerReceiver;
-    using IpType = ReadPointer<RecType, 1>;
+    using RecType = WritePointerReceiver;
+    using IpType = WritePointer<RecType, 1>;
 
     RecType receiver {};
     IpType ip(&receiver);
 
     receiver.Log = log;
 
-    ip.SetReadIncoming(true);
-    ip.SetReadClockWriteAddress(0);
+    ip.SetWriteIncoming(true);
+    // This is 0x3, since the address is actually 2 bits.
+    ip.SetWriteClockReadAddress(3);
 
-    ip.SetReadResetN(false);
+    ip.SetWriteResetN(false);
 
-    TAU_UNIT_EQ(receiver.Empty, true, "Empty should be true during reset. {}");
+    TAU_UNIT_EQ(receiver.Full, true, "Full should be true during reset. {}");
     TAU_UNIT_EQ(receiver.Pointer, 0, "Pointer should be 0 during reset. {}");
     TAU_UNIT_EQ(receiver.Address, 0, "Address should be 0 during reset. {}");
     TAU_UNIT_EQ(receiver.ReceivedCount, 3, "Should have received 3 updates after reset. {}");
 
-    ip.SetReadResetN(true);
+    ip.SetWriteResetN(true);
 
     for(uSys i = 0; i < 3; ++i)
     {
         receiver.ResetReceive();
 
-        ip.SetReadClock(true);
+        ip.SetWriteClock(true);
 
-        TAU_UNIT_EQ(receiver.Empty, true, "Empty should be true. {}");
+        TAU_UNIT_EQ(receiver.Full, true, "Full should be true. {}");
         TAU_UNIT_EQ(receiver.Pointer, 0, "Pointer should be 0. {}");
         TAU_UNIT_EQ(receiver.Address, 0, "Address should be 0. {}");
         TAU_UNIT_EQ(receiver.ReceivedCount, 3, "Should have received {} updates after reset and clock raise. {}", 3);
 
         receiver.ResetReceive();
 
-        ip.SetReadClock(false);
+        ip.SetWriteClock(false);
 
-        TAU_UNIT_EQ(receiver.Empty, true, "Empty should be true. {}");
+        TAU_UNIT_EQ(receiver.Full, true, "Full should be true. {}");
         TAU_UNIT_EQ(receiver.Pointer, 0, "Pointer should be 0. {}");
         TAU_UNIT_EQ(receiver.Address, 0, "Address should be 0. {}");
         TAU_UNIT_EQ(receiver.ReceivedCount, 0, "Should have received {} updates after reset and clock raise and lower. {}", 0);
     }
 }
 
-static void ReadPointer1BitTest(const bool log = false)
+static void WritePointer1BitTest(const bool log = false)
 {
     TAU_UNIT_TEST();
 
-    using RecType = ReadPointerReceiver;
-    using IpType = ReadPointer<RecType, 1>;
+    using RecType = WritePointerReceiver;
+    using IpType = WritePointer<RecType, 1>;
 
     RecType receiver {};
     IpType ip(&receiver);
 
     receiver.Log = false;
 
-    ip.SetReadIncoming(true);
-    ip.SetReadClockWriteAddress(0);
+    ip.SetWriteIncoming(true);
+    ip.SetWriteClockReadAddress(0);
 
-    ip.SetReadResetN(false);
+    ip.SetWriteResetN(false);
 
-    TAU_UNIT_EQ(receiver.Empty, true, "Empty should be true during reset. {}");
+    TAU_UNIT_EQ(receiver.Full, true, "Full should be true during reset. {}");
     TAU_UNIT_EQ(receiver.Pointer, 0, "Pointer should be 0 during reset. {}");
     TAU_UNIT_EQ(receiver.Address, 0, "Address should be 0 during reset. {}");
     TAU_UNIT_EQ(receiver.ReceivedCount, 3, "Should have received 3 updates after reset. {}");
 
     receiver.Log = log;
 
-    ip.SetReadResetN(true);
+    ip.SetWriteResetN(true);
 
     for(uSys i = 1; i < 8; ++i)
     {
         const uSys address = (i - 1) % 2;
         const uSys pointer = (i - 1) % 4;
-        ip.SetReadClockWriteAddress(((i % 4) >> 1) ^ (i % 4));
+        ip.SetWriteClockReadAddress(((i % 4) >> 1) ^ (i % 4));
 
         receiver.ResetReceive();
 
-        ip.SetReadClock(true);
+        ip.SetWriteClock(true);
 
-        TAU_UNIT_EQ(receiver.Empty, false, "Empty should be false. {}");
+        TAU_UNIT_EQ(receiver.Full, false, "Empty should be false. {}");
         TAU_UNIT_EQ(receiver.Pointer, (pointer >> 1) ^ pointer, "Pointer should be {}. {}", (pointer >> 1) ^ pointer);
         TAU_UNIT_EQ(receiver.Address, address, "Address should be {}. {}", address);
         TAU_UNIT_EQ(receiver.ReceivedCount, 3, "Should have received {} updates after reset and clock raise. {}", 3);
 
         receiver.ResetReceive();
 
-        ip.SetReadClock(false);
+        ip.SetWriteClock(false);
 
         TAU_UNIT_EQ(receiver.ReceivedCount, 0, "Should have received {} updates after reset and clock raise and lower. {}", 0);
     }
 }
 
-static void ReadPointer2BitEmptyTest(const bool log = false)
+static void WritePointer2BitFullTest(const bool log = false)
 {
     TAU_UNIT_TEST();
 
-    using RecType = ReadPointerReceiver;
-    using IpType = ReadPointer<RecType, 2>;
+    using RecType = WritePointerReceiver;
+    using IpType = WritePointer<RecType, 2>;
 
     RecType receiver {};
     IpType ip(&receiver);
 
     receiver.Log = log;
 
-    ip.SetReadIncoming(true);
-    ip.SetReadClockWriteAddress(0);
+    ip.SetWriteIncoming(true);
+    // This is 0x6, since the address is actually 3 bits, and only the upper 2 bits matter.
+    ip.SetWriteClockReadAddress(0x6);
 
-    ip.SetReadResetN(false);
+    ip.SetWriteResetN(false);
 
-    TAU_UNIT_EQ(receiver.Empty, true, "Empty should be true during reset. {}");
+    TAU_UNIT_EQ(receiver.Full, true, "Full should be true during reset. {}");
     TAU_UNIT_EQ(receiver.Pointer, 0, "Pointer should be 0 during reset. {}");
     TAU_UNIT_EQ(receiver.Address, 0, "Address should be 0 during reset. {}");
     TAU_UNIT_EQ(receiver.ReceivedCount, 3, "Should have received 3 updates after reset. {}");
 
-    ip.SetReadResetN(true);
+    ip.SetWriteResetN(true);
 
     for(uSys i = 0; i < 3; ++i)
     {
         receiver.ResetReceive();
 
-        ip.SetReadClock(true);
+        ip.SetWriteClock(true);
 
-        TAU_UNIT_EQ(receiver.Empty, true, "Empty should be true. {}");
+        TAU_UNIT_EQ(receiver.Full, true, "Full should be true. {}");
         TAU_UNIT_EQ(receiver.Pointer, 0, "Pointer should be 0. {}");
         TAU_UNIT_EQ(receiver.Address, 0, "Address should be 0. {}");
         TAU_UNIT_EQ(receiver.ReceivedCount, 3, "Should have received {} updates after reset and clock raise. {}", 3);
 
         receiver.ResetReceive();
 
-        ip.SetReadClock(false);
+        ip.SetWriteClock(false);
 
-        TAU_UNIT_EQ(receiver.Empty, true, "Empty should be true. {}");
+        TAU_UNIT_EQ(receiver.Full, true, "Full should be true. {}");
         TAU_UNIT_EQ(receiver.Pointer, 0, "Pointer should be 0. {}");
         TAU_UNIT_EQ(receiver.Address, 0, "Address should be 0. {}");
         TAU_UNIT_EQ(receiver.ReceivedCount, 0, "Should have received {} updates after reset and clock raise and lower. {}", 0);
     }
 }
 
-static void ReadPointer2BitTest(const bool log = false)
+static void WritePointer2BitTest(const bool log = false)
 {
     TAU_UNIT_TEST();
 
-    using RecType = ReadPointerReceiver;
-    using IpType = ReadPointer<RecType, 2>;
+    using RecType = WritePointerReceiver;
+    using IpType = WritePointer<RecType, 2>;
 
     RecType receiver {};
     IpType ip(&receiver);
 
     receiver.Log = false;
 
-    ip.SetReadIncoming(true);
-    ip.SetReadClockWriteAddress(0);
+    ip.SetWriteIncoming(true);
+    ip.SetWriteClockReadAddress(0);
 
-    ip.SetReadResetN(false);
+    ip.SetWriteResetN(false);
 
-    TAU_UNIT_EQ(receiver.Empty, true, "Empty should be true during reset. {}");
+    TAU_UNIT_EQ(receiver.Full, true, "Full should be true during reset. {}");
     TAU_UNIT_EQ(receiver.Pointer, 0, "Pointer should be 0 during reset. {}");
     TAU_UNIT_EQ(receiver.Address, 0, "Address should be 0 during reset. {}");
     TAU_UNIT_EQ(receiver.ReceivedCount, 3, "Should have received 3 updates after reset. {}");
 
     receiver.Log = log;
 
-    ip.SetReadResetN(true);
+    ip.SetWriteResetN(true);
 
     for(uSys i = 1; i < 16; ++i)
     {
         const uSys address = (i - 1) % 4;
         const uSys pointer = (i - 1) % 8;
-        ip.SetReadClockWriteAddress(((i % 8) >> 1) ^ (i % 8));
+        ip.SetWriteClockReadAddress(((i % 8) >> 1) ^ (i % 8));
 
         receiver.ResetReceive();
 
-        ip.SetReadClock(true);
+        ip.SetWriteClock(true);
 
-        TAU_UNIT_EQ(receiver.Empty, false, "Empty should be false. {}");
+        TAU_UNIT_EQ(receiver.Full, false, "Empty should be false. {}");
         TAU_UNIT_EQ(receiver.Pointer, (pointer >> 1) ^ pointer, "Pointer should be {}. {}", (pointer >> 1) ^ pointer);
         TAU_UNIT_EQ(receiver.Address, address, "Address should be {}. {}", address);
         TAU_UNIT_EQ(receiver.ReceivedCount, 3, "Should have received {} updates after reset and clock raise. {}", 3);
 
         receiver.ResetReceive();
 
-        ip.SetReadClock(false);
+        ip.SetWriteClock(false);
 
         TAU_UNIT_EQ(receiver.ReceivedCount, 0, "Should have received {} updates after reset and clock raise and lower. {}", 0);
     }

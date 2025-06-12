@@ -3,6 +3,7 @@
 #include <riscv/DualClockFIFO/Memory.TestBench.hpp>
 #include <riscv/DualClockFIFO/Synchronizer.TestBench.hpp>
 #include <riscv/DualClockFIFO/ReadPointer.TestBench.hpp>
+#include <riscv/DualClockFIFO/WritePointer.TestBench.hpp>
 #include <riscv/DualClockFIFO/DualClockFIFO.TestBench.hpp>
 #include "Processor.hpp"
 #include <ConPrinter.hpp>
@@ -130,22 +131,29 @@ int main(int argCount, char* args[])
         // riscv::fifo::test::SynchronizerIncrementDualBitTest();
         // riscv::fifo::test::SynchronizerIncrement6BitTest();
         // riscv::fifo::test::ReadPointerResetTest();
-        // riscv::fifo::test::ReadPointerSingleBitEmptyTest();
-        // riscv::fifo::test::ReadPointerSingleBitTest(true);
+        riscv::fifo::test::ReadPointer1BitEmptyTest();
+        riscv::fifo::test::ReadPointer1BitTest(false);
+        riscv::fifo::test::ReadPointer2BitEmptyTest();
+        riscv::fifo::test::ReadPointer2BitTest(false);
+        riscv::fifo::test::WritePointerResetTest();
+        riscv::fifo::test::WritePointer1BitFullTest();
+        riscv::fifo::test::WritePointer1BitTest();
+        riscv::fifo::test::WritePointer2BitFullTest();
+        riscv::fifo::test::WritePointer2BitTest();
         // riscv::fifo::test::MemorySimpleSet();
         // riscv::fifo::test::MemoryFullSet();
         // riscv::fifo::test::MemoryWrapSet();
         // riscv::fifo::test::MemoryLargeSet();
-        riscv::fifo::test::FifoTestFastRead1Bit();
-        riscv::fifo::test::FifoTestFastWrite1Bit();
-        riscv::fifo::test::FifoTestFastRead2Bit();
-        riscv::fifo::test::FifoTestFastWrite2Bit();
-        riscv::fifo::test::FifoTestFastRead3Bit();
-        riscv::fifo::test::FifoTestFastWrite3Bit();
-        riscv::fifo::test::FifoTestFastRead4Bit();
-        riscv::fifo::test::FifoTestFastWrite4Bit();
-        riscv::fifo::test::FifoTestFastRead5Bit();
-        riscv::fifo::test::FifoTestFastWrite5Bit();
+        // riscv::fifo::test::FifoTestFastRead1Bit();
+        // riscv::fifo::test::FifoTestFastWrite1Bit();
+        // riscv::fifo::test::FifoTestFastRead2Bit();
+        // riscv::fifo::test::FifoTestFastWrite2Bit();
+        // riscv::fifo::test::FifoTestFastRead3Bit();
+        // riscv::fifo::test::FifoTestFastWrite3Bit();
+        // riscv::fifo::test::FifoTestFastRead4Bit();
+        // riscv::fifo::test::FifoTestFastWrite4Bit();
+        // riscv::fifo::test::FifoTestFastRead5Bit();
+        // riscv::fifo::test::FifoTestFastWrite5Bit();
         tau::TestContainer::Instance().PrintTotals();
         return 0;
     }
