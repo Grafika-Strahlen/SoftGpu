@@ -55,9 +55,10 @@ public:
         , p_DebugHaltInterrupt(0)
         , p_CustomFastInterrupt(0)
         , p_MemSync(0)
+        , m_ClockGated(0)
         , m_Pad0(0)
         , m_ControlBus{ }
-        , m_ClockGate{ }
+        , m_ClockGate(this)
         , m_RegisterFile{ }
     { }
 
@@ -78,13 +79,19 @@ public:
         m_RegisterFile.SetClock(ClockGated());
     }
 private:
+    void ReceiveClockGate_Clock(const u32 index, const bool clock) noexcept
+    {
+        (void) index;
+        m_ClockGated = BOOL_TO_BIT(clock);
+    }
+private:
     // Muxes
 
     [[nodiscard]] bool ClockGated() const noexcept
     {
         if constexpr(EnableClockGating)
         {
-            return m_ClockGate.GetClock();
+            return m_ClockGated;
         }
         else
         {
@@ -105,11 +112,12 @@ private:
 
     u32 p_MemSync : 1;
 
-    u32 m_Pad0 : 9;
+    u32 m_ClockGated : 1;
+    u32 m_Pad0 : 8;
 
 
     ControlBus m_ControlBus;
-    ClockGate m_ClockGate;
+    ClockGate<CPUCore> m_ClockGate;
     RegisterFile<EnableISA_E, EnableRS3> m_RegisterFile;
     
 };

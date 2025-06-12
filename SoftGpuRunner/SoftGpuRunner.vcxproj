@@ -231,7 +231,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\ClockGateTestBench.cpp" />
     <ClCompile Include="src\Main.cpp" />
     <ClCompile Include="src\RegisterAllocatorTests.cpp" />
   </ItemGroup>

@@ -6,21 +6,25 @@
 
 namespace riscv {
 
+class ClockGateReceiverSample
+{
+    void ReceiveClockGate_Clock(const u32 index, const bool clock) noexcept { }
+};
+
+template<typename Receiver = ClockGateReceiverSample>
 class ClockGate final
 {
     DEFAULT_DESTRUCT(ClockGate);
     DELETE_CM(ClockGate);
 private:
-    enum class Sensitivity
-    {
-        Reset = 0,
-        Clock
-    };
+    SENSITIVITY_DECL(p_Reset_n, p_Clock);
 
     SIGNAL_ENTITIES();
 public:
-    ClockGate() noexcept
-        : p_Reset_n(0)
+    ClockGate(Receiver* const parent, const u32 index = 0) noexcept
+        : m_Parent(parent)
+        , m_Index(index)
+        , p_Reset_n(0)
         , p_Clock(0)
         , p_Halt(0)
         , m_Enable(0)
@@ -31,56 +35,53 @@ public:
     {
         p_Reset_n = BOOL_TO_BIT(reset_n);
 
-        Processes(Sensitivity::Reset);
+        TRIGGER_SENSITIVITY(p_Reset_n);
     }
 
     void SetClock(const bool clock) noexcept
     {
         p_Clock = BOOL_TO_BIT(clock);
 
-        Processes(Sensitivity::Clock);
+        // This is just a mux, so it needs to check before the process.
+        if(BIT_TO_BOOL(m_Enable))
+        {
+            m_Parent->ReceiveClockGate_Clock(m_Index, p_Clock);
+        }
+
+        TRIGGER_SENSITIVITY(p_Clock);
     }
 
     void SetHalt(const bool halt) noexcept
     {
         p_Halt = BOOL_TO_BIT(halt);
     }
-
-    [[nodiscard]] bool GetClock() const noexcept
-    {
-        if(BIT_TO_BOOL(m_Enable))
-        {
-            return p_Clock;
-        }
-        else
-        {
-            return false;
-        }
-    }
 private:
-    void Processes(const Sensitivity trigger) noexcept
+    PROCESSES_DECL()
     {
-        ClockSwitch(trigger);
+        PROCESS_ENTER(ClockSwitch, p_Reset_n, p_Clock)
     }
 
-    void ClockSwitch(const Sensitivity trigger) noexcept
+    PROCESS_DECL(ClockSwitch)
     {
         if(!BIT_TO_BOOL(p_Reset_n))
         {
             m_Enable = 1;
         }
-        else if(FallingEdge<Sensitivity::Clock>(p_Clock, trigger))
+        else if(FALLING_EDGE(p_Clock))
         {
             m_Enable = BOOL_TO_BIT(!BIT_TO_BOOL(p_Halt));
         }
     }
 private:
+    Receiver* m_Parent;
+    u32 m_Index;
+
     u32 p_Reset_n : 1;
     u32 p_Clock : 1;
     u32 p_Halt : 1;
 
     u32 m_Enable : 1;
-    u32 m_Pad0 : 28;
+    [[maybe_unused]] u32 m_Pad0 : 28;
 };
 
 }

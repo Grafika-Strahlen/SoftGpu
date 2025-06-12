@@ -11,7 +11,6 @@ class RegisterFile final
     DEFAULT_DESTRUCT(RegisterFile);
     DELETE_CM(RegisterFile);
 private:
-    // ReSharper disable once CppInconsistentNaming
     SENSITIVITY_DECL(p_Reset_n, p_Clock);
 
     SIGNAL_ENTITIES();

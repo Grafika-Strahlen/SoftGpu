@@ -21,9 +21,6 @@
     <ClCompile Include="src\RegisterAllocatorTests.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\ClockGateTestBench.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="..\libs\TauUtils\natvis\BitSet.natvis" />

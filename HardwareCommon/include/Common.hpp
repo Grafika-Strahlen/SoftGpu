@@ -111,6 +111,9 @@ class Processor;
 #define TRIGGER_SENSITIVITY(Sense) \
     Processes(Sensitivity::Sense)
 
+#define EVENT(Sense) \
+    Event<Sensitivity::Sense>(trigger)
+
 #define RISING_EDGE(Sense) \
     RisingEdge<Sensitivity::Sense>(Sense, trigger)
 

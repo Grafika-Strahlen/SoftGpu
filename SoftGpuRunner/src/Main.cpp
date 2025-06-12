@@ -5,6 +5,7 @@
 #include <riscv/DualClockFIFO/ReadPointer.TestBench.hpp>
 #include <riscv/DualClockFIFO/WritePointer.TestBench.hpp>
 #include <riscv/DualClockFIFO/DualClockFIFO.TestBench.hpp>
+#include <riscv/ClockGate.TestBench.hpp>
 #include "Processor.hpp"
 #include <ConPrinter.hpp>
 #include "DebugManager.hpp"
@@ -27,8 +28,6 @@ DebugManager GlobalDebug;
 
 static u32 BAR0 = 0;
 static u64 BAR1 = 0;
-
-void ClockGateTestBench() noexcept;
 
 static void InitEnvironment() noexcept;
 static int InitCommandRegister() noexcept;
@@ -124,7 +123,7 @@ int main(int argCount, char* args[])
 
     if constexpr(true)
     {
-        // ClockGateTestBench();
+        riscv::test::ClockGateTestBench();
         // riscv::fifo::test::SynchronizerResetTest();
         // riscv::fifo::test::SynchronizerSingleTest();
         // riscv::fifo::test::SynchronizerIncrementSingleBitTest();
