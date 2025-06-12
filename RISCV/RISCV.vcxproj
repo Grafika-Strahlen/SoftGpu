@@ -171,6 +171,7 @@
     <ClInclude Include="include\riscv\DualClockFIFO\Memory.hpp" />
     <ClInclude Include="include\riscv\DualClockFIFO\Memory.TestBench.hpp" />
     <ClInclude Include="include\riscv\DualClockFIFO\ReadPointer.hpp" />
+    <ClInclude Include="include\riscv\DualClockFIFO\ReadPointer.TestBench.hpp" />
     <ClInclude Include="include\riscv\DualClockFIFO\Synchronizer.hpp" />
     <ClInclude Include="include\riscv\DualClockFIFO\Synchronizer.TestBench.hpp" />
     <ClInclude Include="include\riscv\DualClockFIFO\WritePointer.hpp" />

@@ -62,9 +62,7 @@ private:
     {
         m_ReadBin = readBin;
 
-        // m_WriteBin is one of the values that affects WriteGrayNext
-
-        m_Parent->ReceiveReadPointer_ReadAddress(m_Index, m_ReadBin & ~(1 << ElementCountExponent));
+        m_Parent->ReceiveReadPointer_ReadAddress(m_Index, m_ReadBin & ((1 << ElementCountExponent) - 1));
     }
 
     void SetReadEmptyIntermediate(const bool readEmpty) noexcept
@@ -81,7 +79,7 @@ private:
 
     [[nodiscard]] u64 ReadBinNext() const noexcept
     {
-        return m_ReadBin + BOOL_TO_BIT(ReadIncomingNotEmpty());
+        return (m_ReadBin + BOOL_TO_BIT(ReadIncomingNotEmpty())) & ((1 << (ElementCountExponent + 1)) - 1);
     }
 
     [[nodiscard]] u64 ReadGrayNext() const noexcept

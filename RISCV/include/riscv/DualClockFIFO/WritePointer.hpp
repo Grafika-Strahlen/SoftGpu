@@ -79,7 +79,7 @@ private:
 
     [[nodiscard]] u64 WriteBinNext() const noexcept
     {
-        return m_WriteBin + BOOL_TO_BIT(WriteIncomingNotFull());
+        return (m_WriteBin + BOOL_TO_BIT(WriteIncomingNotFull())) & ((1 << (ElementCountExponent + 1)) - 1);
     }
 
     [[nodiscard]] u64 WriteGrayNext() const noexcept
