@@ -14,7 +14,7 @@ class FIFOReceiverSample
     void ReceiveFIFO_Available(const u32 index, const bool available) noexcept { }
 };
 
-template<typename Receiver = FIFOReceiverSample<u32>, typename DataType = u32, u32 ElementCountExponent = 2, bool SyncRead = false, bool Safe = false, bool FullReset = false>
+template<typename Receiver = FIFOReceiverSample<u32>, typename DataType = u32, u32 ElementCountExponent = 2, bool SyncRead = false, bool Safe = false, bool FullReset = false, bool ZeroOut = false>
 class FIFO final
 {
     DEFAULT_DESTRUCT(FIFO);
@@ -78,11 +78,11 @@ public:
         p_WriteData = writeData;
     }
 private:
-    // Muxes
+    // Wires
 
     [[nodiscard]] bool ReadEnable() const noexcept
     {
-        if constexpr(Safe)
+        if constexpr(!Safe)
         {
             return BIT_TO_BOOL(p_ReadEnable);
         }
@@ -94,7 +94,7 @@ private:
 
     [[nodiscard]] bool WriteEnable() const noexcept
     {
-        if constexpr(Safe)
+        if constexpr(!Safe)
         {
             return BIT_TO_BOOL(p_WriteEnable);
         }
@@ -156,13 +156,10 @@ private:
         }
         else
         {
-            return Match() && ((m_WritePointer & PointerMask) != (m_ReadPointer & PointerMask));
-        }
-    }
+            constexpr u32 BitMask = (1 << ElementCountExponent);
 
-    [[nodiscard]] bool Free() const noexcept
-    {
-        return !Full();
+            return Match() && ((m_WritePointer & BitMask) != (m_ReadPointer & BitMask));
+        }
     }
 
     [[nodiscard]] bool Empty() const noexcept
@@ -173,10 +170,15 @@ private:
         }
         else
         {
-            constexpr u32 BitMask = (1 << (ElementCountExponent - 1));
+            constexpr u32 BitMask = (1 << ElementCountExponent);
 
             return Match() && ((m_WritePointer & BitMask) == (m_ReadPointer & BitMask));
         }
+    }
+
+    [[nodiscard]] bool Free() const noexcept
+    {
+        return !Full();
     }
 
     [[nodiscard]] bool Available() const noexcept
@@ -205,9 +207,8 @@ private:
         else
         {
             constexpr u32 BitShift = (ElementCountExponent - 1);
-            constexpr u32 TargetBit = 1 << BitShift;
 
-            return ((Level() & TargetBit) >> BitShift) || Full();
+            return BIT_TO_BOOL((Level() >> BitShift) & 0x1) || Full();
         }
     }
 private:
@@ -298,8 +299,22 @@ private:
                     {
                         m_Memory[0] = p_WriteData;
 
-                        // ReadData is a mux in this case.
-                        m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[0]);
+                        // ReadData is a wire in this case.
+                        if constexpr(ZeroOut)
+                        {
+                            if(Available())
+                            {
+                                m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[0]);
+                            }
+                            else
+                            {
+                                m_Parent.ReceiveFIFO_ReadData(m_Index, DataType {});
+                            }
+                        }
+                        else
+                        {
+                            m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[0]);
+                        }
                     }
                 }
             }
@@ -316,7 +331,7 @@ private:
                 {
                     if(WriteEnable())
                     {
-                        m_Memory[m_WritePointer & (ElementCount - 1)] = p_WriteData;
+                        m_Memory[m_WritePointer & PointerMask] = p_WriteData;
                     }
                 }
             }
@@ -335,8 +350,22 @@ private:
                     {
                         m_Memory[0] = p_WriteData;
 
-                        // ReadData is a mux in this case.
-                        m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[0]);
+                        // ReadData is a wire in this case.
+                        if constexpr(ZeroOut)
+                        {
+                            if(Available())
+                            {
+                                m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[0]);
+                            }
+                            else
+                            {
+                                m_Parent.ReceiveFIFO_ReadData(m_Index, DataType {});
+                            }
+                        }
+                        else
+                        {
+                            m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[0]);
+                        }
                     }
                 }
             }
@@ -346,7 +375,7 @@ private:
                 {
                     if(WriteEnable())
                     {
-                        m_Memory[m_WritePointer] = p_WriteData;
+                        m_Memory[m_WritePointer & PointerMask] = p_WriteData;
                     }
                 }
             }
@@ -361,7 +390,21 @@ private:
             {
                 if(RISING_EDGE(p_Clock))
                 {
-                    m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[m_ReadPointer & PointerMask]);
+                    if constexpr(ZeroOut)
+                    {
+                        if(Available())
+                        {
+                            m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[m_ReadPointer & PointerMask]);
+                        }
+                        else
+                        {
+                            m_Parent.ReceiveFIFO_ReadData(m_Index, DataType {});
+                        }
+                    }
+                    else
+                    {
+                        m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[m_ReadPointer & PointerMask]);
+                    }
                 }
             }
         }
@@ -377,8 +420,22 @@ private:
                 {
                     m_ReadPointer0 = NextRead();
 
-                    // ReadData is a mux in this case.
-                    m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[m_ReadPointer0 & PointerMask]);
+                    // ReadData is a wire in this case.
+                    if constexpr(ZeroOut)
+                    {
+                        if(Available())
+                        {
+                            m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[m_ReadPointer0 & PointerMask]);
+                        }
+                        else
+                        {
+                            m_Parent.ReceiveFIFO_ReadData(m_Index, DataType {});
+                        }
+                    }
+                    else
+                    {
+                        m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[m_ReadPointer0 & PointerMask]);
+                    }
                 }
             }
         }
