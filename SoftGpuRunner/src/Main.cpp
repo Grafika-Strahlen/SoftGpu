@@ -5,6 +5,7 @@
 #include <riscv/DualClockFIFO/ReadPointer.TestBench.hpp>
 #include <riscv/DualClockFIFO/WritePointer.TestBench.hpp>
 #include <riscv/DualClockFIFO/DualClockFIFO.TestBench.hpp>
+#include <riscv/CoProcessor/Shifter.TestBench.hpp>
 #include <riscv/ClockGate.TestBench.hpp>
 #include "Processor.hpp"
 #include <ConPrinter.hpp>
@@ -46,7 +47,7 @@ namespace tau::test::register_allocator {
 extern void RunTests() noexcept;
 }
 
-static void FillFramebufferBlackMagenta(const Ref<::tau::vd::Window>& window, u8* const framebuffer) noexcept
+[[maybe_unused]] static void FillFramebufferBlackMagenta(const Ref<::tau::vd::Window>& window, u8* const framebuffer) noexcept
 {
     for(uSys y = 0; y < window->FramebufferHeight(); ++y)
     {
@@ -123,26 +124,46 @@ int main(int argCount, char* args[])
 
     if constexpr(true)
     {
-        riscv::test::ClockGateTestBench();
+        // riscv::coprocessor::test::ShifterSerialCheckResetResult(true);
+        // riscv::coprocessor::test::ShifterBarrelCheckResetResult(true);
+        // riscv::coprocessor::test::ShifterSerialCheck1S0Right(true);
+        // riscv::coprocessor::test::ShifterBarrelCheck1S0Right(true);
+        // riscv::coprocessor::test::ShifterSerialCheck2S1Right(true);
+        // riscv::coprocessor::test::ShifterBarrelCheck2S1Right(true);
+        // riscv::coprocessor::test::ShifterSerialCheck4S2Right(true);
+        // riscv::coprocessor::test::ShifterBarrelCheck4S2Right(true);
+        // riscv::coprocessor::test::ShifterSerialCheck31S3Right(true);
+        // riscv::coprocessor::test::ShifterBarrelCheck31S3Right(true);
+        // riscv::coprocessor::test::ShifterSerialCheckMaxS31Right(false);
+        // riscv::coprocessor::test::ShifterBarrelCheckMaxS31Right(true);
+        // riscv::coprocessor::test::ShifterSerialCheckMaxS32Right(false);
+        // riscv::coprocessor::test::ShifterBarrelCheckMaxS32Right(true);
+
+        riscv::coprocessor::test::ShifterBarrelCheckFuzzRight(false);
+        riscv::coprocessor::test::ShifterSerialCheckFuzzRight(false);
+
+        // riscv::coprocessor::test::ShifterSerialCheck31S3Left(true);
+        // riscv::coprocessor::test::ShifterBarrelCheck31S3Left(true);
+        // riscv::test::ClockGateTestBench();
         // riscv::fifo::test::SynchronizerResetTest();
         // riscv::fifo::test::SynchronizerSingleTest();
         // riscv::fifo::test::SynchronizerIncrementSingleBitTest();
         // riscv::fifo::test::SynchronizerIncrementDualBitTest();
         // riscv::fifo::test::SynchronizerIncrement6BitTest();
-        // riscv::fifo::test::ReadPointerResetTest();
-        riscv::fifo::test::ReadPointer1BitEmptyTest();
-        riscv::fifo::test::ReadPointer1BitTest(false);
-        riscv::fifo::test::ReadPointer2BitEmptyTest();
-        riscv::fifo::test::ReadPointer2BitTest(false);
-        riscv::fifo::test::WritePointerResetTest();
-        riscv::fifo::test::WritePointer1BitFullTest();
-        riscv::fifo::test::WritePointer1BitTest();
-        riscv::fifo::test::WritePointer2BitFullTest();
-        riscv::fifo::test::WritePointer2BitTest();
         // riscv::fifo::test::MemorySimpleSet();
         // riscv::fifo::test::MemoryFullSet();
         // riscv::fifo::test::MemoryWrapSet();
         // riscv::fifo::test::MemoryLargeSet();
+        // riscv::fifo::test::ReadPointerResetTest();
+        // riscv::fifo::test::ReadPointer1BitEmptyTest();
+        // riscv::fifo::test::ReadPointer1BitTest(false);
+        // riscv::fifo::test::ReadPointer2BitEmptyTest();
+        // riscv::fifo::test::ReadPointer2BitTest(false);
+        // riscv::fifo::test::WritePointerResetTest();
+        // riscv::fifo::test::WritePointer1BitFullTest();
+        // riscv::fifo::test::WritePointer1BitTest();
+        // riscv::fifo::test::WritePointer2BitFullTest();
+        // riscv::fifo::test::WritePointer2BitTest();
         // riscv::fifo::test::FifoTestFastRead1Bit();
         // riscv::fifo::test::FifoTestFastWrite1Bit();
         // riscv::fifo::test::FifoTestFastRead2Bit();

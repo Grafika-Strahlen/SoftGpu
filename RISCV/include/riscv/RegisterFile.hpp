@@ -7,6 +7,7 @@ namespace riscv {
 
 class RegisterFileReceiverSample
 {
+public:
     void ReceiveRegisterFile_RS1(const u32 index, const u32 rs1) noexcept { }
     void ReceiveRegisterFile_RS2(const u32 index, const u32 rs2) noexcept { }
     void ReceiveRegisterFile_RS3(const u32 index, const u32 rs3) noexcept { }
@@ -107,7 +108,7 @@ private:
     {
         if(RISING_EDGE(p_Clock))
         {
-            m_Parent->ReceiveRegisterFile_RS3(m_Index, m_Registers[(p_ControlBus.IR_Funct12 >> 7) & RegisterMask]);
+            m_Parent->ReceiveRegisterFile_RS3(m_Index, m_Registers[(p_ControlBus.IR_Function12 >> 7) & RegisterMask]);
         }
     }
 private:

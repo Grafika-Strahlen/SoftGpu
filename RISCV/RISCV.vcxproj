@@ -166,6 +166,7 @@
     <ClInclude Include="include\riscv\ClockGate.hpp" />
     <ClInclude Include="include\riscv\ClockGate.TestBench.hpp" />
     <ClInclude Include="include\riscv\ControlBus.hpp" />
+    <ClInclude Include="include\riscv\CoProcessor\Shifter.TestBench.hpp" />
     <ClInclude Include="include\riscv\CpuCore.hpp" />
     <ClInclude Include="include\riscv\DualClockFIFO\DualClockFIFO.hpp" />
     <ClInclude Include="include\riscv\DualClockFIFO\DualClockFIFO.TestBench.hpp" />
@@ -181,6 +182,7 @@
     <ClInclude Include="include\riscv\InstructionFetch.hpp" />
     <ClInclude Include="include\riscv\MemoryBus.hpp" />
     <ClInclude Include="include\riscv\RegisterFile.hpp" />
+    <ClInclude Include="include\riscv\CoProcessor\Shifter.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source.cpp" />
