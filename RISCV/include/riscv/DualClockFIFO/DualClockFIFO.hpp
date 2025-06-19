@@ -12,6 +12,7 @@ namespace riscv::fifo {
 template<typename DataType>
 class DualClockFIFOReceiverSample
 {
+public:
     void ReceiveDualClockFIFO_WriteFull(const u32 index, const bool writeFull) noexcept { }
     void ReceiveDualClockFIFO_ReadData(const u32 index, const DataType& data) noexcept { }
     void ReceiveDualClockFIFO_ReadEmpty(const u32 index, const bool readEmpty) noexcept { }

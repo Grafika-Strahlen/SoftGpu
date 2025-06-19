@@ -7,6 +7,7 @@ namespace riscv::fifo {
 template<typename DataType>
 class MemoryReceiverSample
 {
+public:
     void ReceiveMemory_ReadData(const u32 index, const DataType& data) noexcept { }
 };
 

@@ -6,6 +6,7 @@ namespace riscv::fifo {
 
 class WritePointerReceiverSample
 {
+public:
     void ReceiveWritePointer_WriteFull(const u32 index, const bool writeFull) noexcept { }
     void ReceiveWritePointer_WritePointer(const u32 index, const u64 writePointer) noexcept { }
     void ReceiveWritePointer_WriteAddress(const u32 index, const u64 writeAddress) noexcept { }

@@ -6,6 +6,7 @@ namespace riscv::fifo {
 
 class ReadPointerReceiverSample
 {
+public:
     void ReceiveReadPointer_ReadEmpty(const u32 index, const bool readEmpty) noexcept { }
     void ReceiveReadPointer_ReadPointer(const u32 index, const u64 readPointer) noexcept { }
     void ReceiveReadPointer_ReadAddress(const u32 index, const u64 readAddress) noexcept { }

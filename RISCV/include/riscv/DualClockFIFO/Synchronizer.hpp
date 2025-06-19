@@ -6,6 +6,7 @@ namespace riscv::fifo {
 
 class SynchronizerReceiverSample
 {
+public:
     void ReceiveSynchronizer_Pointer(const u32 index, const u64 pointer) noexcept { }
 };
 

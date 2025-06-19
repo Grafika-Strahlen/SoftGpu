@@ -8,6 +8,7 @@ namespace riscv {
 
 class ClockGateReceiverSample
 {
+public:
     void ReceiveClockGate_Clock(const u32 index, const bool clock) noexcept { }
 };
 
