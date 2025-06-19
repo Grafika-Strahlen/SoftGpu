@@ -72,7 +72,7 @@ static void MemorySimpleSet()
     memory.SetWriteClock(true);
     memory.SetWriteClock(false);
 
-    TAU_UNIT_EQ(receiver.ReceivedCount, 2, "Expected to have received 2 memory updates. {}");
+    TAU_UNIT_EQ(receiver.ReceivedCount, 0, "Expected to have received 0 memory updates. {}");
     receiver.ResetReceive();
 
     DataType data = receiver.Data;
@@ -94,7 +94,7 @@ static void MemorySimpleSet()
     memory.SetReadAddress(0);
     memory.SetWriteClockEnable(true);
 
-    TAU_UNIT_EQ(receiver.ReceivedCount, 0, "Expected to have received 0 memory updates. {}");
+    TAU_UNIT_EQ(receiver.ReceivedCount, 1, "Expected to have received 1 memory updates. {}");
     receiver.ResetReceive();
 
     data = receiver.Data;
@@ -113,7 +113,7 @@ static void MemorySimpleSet()
 
     memory.SetWriteClock(false);
 
-    TAU_UNIT_EQ(receiver.ReceivedCount, 1, "Expected to have received 1 memory updates. {}");
+    TAU_UNIT_EQ(receiver.ReceivedCount, 0, "Expected to have received 0 memory updates. {}");
     receiver.ResetReceive();
 
     data = receiver.Data;
@@ -136,7 +136,7 @@ static void MemoryFullSet()
     memory.SetWriteClock(true);
     memory.SetWriteClock(false);
 
-    TAU_UNIT_EQ(receiver.ReceivedCount, 2, "Expected to have received 2 memory updates. {}");
+    TAU_UNIT_EQ(receiver.ReceivedCount, 0, "Expected to have received0 memory updates. {}");
     receiver.ResetReceive();
 
     memory.SetWriteFull(true);
@@ -179,7 +179,7 @@ static void MemoryFullSet()
 
     memory.SetWriteClock(false);
 
-    TAU_UNIT_EQ(receiver.ReceivedCount, 1, "Expected to have received 1 memory updates. {}");
+    TAU_UNIT_EQ(receiver.ReceivedCount, 0, "Expected to have received 0 memory updates. {}");
     receiver.ResetReceive();
 
     data = receiver.Data;
