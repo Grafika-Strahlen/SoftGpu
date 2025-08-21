@@ -16,8 +16,7 @@ public:
     u32 Instruction;
     u32 Valid : 1;
     u32 Error : 1;
-    u32 Halted : 1;
-    u32 Pad0 : 29;
+    u32 Pad0 : 30;
 };
 
 struct InstructionDataPacked final
@@ -29,6 +28,15 @@ public:
     u16 Data;
     u16 Error : 1;
     u16 Pad : 15;
+
+    InstructionDataPacked(
+        const u16 data,
+        const bool error
+    ) noexcept
+        : Data(data)
+        , Error(BOOL_TO_BIT(error))
+        , Pad(0)
+    { }
 };
 
 struct InstructionPrefetchBuffer final
@@ -45,6 +53,7 @@ public:
 
 class InstructionFetchReceiverSample
 {
+public:
     void ReceiveInstructionFetch_Bus(const u32 index, const InstructionFetchBus& bus) noexcept { }
     void ReceiveInstructionFetch_MemoryRequest(const u32 index, const MemoryBusRequest& bus) noexcept { }
 };
@@ -119,27 +128,15 @@ public:
     {
         p_MemoryResponse = response;
 
-        m_PrefetchFifo[0].SetWriteData(WritePrefetchBuffer_Data0());
+        m_PrefetchFifo[0].SetWriteData(InstructionDataPacked(WritePrefetchBuffer_Data0(), WritePrefetchBuffer_Error0()));
         m_PrefetchFifo[0].SetWriteEnable(WritePrefetchBuffer_Enable0());
         m_PrefetchFifo[0].SetReadEnable(ReadPrefetchBuffer_Enable0());
 
 
-        m_PrefetchFifo[1].SetWriteData(WritePrefetchBuffer_Data1());
+        m_PrefetchFifo[1].SetWriteData(InstructionDataPacked(WritePrefetchBuffer_Data1(), WritePrefetchBuffer_Error1()));
         m_PrefetchFifo[1].SetWriteEnable(WritePrefetchBuffer_Enable1());
         m_PrefetchFifo[1].SetReadEnable(ReadPrefetchBuffer_Enable1());
     }
-
-    // [[nodiscard]] const MemoryBusRequest& GetMemoryRequest() noexcept
-    // {
-    //     p_out_MemoryRequest.Address = MemoryRequest_Address();
-    //     p_out_MemoryRequest.Strobe = BOOL_TO_BIT(MemoryRequest_Strobe());
-    //     return p_out_MemoryRequest;
-    // }
-    //
-    // [[nodiscard]] const InstructionFetchBus& GetInstructionFetch() const noexcept
-    // {
-    //     return p_out_InstructionFetch;
-    // }
 public:
     void ReceiveFIFO_HalfFull(const u32 index, const bool halfFull) noexcept
     { }
@@ -199,7 +196,7 @@ private:
     {
         p_out_MemoryRequest.Address = MemoryRequest_Address();
         p_out_MemoryRequest.WriteData = 0;
-        p_out_MemoryRequest.ByteEnable = 0;
+        p_out_MemoryRequest.ByteEnable = 0b1111;
         p_out_MemoryRequest.ReadWrite = 0; // Read Only
         p_out_MemoryRequest.Strobe = BOOL_TO_BIT(MemoryRequest_Strobe());
         p_out_MemoryRequest.Source = 1; // Instruction Fetch
@@ -207,7 +204,7 @@ private:
         p_out_MemoryRequest.AtomicOperation = 0; // Not Atomic
         p_out_MemoryRequest.Fence = p_ControlBus.IF_Fence; // Not Atomic
 
-        m_Parent->ReceiveInstructionFetch_MemoryRequest(0, p_out_MemoryRequest);
+        m_Parent->ReceiveInstructionFetch_MemoryRequest(m_Index, p_out_MemoryRequest);
     }
 
     void UpdateInstructionFetchBus() noexcept
@@ -215,9 +212,8 @@ private:
         p_out_InstructionFetch.Instruction = InstructionFetch_Instruction();
         p_out_InstructionFetch.Valid = BOOL_TO_BIT(InstructionFetch_Valid());
         p_out_InstructionFetch.Error = BOOL_TO_BIT(InstructionFetch_Error());
-        p_out_InstructionFetch.Halted = BOOL_TO_BIT(InstructionFetch_Halted());
 
-        m_Parent->ReceiveInstructionFetch_Bus(0, p_out_InstructionFetch);
+        m_Parent->ReceiveInstructionFetch_Bus(m_Index, p_out_InstructionFetch);
     }
 
     [[nodiscard]] u32 MemoryRequest_Address() const noexcept
@@ -239,11 +235,6 @@ private:
     [[nodiscard]] u32 InstructionPrefetchBus_Available() const noexcept
     {
         return m_ReadPrefetchBuffer.State;
-    }
-
-    [[nodiscard]] bool BusResponse() const noexcept
-    {
-        return BIT_TO_BOOL(p_MemoryResponse.Acknowledge) || BIT_TO_BOOL(p_MemoryResponse.Error);
     }
 
     [[nodiscard]] u16 WritePrefetchBuffer_Data0() const noexcept
@@ -268,28 +259,22 @@ private:
 
     [[nodiscard]] bool WritePrefetchBuffer_Enable0() const noexcept
     {
-        return m_FetchState == FetchState::Pending && BusResponse();
+        return m_FetchState == FetchState::Pending && BIT_TO_BOOL(p_MemoryResponse.Acknowledge);
     }
 
     [[nodiscard]] bool WritePrefetchBuffer_Enable1() const noexcept
     {
-        return m_FetchState == FetchState::Pending && BusResponse();
+        return m_FetchState == FetchState::Pending && BIT_TO_BOOL(p_MemoryResponse.Acknowledge);
     }
 
     [[nodiscard]] bool ReadPrefetchBuffer_Enable0() const noexcept
     {
-        return BIT_TO_BOOL(Issue_Valid() & 0x1) && p_ControlBus.IF_Acknowledge;
+        return BIT_TO_BOOL(p_ControlBus.IF_Acknowledge);
     }
 
     [[nodiscard]] bool ReadPrefetchBuffer_Enable1() const noexcept
     {
-        return BIT_TO_BOOL((Issue_Valid() >> 1) & 0x1) && p_ControlBus.IF_Acknowledge;
-    }
-
-    [[nodiscard]] u32 Issue_Valid() const noexcept
-    {
-        const u32 statusBit = InstructionPrefetchBus_Available() & 0x1;
-        return statusBit | (statusBit << 1);
+        return BIT_TO_BOOL(p_ControlBus.IF_Acknowledge);
     }
 
     [[nodiscard]] bool Issue_Error() const noexcept
@@ -309,18 +294,12 @@ private:
 
     [[nodiscard]] bool InstructionFetch_Valid() const noexcept
     {
-        const u32 issueValid = Issue_Valid();
-        return BIT_TO_BOOL((issueValid >> 1) & 0x1) || BIT_TO_BOOL(issueValid & 0x1);
+        return BIT_TO_BOOL(InstructionPrefetchBus_Available() & 0x1);
     }
 
     [[nodiscard]] bool InstructionFetch_Error() const noexcept
     {
         return Issue_Error();
-    }
-
-    [[nodiscard]] bool InstructionFetch_Halted() const noexcept
-    {
-        return m_FetchState == FetchState::Request && (InstructionPrefetchBus_Free() & 0x3) != 0x3;
     }
 private:
     PROCESSES_DECL()
@@ -355,7 +334,7 @@ private:
                     break;
                 case FetchState::Pending:
                     SetRestart(m_Restart || BIT_TO_BOOL(p_ControlBus.IF_Reset));
-                    if(BusResponse())
+                    if(BIT_TO_BOOL(p_MemoryResponse.Acknowledge))
                     {
                         SetProgramCounter((m_ProgramCounter + 4) & 0xFFFFFFFC);
                         if(BIT_TO_BOOL(m_Restart) || BIT_TO_BOOL(p_ControlBus.IF_Reset))
@@ -401,7 +380,7 @@ private:
     InstructionPrefetchBuffer m_WritePrefetchBuffer;
     InstructionPrefetchBuffer m_ReadPrefetchBuffer;
 
-    FIFO<InstructionFetch, u16, 2, false, false, false> m_PrefetchFifo[2];
+    FIFO<InstructionFetch, InstructionDataPacked, 1, false, false, false, false> m_PrefetchFifo[2];
 };
 
 }

@@ -113,7 +113,7 @@
       <PreprocessorDefinitions>_NO_EXCEPTIONS=1;__SSE__;__SSE2__;__SSE3__;__SSSE3__;__SSE4_1__;__SSE4_2__;__AVX__;__AVX2__;__F16C__;__POPCNT__;__FMA__;VK_USE_PLATFORM_WIN32_KHR;WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
-      <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <LanguageStandard_C>stdclatest</LanguageStandard_C>
       <AdditionalOptions>-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mpopcnt -mcrc32 -mavx -mavx2 -mfma -mf16c -Wno-unknown-attributes -Wno-unused-variable -Wno-unused-parameter %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(IncludePath);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -144,7 +144,7 @@
       <PreprocessorDefinitions>_NO_EXCEPTIONS=1;__SSE__;__SSE2__;__SSE3__;__SSSE3__;__SSE4_1__;__SSE4_2__;__AVX__;__AVX2__;__F16C__;__POPCNT__;__FMA__;VK_USE_PLATFORM_WIN32_KHR;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
-      <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <LanguageStandard_C>stdclatest</LanguageStandard_C>
       <AdditionalOptions>-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mpopcnt -mcrc32 -mavx -mavx2 -mfma -mf16c -Wno-unknown-attributes -Wno-unused-variable -Wno-unused-parameter %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(IncludePath);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -175,7 +175,7 @@
       <PreprocessorDefinitions>_NO_EXCEPTIONS=1;__SSE__;__SSE2__;__SSE3__;__SSSE3__;__SSE4_1__;__SSE4_2__;__AVX__;__AVX2__;__F16C__;__POPCNT__;__FMA__;VK_USE_PLATFORM_WIN32_KHR;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
-      <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <LanguageStandard_C>stdclatest</LanguageStandard_C>
       <AdditionalOptions>-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mpopcnt -mcrc32 -mavx -mavx2 -mfma -mf16c -Wno-unknown-attributes -Wno-unused-variable -Wno-unused-parameter %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(IncludePath);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -206,7 +206,7 @@
       <PreprocessorDefinitions>_NO_EXCEPTIONS=1;__SSE__;__SSE2__;__SSE3__;__SSSE3__;__SSE4_1__;__SSE4_2__;__AVX__;__AVX2__;__F16C__;__POPCNT__;__FMA__;VK_USE_PLATFORM_WIN32_KHR;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
-      <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <LanguageStandard_C>stdclatest</LanguageStandard_C>
       <AdditionalOptions>-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mpopcnt -mcrc32 -mavx -mavx2 -mfma -mf16c -Wno-unknown-attributes -Wno-unused-variable -Wno-unused-parameter %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(IncludePath);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>

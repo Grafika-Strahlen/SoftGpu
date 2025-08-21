@@ -7,6 +7,7 @@ namespace riscv {
 template<typename DataType>
 class FIFOReceiverSample
 {
+public:
     void ReceiveFIFO_HalfFull(const u32 index, const bool halfFull) noexcept { }
     void ReceiveFIFO_Level(const u32 index, const u32 level) noexcept { }
     void ReceiveFIFO_Free(const u32 index, const bool free) noexcept { }
@@ -277,7 +278,7 @@ private:
 
     PROCESS_DECL(LevelHandler)
     {
-        m_Parent.ReceiveFIFO_Level(m_Index, Level());
+        m_Parent->ReceiveFIFO_Level(m_Index, Level());
     }
 
     PROCESS_DECL(FullResetWriteHandler)
@@ -291,7 +292,7 @@ private:
                     m_Memory[0] = DataType {};
 
                     // ReadData is a mux in this case.
-                    m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[0]);
+                    m_Parent->ReceiveFIFO_ReadData(m_Index, m_Memory[0]);
                 }
                 else if(RISING_EDGE(p_Clock))
                 {
@@ -304,16 +305,16 @@ private:
                         {
                             if(Available())
                             {
-                                m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[0]);
+                                m_Parent->ReceiveFIFO_ReadData(m_Index, m_Memory[0]);
                             }
                             else
                             {
-                                m_Parent.ReceiveFIFO_ReadData(m_Index, DataType {});
+                                m_Parent->ReceiveFIFO_ReadData(m_Index, DataType {});
                             }
                         }
                         else
                         {
-                            m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[0]);
+                            m_Parent->ReceiveFIFO_ReadData(m_Index, m_Memory[0]);
                         }
                     }
                 }
@@ -355,16 +356,16 @@ private:
                         {
                             if(Available())
                             {
-                                m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[0]);
+                                m_Parent->ReceiveFIFO_ReadData(m_Index, m_Memory[0]);
                             }
                             else
                             {
-                                m_Parent.ReceiveFIFO_ReadData(m_Index, DataType {});
+                                m_Parent->ReceiveFIFO_ReadData(m_Index, DataType {});
                             }
                         }
                         else
                         {
-                            m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[0]);
+                            m_Parent->ReceiveFIFO_ReadData(m_Index, m_Memory[0]);
                         }
                     }
                 }
@@ -394,16 +395,16 @@ private:
                     {
                         if(Available())
                         {
-                            m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[m_ReadPointer & PointerMask]);
+                            m_Parent->ReceiveFIFO_ReadData(m_Index, m_Memory[m_ReadPointer & PointerMask]);
                         }
                         else
                         {
-                            m_Parent.ReceiveFIFO_ReadData(m_Index, DataType {});
+                            m_Parent->ReceiveFIFO_ReadData(m_Index, DataType {});
                         }
                     }
                     else
                     {
-                        m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[m_ReadPointer & PointerMask]);
+                        m_Parent->ReceiveFIFO_ReadData(m_Index, m_Memory[m_ReadPointer & PointerMask]);
                     }
                 }
             }
@@ -425,16 +426,16 @@ private:
                     {
                         if(Available())
                         {
-                            m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[m_ReadPointer0 & PointerMask]);
+                            m_Parent->ReceiveFIFO_ReadData(m_Index, m_Memory[m_ReadPointer0 & PointerMask]);
                         }
                         else
                         {
-                            m_Parent.ReceiveFIFO_ReadData(m_Index, DataType {});
+                            m_Parent->ReceiveFIFO_ReadData(m_Index, DataType {});
                         }
                     }
                     else
                     {
-                        m_Parent.ReceiveFIFO_ReadData(m_Index, m_Memory[m_ReadPointer0 & PointerMask]);
+                        m_Parent->ReceiveFIFO_ReadData(m_Index, m_Memory[m_ReadPointer0 & PointerMask]);
                     }
                 }
             }
@@ -447,15 +448,15 @@ private:
         {
             if(!BIT_TO_BOOL(p_Reset_n))
             {
-                m_Parent.ReceiveFIFO_HalfFull(m_Index, 0);
-                m_Parent.ReceiveFIFO_Free(m_Index, 0);
-                m_Parent.ReceiveFIFO_Available(m_Index, 0);
+                m_Parent->ReceiveFIFO_HalfFull(m_Index, 0);
+                m_Parent->ReceiveFIFO_Free(m_Index, 0);
+                m_Parent->ReceiveFIFO_Available(m_Index, 0);
             }
             else if(RISING_EDGE(p_Clock))
             {
-                m_Parent.ReceiveFIFO_HalfFull(m_Index, Half());
-                m_Parent.ReceiveFIFO_Free(m_Index, Free());
-                m_Parent.ReceiveFIFO_Available(m_Index, Available());
+                m_Parent->ReceiveFIFO_HalfFull(m_Index, Half());
+                m_Parent->ReceiveFIFO_Free(m_Index, Free());
+                m_Parent->ReceiveFIFO_Available(m_Index, Available());
             }
         }
     }

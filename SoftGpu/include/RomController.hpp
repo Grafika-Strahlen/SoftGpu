@@ -7,9 +7,14 @@
 #include <NumTypes.hpp>
 #include <ConPrinter.hpp>
 #include <PCIController.hpp>
+#include <cstdlib>
 
 #ifndef SOFT_GPU_USE_EMBEDDED_ROM
-  #define SOFT_GPU_USE_EMBEDDED_ROM (0)
+    #if defined(_WIN32)
+        #define SOFT_GPU_USE_EMBEDDED_ROM 0
+    #else
+        #define SOFT_GPU_USE_EMBEDDED_ROM 1
+    #endif
 #endif
 
 #if SOFT_GPU_USE_EMBEDDED_ROM
@@ -55,7 +60,7 @@ private:
         (void) ::std::memcpy(m_ExpansionRom, SoftGpuGopDxe_rom, sizeof(SoftGpuGopDxe_rom));
 #else
         size_t trueLibraryPathLength = 0;
-        if(const errno_t err = getenv_s(&trueLibraryPathLength, nullptr, 0, EXPANSION_ROM_ENV_VAR))
+        if(const int err = getenv_s(&trueLibraryPathLength, nullptr, 0, EXPANSION_ROM_ENV_VAR))
         {
             ConPrinter::PrintLn(u8"Initial call to getenv_s failed, Error: {}, Path Length: {}.", err, static_cast<unsigned>(trueLibraryPathLength));
             return;
@@ -75,7 +80,7 @@ private:
             return;
         }
 
-        if(const errno_t err = getenv_s(&trueLibraryPathLength, romPathBuffer, trueLibraryPathLength, EXPANSION_ROM_ENV_VAR))
+        if(const int err = getenv_s(&trueLibraryPathLength, romPathBuffer, trueLibraryPathLength, EXPANSION_ROM_ENV_VAR))
         {
             delete[] romPathBuffer;
             ConPrinter::PrintLn("Failed to get the path to ROM file to load with a valid buffer. Error: {}", err);

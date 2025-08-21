@@ -18,7 +18,9 @@ void PciController::ExecuteMemRead() noexcept
         *m_ReadCountResponse = 0;
 
         m_ReadRequestActive = false;
+#ifdef _WIN32
         SetEvent(m_SimulationSyncEvent);
+#endif
         return;
     }
 
@@ -41,7 +43,9 @@ void PciController::ExecuteMemRead() noexcept
         *m_ReadCountResponse = 0;
 
         m_ReadRequestActive = false;
+#ifdef _WIN32
         SetEvent(m_SimulationSyncEvent);
+#endif
         return;
     }
 
@@ -69,7 +73,9 @@ void PciController::ExecuteMemRead() noexcept
                 m_ReadState = 0;
 
                 m_ReadRequestActive = false;
+#ifdef _WIN32
                 SetEvent(m_SimulationSyncEvent);
+#endif
             }
         }
 
@@ -96,7 +102,9 @@ void PciController::ExecuteMemRead() noexcept
         *m_ReadCountResponse = m_ReadRequestSize;
 
         m_ReadRequestActive = false;
+#ifdef _WIN32
         SetEvent(m_SimulationSyncEvent);
+#endif
         return;
     }
 
@@ -107,14 +115,18 @@ void PciController::ExecuteMemRead() noexcept
         *m_ReadCountResponse = m_Processor->PciReadExpansionRom(addressOffset, m_ReadRequestSize, m_ReadRequestResponseData);
 
         m_ReadRequestActive = false;
+#ifdef _WIN32
         SetEvent(m_SimulationSyncEvent);
+#endif
         return;
     }
 
     *m_ReadCountResponse = 0;
 
     m_ReadRequestActive = false;
+#ifdef _WIN32
     SetEvent(m_SimulationSyncEvent);
+#endif
 }
 
 void PciController::ExecuteMemWrite() noexcept
@@ -131,7 +143,9 @@ void PciController::ExecuteMemWrite() noexcept
     {
         ConPrinter::PrintLn("Attempted to Write over PCI while the Memory Space bit was not set.");
         m_WriteRequestActive = false;
+#ifdef _WIN32
         SetEvent(m_SimulationSyncEvent);
+#endif
         return;
     }
 
@@ -142,7 +156,9 @@ void PciController::ExecuteMemWrite() noexcept
     if(bar == 0xFF)
     {
         m_WriteRequestActive = false;
+#ifdef _WIN32
         SetEvent(m_SimulationSyncEvent);
+#endif
         return;
     }
 
@@ -170,7 +186,9 @@ void PciController::ExecuteMemWrite() noexcept
                 m_WriteState = 0;
 
                 m_WriteRequestActive = false;
+#ifdef _WIN32
                 SetEvent(m_SimulationSyncEvent);
+#endif
             }
         }
 
@@ -192,5 +210,7 @@ void PciController::ExecuteMemWrite() noexcept
     }
 
     m_WriteRequestActive = false;
+#ifdef _WIN32
     SetEvent(m_SimulationSyncEvent);
+#endif
 }

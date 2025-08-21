@@ -94,13 +94,13 @@ private:
     {
         if(!BIT_TO_BOOL(p_Reset_n))
         {
-            m_Parent->ReceiveRegisterFile_RS1(0);
-            m_Parent->ReceiveRegisterFile_RS2(0);
+            m_Parent->ReceiveRegisterFile_RS1(m_Index, 0);
+            m_Parent->ReceiveRegisterFile_RS2(m_Index, 0);
         }
         else if(RISING_EDGE(p_Clock))
         {
-            m_Parent->ReceiveRegisterFile_RS1(m_Registers[p_ControlBus.RF_RS1_Address & RegisterMask]);
-            m_Parent->ReceiveRegisterFile_RS2(m_Registers[p_ControlBus.RF_RS2_Address & RegisterMask]);
+            m_Parent->ReceiveRegisterFile_RS1(m_Index, m_Registers[p_ControlBus.RF_RS1_Address & RegisterMask]);
+            m_Parent->ReceiveRegisterFile_RS2(m_Index, m_Registers[p_ControlBus.RF_RS2_Address & RegisterMask]);
         }
     }
 

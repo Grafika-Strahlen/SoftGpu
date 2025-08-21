@@ -2,6 +2,7 @@
 
 #include <ConPrinter.hpp>
 #include <Objects.hpp>
+#include <riscv/CpuCore.hpp>
 #include "StreamingMultiprocessor.hpp"
 #include "PCIControlRegisters.hpp"
 #include "Cache.hpp"
@@ -15,9 +16,19 @@ class Processor final
 {
     DEFAULT_DESTRUCT(Processor);
     DELETE_CM(Processor);
+private:
+    SENSITIVITY_DECL(p_Reset_n, p_Clock, m_TriggerReset_n);
+    STD_LOGIC_DECL(m_TriggerReset_n);
+
+    SIGNAL_ENTITIES();
 public:
     Processor() noexcept
-        : m_PciController(this)
+        : p_Reset_n(0)
+        , p_Clock(0)
+        , m_Pad0(0)
+        , m_TriggerReset_n(StdLogic::U)
+        , m_Pad1(0)
+        , m_PciController(this)
         , m_RomController(this)
         , m_PciRegisters(this)
         , m_CacheController(this)
@@ -29,6 +40,24 @@ public:
         , m_RamSize(0)
     { }
 
+    void SetResetN(const bool reset_n) noexcept
+    {
+        p_Reset_n = BOOL_TO_BIT(reset_n);
+
+        TRIGGER_SENSITIVITY(p_Reset_n);
+    }
+
+    void SetClock(const bool clock) noexcept
+    {
+        p_Clock = BOOL_TO_BIT(clock);
+
+        m_PciRegisters.SetClock(clock);
+        // m_DmaController.SetClock(clock);
+        m_DisplayManager.SetClock(clock);
+
+        TRIGGER_SENSITIVITY(p_Clock);
+    }
+
     void Reset()
     {
         m_PciRegisters.SetResetN(false);
@@ -38,11 +67,12 @@ public:
         m_SMs[1].Reset();
         m_SMs[2].Reset();
         m_SMs[3].Reset();
-        m_DisplayManager.Reset();
+        m_DisplayManager.SetResetN(false);
         m_ClockCycle = 0;
 
         m_PciRegisters.SetResetN(true);
         m_DmaController.SetResetN(true);
+        m_DisplayManager.SetResetN(true);
     }
 
     void Clock() noexcept
@@ -97,7 +127,7 @@ public:
         m_PciController.Clock(true);
         m_PciRegisters.SetClock(true);
         // m_DmaController.SetClock(true);
-        m_DisplayManager.Clock(true);
+        m_DisplayManager.SetClock(true);
 
         m_SMs[0].Clock();
         m_SMs[1].Clock();
@@ -107,7 +137,7 @@ public:
         m_PciController.Clock(false);
         m_PciRegisters.SetClock(false);
         // m_DmaController.SetClock(false);
-        m_DisplayManager.Clock(false);
+        m_DisplayManager.SetClock(false);
     }
 
     void TestLoadProgram(const u32 sm, const u32 dispatchPort, const u8 replicationMask, const u64 program)
@@ -338,6 +368,58 @@ public:
         m_SMs[coreIndex].FlushCache();
     }
 
+    void ReceivePciControlRegisters_TriggerResetN(const StdLogic reset_n) noexcept
+    {
+        STD_LOGIC_SET(m_TriggerReset_n, reset_n);
+
+        TRIGGER_SENSITIVITY(m_TriggerReset_n);
+    }
+
+    void ReceivePciControlRegisters_DisplayManagerRequestActive(const StdLogic active) noexcept
+    {
+        m_DisplayManager.SetRequestActive(active);
+    }
+
+    void ReceivePciControlRegisters_DisplayManagerRequestPacketType(const DisplayRequestPacketType packetType) noexcept
+    {
+        m_DisplayManager.SetRequestPacketType(packetType);
+    }
+
+    void ReceivePciControlRegisters_DisplayManagerRequestReadWrite(const EReadWrite readWrite) noexcept
+    {
+        m_DisplayManager.SetRequestReadWrite(readWrite);
+    }
+
+    void ReceivePciControlRegisters_DisplayManagerRequestDisplayIndex(const u32 displayIndex) noexcept
+    {
+        m_DisplayManager.SetRequestDisplayIndex(displayIndex);
+    }
+
+    void ReceivePciControlRegisters_DisplayManagerRequestRegister(const u32 registerIndex) noexcept
+    {
+        m_DisplayManager.SetRequestRegister(registerIndex);
+    }
+
+    void ReceivePciControlRegisters_DisplayManagerRequestData(const u32 data) noexcept
+    {
+        m_DisplayManager.SetRequestData(data);
+    }
+
+    void ReceiveDisplayManager_Acknowledge(const bool acknowledge) noexcept
+    {
+        m_PciRegisters.SetDisplayManagerAcknowledge(acknowledge);
+    }
+
+    void ReceiveDisplayManager_Data(const u32 data) noexcept
+    {
+
+    }
+
+    void ReceiveDisplayManager_VSyncEvent(const bool event) noexcept
+    {
+
+    }
+
     void SetDisplayManagerBus(const DisplayDataPacket& bus) noexcept
     {
         m_DisplayManager.SetBus(bus);
@@ -370,15 +452,124 @@ public:
     // Intended only for VBDevice.
     [[nodiscard]] PciController& GetPciController() noexcept { return m_PciController; }
     [[nodiscard]] PciControlRegisters& GetPciControlRegisters() noexcept { return m_PciRegisters; }
-    [[nodiscard]] DisplayManager& GetDisplayManager() noexcept { return m_DisplayManager; }
+    [[nodiscard]] DisplayManager<Processor>& GetDisplayManager() noexcept { return m_DisplayManager; }
 private:
+    // Muxes
+
+    //   This mux checks if we're in reset, either from an external
+    // hardware pin, or from an internal trigger.
+    //   We use AND logic since these are inverse bits, if either of them
+    // are low, we want to signal the reset, which occurs when driven low.
+    [[nodiscard]] bool MergedResetN() const noexcept
+    {
+        return BIT_TO_BOOL(p_Reset_n) && LOGIC_TO_BOOL(m_TriggerReset_n);
+    }
+private:
+    PROCESSES_DECL()
+    {
+        STD_LOGIC_PROCESS_RESET_HANDLER(p_Clock);
+        PROCESS_ENTER(HandleReset, p_Reset_n, m_TriggerReset_n)
+        PROCESS_ENTER(HandleClock, p_Clock)
+    }
+
+    PROCESS_DECL(HandleReset)
+    {
+        // On reset, reset the elements of this entity.
+        if(!MergedResetN())
+        {
+            m_RamBaseAddress = 0;
+            m_RamSize = 0;
+        }
+
+        //   Since this is only triggered on sensitivity changes to p_Reset_n
+        // and m_TriggerReset_n, this won't constantly trigger the reset
+        // processes.
+        //   We need to do this out here so that p_Reset_n of each entity
+        // receives the current state, and doesn't simply drive them low during
+        // a reset.
+        const bool reset_n = MergedResetN();
+
+        m_DmaController.SetResetN(reset_n);
+        m_DisplayManager.SetResetN(reset_n);
+
+        // This should be last since it is likely the cause of the reset.
+        //   This shouldn't be necessary since we made the clearing of the
+        // reset signal happen in the clock falling edge.
+        m_PciRegisters.SetResetN(reset_n);
+    }
+
+    PROCESS_DECL(HandleClock)
+    {
+        if(!MergedResetN())
+        {
+
+        }
+        else if(RISING_EDGE(p_Clock))
+        {
+            ++m_ClockCycle;
+
+            if(GlobalDebug.IsAttached())
+            {
+                GlobalDebug.WriteInfo(DebugCodeReportTiming, &m_ClockCycle, sizeof(m_ClockCycle));
+
+                if(!GlobalDebug.Stepping() && !GlobalDebug.DisableStepping())
+                {
+                    GlobalDebug.WriteStepping(DebugCodeCheckForPause);
+
+                    const u32 dataCode = GlobalDebug.ReadStepping<u32>();
+                    const u32 dataSize = GlobalDebug.ReadStepping<u32>();
+
+                    (void) dataSize;
+
+                    if(dataCode == DebugCodePause)
+                    {
+                        GlobalDebug.Stepping() = true;
+                    }
+                }
+
+                if(GlobalDebug.Stepping())
+                {
+                    ConPrinter::Print("Waiting for Step.\n");
+                    GlobalDebug.WriteStepping(DebugCodeReportStepReady);
+
+                    while(true)
+                    {
+                        const u32 dataCode = GlobalDebug.ReadStepping<u32>();
+                        const u32 dataSize = GlobalDebug.ReadStepping<u32>();
+
+                        (void) dataSize;
+
+                        if(dataCode == DebugCodeStep)
+                        {
+                            ConPrinter::Print("Step Received.\n");
+                            break;
+                        }
+                        else if(dataCode == DebugCodeResume)
+                        {
+                            ConPrinter::Print("Resume Received.\n");
+                            GlobalDebug.Stepping() = false;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+private:
+    u32 p_Reset_n : 1;
+    u32 p_Clock : 1;
+    u32 m_Pad0 : 30;
+
+    StdLogic m_TriggerReset_n : 3;
+    u32 m_Pad1 : 29;
+
     PciController m_PciController;
     RomController m_RomController;
     PciControlRegisters m_PciRegisters;
     CacheController m_CacheController;
     DMAController m_DmaController;
     StreamingMultiprocessor m_SMs[4];
-    DisplayManager m_DisplayManager;
+    DisplayManager<Processor> m_DisplayManager;
     u32 m_ClockCycle;
     u64 m_RamBaseAddress;
     u64 m_RamSize;

@@ -2,8 +2,11 @@
 
 #include <NumTypes.hpp>
 #include <Objects.hpp>
+#include <Common.hpp>
 #include <functional>
 #include <atomic>
+#include <cassert>
+#include <cstring>
 
 struct DisplayData final
 {
@@ -76,35 +79,27 @@ struct EdidBlock final
 };
 #pragma pack(pop)
 
-struct DisplayDataPacket final
-{
-    DEFAULT_CONSTRUCT_PU(DisplayDataPacket);
-    DEFAULT_DESTRUCT(DisplayDataPacket);
-    DEFAULT_CM_PU(DisplayDataPacket);
-
-    u32 BusActive : 1;
-    u32 PacketType : 1;
-    u32 Read : 1;
-    u32 DisplayIndex : 3;
-    u32 Pad0 : 25;
-    union
-    {
-        EdidBlock* EdidBusAssign;
-        struct
-        {
-            u32 Register;
-            u32* Value;
-        };
-    };
-};
-
 using DisplayUpdateCallback_f = ::std::function<void(u32 displayIndex, const DisplayData& displayData)>;
 
 class Processor;
 
+class DisplayManagerReceiverSample
+{
+public:
+    void ReceiveDisplayManager_Acknowledge(const bool acknowledge) noexcept { }
+    void ReceiveDisplayManager_Data(const u32 data) noexcept { }
+    void ReceiveDisplayManager_VSyncEvent(const bool event) noexcept { }
+};
+
+enum class DisplayRequestPacketType : u32
+{
+    Edid = 0,
+    DisplayInfo = 1
+};
+
+template<typename Receiver = DisplayManagerReceiverSample>
 class DisplayManager final
 {
-    //DEFAULT_CONSTRUCT_PU(DisplayManager);
     DEFAULT_DESTRUCT(DisplayManager);
     DELETE_CM(DisplayManager);
 public:
@@ -119,135 +114,271 @@ public:
     static constexpr u32 REGISTER_VSYNC_ENABLE = 6;
     static constexpr u32 REGISTER_FB_LOW = 7;
     static constexpr u32 REGISTER_FB_HIGH = 8;
+private:
+    SENSITIVITY_DECL(p_Reset_n, p_Clock);
+    STD_LOGIC_DECL(p_RequestActive);
+
+    SIGNAL_ENTITIES();
 public:
-    DisplayManager(Processor* const processor) noexcept
-        : m_Processor(processor)
+    explicit DisplayManager(Receiver* const parent) noexcept
+        : m_Parent(parent)
+        , p_Reset_n(0)
+        , p_Clock(0)
+        , p_RequestActive(StdLogic::U)
+        , p_RequestPacketType(DisplayRequestPacketType::Edid)
+        , p_RequestReadWrite(EReadWrite::Read)
+        , p_RequestDisplayIndex(0)
+        , p_VSyncInterruptPending(0)
+        , m_RequestHandled(0)
+        , m_Pad0(0)
+        , p_RequestRegister(0)
+        , p_inout_Data(0)
         , m_DisplaysEdid{ }
         , m_Displays{ }
-        , m_CurrentPacket()
+        , m_VSyncEvents{ }
         , m_UpdateCallback(nullptr)
-        , m_VSyncEvent(0)
-    { }
-
-    void Reset() noexcept
     {
-        for(uSys i = 0; i < MaxDisplayCount; ++i)
+        for(uSys i = 0; i < ::std::size(m_VSyncEvents); ++i)
         {
-            ::new(&m_Displays[i]) EdidBlock;
+            m_VSyncEvents[i] = 0;
         }
     }
 
-    void Clock(bool risingEdge = true) noexcept
+    void SetResetN(const bool reset_n) noexcept
     {
-        if(!risingEdge)
+        p_Reset_n = BOOL_TO_BIT(reset_n);
+
+        TRIGGER_SENSITIVITY(p_Reset_n);
+    }
+
+    void SetClock(const bool clock) noexcept
+    {
+        p_Clock = BOOL_TO_BIT(clock);
+
+        TRIGGER_SENSITIVITY(p_Clock);
+    }
+
+    void SetRequestActive(const StdLogic active) noexcept
+    {
+        STD_LOGIC_SET(p_RequestActive, active);
+    }
+
+    void SetRequestPacketType(const DisplayRequestPacketType packetType) noexcept
+    {
+        p_RequestPacketType = packetType;
+    }
+
+    void SetRequestReadWrite(const EReadWrite readWrite) noexcept
+    {
+        p_RequestReadWrite = readWrite;
+    }
+
+    void SetRequestDisplayIndex(const u32 displayIndex) noexcept
+    {
+        p_RequestDisplayIndex = displayIndex;
+    }
+
+    void SetRequestRegister(const u32 registerIndex) noexcept
+    {
+        p_RequestRegister = registerIndex;
+    }
+
+    void SetRequestData(const u32 data) noexcept
+    {
+        p_inout_Data = data;
+    }
+
+    [[nodiscard]] u32 GetResponseData() const noexcept
+    {
+        return p_inout_Data;
+    }
+
+    // Intended only for VBDevice.
+    [[nodiscard]] EdidBlock& GetDisplayEdid(const uSys index) noexcept { return m_DisplaysEdid[index]; }
+    [[nodiscard]] DisplayUpdateCallback_f& UpdateCallback() noexcept { return m_UpdateCallback; }
+
+    void NotifyDisplayVSyncEvent(const u32 display) noexcept
+    {
+        ++m_VSyncEvents[display];
+    }
+private:
+    PROCESSES_DECL()
+    {
+        STD_LOGIC_PROCESS_RESET_HANDLER(p_Clock);
+        PROCESS_ENTER(HandleReset, p_Reset_n)
+        PROCESS_ENTER(TriggerInterrupt, p_Reset_n, p_Clock)
+        PROCESS_ENTER(HandlePacket, p_Reset_n, p_Clock)
+    }
+
+    PROCESS_DECL(HandleReset)
+    {
+        if(!BIT_TO_BOOL(p_Reset_n))
         {
-            HandleVSyncEvent();
+            for(uSys i = 0; i < ::std::size(m_DisplaysEdid); ++i)
+            {
+                ::new(&m_DisplaysEdid[i]) EdidBlock();
+            }
+
+            for(uSys i = 0; i < ::std::size(m_Displays); ++i)
+            {
+                ::new(&m_Displays[i]) DisplayData();
+            }
         }
-        else
+    }
+
+    PROCESS_DECL(TriggerInterrupt)
+    {
+        if(!BIT_TO_BOOL(p_Reset_n))
         {
-            if(!m_CurrentPacket.BusActive)
+            for(uSys i = 0; i < ::std::size(m_VSyncEvents); ++i)
+            {
+                m_VSyncEvents[i] = 0;
+            }
+        }
+        else if(RISING_EDGE(p_Clock))
+        {
+            if(!BIT_TO_BOOL(p_VSyncInterruptPending))
+            {
+                // Check to see if any VSync events have been counted.
+
+                // A variable to coalesce all event counts.
+                u32 eventCoalesce = 0;
+
+                // Bitwise OR each of the event counters.
+                for(uSys i = 0; i < ::std::size(m_VSyncEvents); ++i)
+                {
+                    eventCoalesce |= m_VSyncEvents[i];
+                }
+
+                // Coalesce down to a single bit. Basically checking if eventCoalesce != 0.
+                eventCoalesce = (eventCoalesce & 0xFFFF) | (eventCoalesce >> 16);
+                eventCoalesce = (eventCoalesce & 0xFF) | (eventCoalesce >> 8);
+                eventCoalesce = (eventCoalesce & 0xF) | (eventCoalesce >> 4);
+                eventCoalesce = (eventCoalesce & 0x3) | (eventCoalesce >> 2);
+                eventCoalesce = (eventCoalesce & 0x1) | (eventCoalesce >> 1);
+
+                if(BIT_TO_BOOL(eventCoalesce))
+                {
+                    m_Parent->ReceiveDisplayManager_VSyncEvent(true);
+                }
+            }
+            else
+            {
+                m_Parent->ReceiveDisplayManager_VSyncEvent(false);
+            }
+        }
+    }
+
+    PROCESS_DECL(HandlePacket)
+    {
+        if(!BIT_TO_BOOL(p_Reset_n))
+        {
+            p_inout_Data = 0;
+        }
+        else if(RISING_EDGE(p_Clock))
+        {
+            if(!LOGIC_TO_BOOL(p_RequestActive))
+            {
+                m_RequestHandled = BOOL_TO_BIT(false);
+                m_Parent->ReceiveDisplayManager_Acknowledge(false);
+                return;
+            }
+            else if(BIT_TO_BOOL(m_RequestHandled))
             {
                 return;
             }
 
-            if(m_CurrentPacket.PacketType == 0)
+            if(p_RequestPacketType == DisplayRequestPacketType::Edid)
             {
-                if(m_CurrentPacket.Read)
+                const u32 edidOffset = p_RequestRegister * sizeof(u32);
+                u8* const edidPointer = reinterpret_cast<u8*>(&m_DisplaysEdid[p_RequestDisplayIndex]) + edidOffset;
+
+                static_assert(sizeof(u32) == 4, "We are anticipating a u32 to be 4 bytes for this function.");
+
+                if(p_RequestReadWrite == EReadWrite::Read)
                 {
-                    // Not required in hardware, we just represent the bus with a pointer.
-                    if(m_CurrentPacket.EdidBusAssign)
-                    {
-                        *m_CurrentPacket.EdidBusAssign = m_DisplaysEdid[m_CurrentPacket.DisplayIndex];
-                    }
+                    (void) ::std::memcpy(&p_inout_Data, edidPointer, sizeof(p_inout_Data));
+                    m_Parent->ReceiveDisplayManager_Data(p_inout_Data);
                 }
-                else
+                else if(p_RequestReadWrite == EReadWrite::Write)
                 {
-                    // Not required in hardware, we just represent the bus with a pointer.
-                    if(m_CurrentPacket.EdidBusAssign)
-                    {
-                        m_DisplaysEdid[m_CurrentPacket.DisplayIndex] = *m_CurrentPacket.EdidBusAssign;
-                    }
+                    (void) ::std::memcpy(edidPointer, &p_inout_Data, sizeof(p_inout_Data));
                 }
             }
-            else if(m_CurrentPacket.PacketType == 1)
+            else if(p_RequestPacketType == DisplayRequestPacketType::DisplayInfo)
             {
-                // Not required in hardware, we just represent the bus with a pointer.
-                if(!m_CurrentPacket.Value)
+                if(p_RequestReadWrite == EReadWrite::Read)
                 {
-                    return;
-                }
-
-                if(m_CurrentPacket.Read)
-                {
-                    switch(m_CurrentPacket.Register)
+                    switch(p_RequestRegister)
                     {
                         case REGISTER_WIDTH:
-                            *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].Width;
+                            p_inout_Data = m_Displays[p_RequestDisplayIndex].Width;
                             break;
                         case REGISTER_HEIGHT:
-                            *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].Height;
+                            p_inout_Data = m_Displays[p_RequestDisplayIndex].Height;
                             break;
                         case REGISTER_BPP:
-                            *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].BitsPerPixel;
+                            p_inout_Data = m_Displays[p_RequestDisplayIndex].BitsPerPixel;
                             break;
                         case REGISTER_ENABLE:
-                            *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].Enable;
+                            p_inout_Data = m_Displays[p_RequestDisplayIndex].Enable;
                             break;
                         case REGISTER_REFRESH_RATE_NUMERATOR:
-                            *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].RefreshRateNumerator;
+                            p_inout_Data = m_Displays[p_RequestDisplayIndex].RefreshRateNumerator;
                             break;
                         case REGISTER_REFRESH_RATE_DENOMINATOR:
-                            *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].RefreshRateDenominator;
+                            p_inout_Data = m_Displays[p_RequestDisplayIndex].RefreshRateDenominator;
                             break;
                         case REGISTER_VSYNC_ENABLE:
-                            *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].VSyncEnable;
+                            p_inout_Data = m_Displays[p_RequestDisplayIndex].VSyncEnable;
                             break;
                         case REGISTER_FB_LOW:
-                            *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].FramebufferLow();
+                            p_inout_Data = m_Displays[p_RequestDisplayIndex].FramebufferLow();
                             break;
                         case REGISTER_FB_HIGH:
-                            *m_CurrentPacket.Value = m_Displays[m_CurrentPacket.DisplayIndex].FramebufferHigh();
+                            p_inout_Data = m_Displays[p_RequestDisplayIndex].FramebufferHigh();
                             break;
                         default:
                             break;
                     }
+                    m_Parent->ReceiveDisplayManager_Data(p_inout_Data);
                 }
-                else
+                else if(p_RequestReadWrite == EReadWrite::Write)
                 {
-                    switch(m_CurrentPacket.Register)
+                    switch(p_RequestRegister)
                     {
                         case REGISTER_WIDTH:
-                            m_Displays[m_CurrentPacket.DisplayIndex].Width = *m_CurrentPacket.Value;
+                            m_Displays[p_RequestDisplayIndex].Width = p_inout_Data;
                             break;
                         case REGISTER_HEIGHT:
-                            m_Displays[m_CurrentPacket.DisplayIndex].Height = *m_CurrentPacket.Value;
+                            m_Displays[p_RequestDisplayIndex].Height = p_inout_Data;
                             break;
                         case REGISTER_BPP:
-                            m_Displays[m_CurrentPacket.DisplayIndex].BitsPerPixel = *m_CurrentPacket.Value;
+                            m_Displays[p_RequestDisplayIndex].BitsPerPixel = p_inout_Data;
                             break;
                         case REGISTER_ENABLE:
-                            m_Displays[m_CurrentPacket.DisplayIndex].Enable = *m_CurrentPacket.Value;
+                            m_Displays[p_RequestDisplayIndex].Enable = p_inout_Data;
                             break;
                         case REGISTER_REFRESH_RATE_NUMERATOR:
-                            m_Displays[m_CurrentPacket.DisplayIndex].RefreshRateNumerator = *m_CurrentPacket.Value;
+                            m_Displays[p_RequestDisplayIndex].RefreshRateNumerator = p_inout_Data;
                             break;
                         case REGISTER_REFRESH_RATE_DENOMINATOR:
-                            m_Displays[m_CurrentPacket.DisplayIndex].RefreshRateDenominator = *m_CurrentPacket.Value;
+                            m_Displays[p_RequestDisplayIndex].RefreshRateDenominator = p_inout_Data;
                             break;
                         case REGISTER_VSYNC_ENABLE:
-                            m_Displays[m_CurrentPacket.DisplayIndex].VSyncEnable = *m_CurrentPacket.Value;
-                            if(m_Displays[m_CurrentPacket.DisplayIndex].VSyncEnable)
+                            m_Displays[p_RequestDisplayIndex].VSyncEnable = p_inout_Data;
+                            if(m_Displays[p_RequestDisplayIndex].VSyncEnable)
                             {
-                                SetDisplayVSyncEvent(m_CurrentPacket.DisplayIndex);
+                                ++m_VSyncEvents[p_RequestDisplayIndex];
                             }
                             break;
                         case REGISTER_FB_LOW:
-                            m_Displays[m_CurrentPacket.DisplayIndex].FramebufferLowTmp = *m_CurrentPacket.Value;
+                            m_Displays[p_RequestDisplayIndex].FramebufferLowTmp = p_inout_Data;
                             break;
                         case REGISTER_FB_HIGH:
                         {
-                            m_Displays[m_CurrentPacket.DisplayIndex].Framebuffer = (static_cast<u64>(*m_CurrentPacket.Value) << 32) |
-                                m_Displays[m_CurrentPacket.DisplayIndex].FramebufferLowTmp;
+                            m_Displays[p_RequestDisplayIndex].Framebuffer = (static_cast<u64>(p_inout_Data) << 32) |
+                                m_Displays[p_RequestDisplayIndex].FramebufferLowTmp;
                             break;
                         }
                         default:
@@ -256,45 +387,64 @@ public:
 
                     if(m_UpdateCallback)
                     {
-                        m_UpdateCallback(m_CurrentPacket.DisplayIndex, m_Displays[m_CurrentPacket.DisplayIndex]);
+                        m_UpdateCallback(p_RequestDisplayIndex, m_Displays[p_RequestDisplayIndex]);
                     }
                 }
             }
+
+            m_RequestHandled = BOOL_TO_BIT(true);
+            m_Parent->ReceiveDisplayManager_Acknowledge(true);
         }
-    }
-
-    void SetBus(const DisplayDataPacket& bus) noexcept
-    {
-        m_CurrentPacket = bus;
-    }
-
-    void ResetBus() noexcept
-    {
-        m_CurrentPacket.BusActive = 0;
-        m_CurrentPacket.PacketType = 0;
-        m_CurrentPacket.Read = 0;
-        m_CurrentPacket.DisplayIndex = 0;
-        m_CurrentPacket.EdidBusAssign = nullptr;
-        m_CurrentPacket.Register = 0;
-        m_CurrentPacket.Value = nullptr;
-    }
-
-    // Intended only for VBDevice.
-    [[nodiscard]] EdidBlock& GetDisplayEdid(const uSys index) noexcept { return m_DisplaysEdid[index]; }
-    [[nodiscard]] DisplayUpdateCallback_f& UpdateCallback() noexcept { return m_UpdateCallback; }
-
-    void SetDisplayVSyncEvent(const u32 display) noexcept
-    {
-        m_VSyncEvent = display + 1;
     }
 private:
     void HandleVSyncEvent() noexcept;
 private:
-    Processor* m_Processor;
+    Receiver* m_Parent;
+
+    u32 p_Reset_n : 1;
+    u32 p_Clock : 1;
+    StdLogic p_RequestActive : 3;
+    DisplayRequestPacketType p_RequestPacketType : 1;
+    EReadWrite p_RequestReadWrite : 1;
+    u32 p_RequestDisplayIndex : 3;
+    u32 p_VSyncInterruptPending : 1;
+    u32 m_RequestHandled : 1;
+    u32 m_Pad0 : 20;
+    u32 p_RequestRegister;
+    u32 p_inout_Data;
+
     EdidBlock m_DisplaysEdid[MaxDisplayCount];
     DisplayData m_Displays[MaxDisplayCount];
-    DisplayDataPacket m_CurrentPacket;
+
+    /**
+     * Counters of the current number of queued VSync events.
+     *
+     *   The Driver will read the number of queued VSync events, and notify
+     * Windows of the appropriate number of interrupts.
+     *
+     *   This is born of an interest to have parity between the simulation
+     * and the hardware. At it's simplest this could just be 3 bits for
+     * tracking which display interrupted. The problem is that the
+     * simulation may not be able to keep up with VSync events, especially
+     * if there are 8 360 Hz displays (which this is designed to handle).
+     * Thus, there is a need to count how many events come. We could assert
+     * an interrupt for each VSync event, but GPT5 had a better idea:
+     * send a single interrupt and the let driver query the number of
+     * queued VSync events. It'd been a while since I reviewed
+     * DXGKCB_NOTIFY_INTERRUPT and had forgotten that you can call it
+     * multiple times from DxgkDdiInterruptRoutine.
+     *
+     *   This is an atomic because its being triggered from the Virtual Box
+     * Device. Thus, there is a thread boundary between us, and we need to
+     * use atomics to safely interact with this counter. In hardware this
+     * would just be a register. This can also feasibly be much smaller.
+     * With a 360 Hz display, a 21-bit integer could track an hours worth
+     * of updates. A 16-bit integer could track about 3 minutes. For the
+     * simulation 3 minutes might be too small, so we'll stick with a fat
+     * 32-bit integer for now. ChatGPT recommended a 64-bit integer, but I
+     * see no need for that.
+     */
+    ::std::atomic_uint32_t m_VSyncEvents[MaxDisplayCount];
 
     DisplayUpdateCallback_f m_UpdateCallback;
-    ::std::atomic_uint32_t m_VSyncEvent;
 };

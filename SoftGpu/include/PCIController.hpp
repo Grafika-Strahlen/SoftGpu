@@ -8,8 +8,11 @@
 #include <cstring>
 #include <mutex>
 #include <functional>
+
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#endif
 
 #undef DeviceCapabilities
 
@@ -348,7 +351,9 @@ public:
         : m_Processor(processor)
         , m_PciConfig{ 0 }
         , m_PciExtendedConfig{ 0 }
+#ifdef _WIN32
         , m_SimulationSyncEvent(INVALID_HANDLE_VALUE)
+#endif
         , m_ReadRequestActive(false)
         , m_ReadRequestAddress(0)
         , m_ReadRequestSize(0)
@@ -639,11 +644,13 @@ public:
         return (m_ConfigHeader.ExpansionROMBaseAddress & EXPANSION_ROM_BAR_ENABLE_BIT) == EXPANSION_ROM_BAR_ENABLE_BIT;
     }
 
+#ifdef _WIN32
     // Intended only for VBDevice.
     void SetSimulationSyncEvent(HANDLE event) noexcept
     {
         m_SimulationSyncEvent = event;
     }
+#endif
 
     [[nodiscard]] InterruptCallback_f& InterruptCallback() noexcept { return m_InterruptCallback; }
     [[nodiscard]] BusMasterReadCallback_f& BusMasterReadCallback() noexcept { return m_BusMasterReadCallback; }
@@ -892,7 +899,9 @@ private:
     AdvancedErrorReportingCapabilityStructure m_AdvancedErrorReportingCapability;
     u8 m_PciExtendedConfig[4096 - 256 - sizeof(m_AdvancedErrorReportingCapability)];
 
+#ifdef _WIN32
     HANDLE m_SimulationSyncEvent;
+#endif
     bool m_ReadRequestActive;
     u64 m_ReadRequestAddress;
     u16 m_ReadRequestSize;

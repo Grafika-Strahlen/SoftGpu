@@ -180,6 +180,7 @@
     <ClInclude Include="include\riscv\DualClockFIFO\WritePointer.hpp" />
     <ClInclude Include="include\riscv\FIFO.hpp" />
     <ClInclude Include="include\riscv\InstructionFetch.hpp" />
+    <ClInclude Include="include\riscv\LoadStoreUnit.hpp" />
     <ClInclude Include="include\riscv\MemoryBus.hpp" />
     <ClInclude Include="include\riscv\RegisterFile.hpp" />
     <ClInclude Include="include\riscv\CoProcessor\Shifter.hpp" />

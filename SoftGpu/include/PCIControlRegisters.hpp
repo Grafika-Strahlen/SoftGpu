@@ -55,6 +55,19 @@ struct PciControlRegistersBus final
 typedef void (*PciControlDebugReadCallback_f)(u32 localAddress);
 typedef void (*PciControlDebugWriteCallback_f)(u32 localAddress, u32 value);
 
+class PciControlRegistersReceiverSample
+{
+public:
+    void ReceivePciControlRegisters_TriggerResetN(const StdLogic reset_n) noexcept { }
+
+    void ReceivePciControlRegisters_DisplayManagerRequestActive(const StdLogic active) noexcept { }
+    void ReceivePciControlRegisters_DisplayManagerRequestPacketType(const DisplayRequestPacketType packetType) noexcept { }
+    void ReceivePciControlRegisters_DisplayManagerRequestReadWrite(const EReadWrite readWrite) noexcept { }
+    void ReceivePciControlRegisters_DisplayManagerRequestDisplayIndex(const u32 displayIndex) noexcept { }
+    void ReceivePciControlRegisters_DisplayManagerRequestRegister(const u32 registerIndex) noexcept { }
+    void ReceivePciControlRegisters_DisplayManagerRequestData(const u32 data) noexcept { }
+};
+
 class PciControlRegisters final
 {
     DEFAULT_DESTRUCT(PciControlRegisters);
@@ -122,15 +135,19 @@ public:
 
     static inline constexpr u32 DMA_CHANNEL_COUNT = 4;
 private:
+    using Receiver = PciControlRegistersReceiverSample;
+
     SENSITIVITY_DECL(p_Reset_n, p_Clock);
 
     SIGNAL_ENTITIES();
 public:
-    PciControlRegisters(Processor* const processor) noexcept
-        : p_Reset_n(1)
+    explicit PciControlRegisters(Receiver* const parent) noexcept
+        : m_Parent(parent)
+        , p_Reset_n(1)
         , p_Clock(0)
+        , p_DisplayManagerAcknowledge(0)
         , p_Pad0(0)
-        , m_Processor(processor)
+        , p_DisplayManagerData(0)
         , m_ControlRegister{.Value = 0}
         , m_VgaWidth(DEFAULT_VGA_WIDTH)
         , m_VgaHeight(DEFAULT_VGA_HEIGHT)
@@ -164,6 +181,11 @@ public:
         p_Clock = BOOL_TO_BIT(clock);
 
         TRIGGER_SENSITIVITY(p_Clock);
+    }
+
+    void SetDisplayManagerAcknowledge(const bool acknowledge) noexcept
+    {
+        p_DisplayManagerAcknowledge = BOOL_TO_BIT(acknowledge);
     }
 
     [[nodiscard]] PciControlRegistersBus& Bus() noexcept { return m_Bus; }
@@ -209,6 +231,17 @@ private:
                 m_DmaBuses[i] = { };
                 m_DmaRequestNumbers[i] = 0;
             }
+
+            //   This needs to be done after a clock cycle to ensure we don't end
+            // up in a cyclical situation where the reset is cleared, then set for
+            // each of the entities. This is largely a side effect of C++, but
+            // probably can't hurt on actual hardware.
+            //   To be extra safe we'll only do it on the falling of the clock when
+            // nothing is happening.
+            if(FALLING_EDGE(p_Clock))
+            {
+                m_Parent->ReceivePciControlRegisters_TriggerResetN(StdLogic::Z);
+            }
         }
         else if(RISING_EDGE(p_Clock))
         {
@@ -220,15 +253,249 @@ private:
         }
     }
 
-    void ExecuteRead() noexcept;
-    void ExecuteWrite() noexcept;
+    void ExecuteRead() noexcept
+    {
+        if(m_Bus.ReadBusLocked != 1)
+        {
+            return;
+        }
+
+        if(m_DebugReadCallback)
+        {
+            m_DebugReadCallback(m_Bus.ReadAddress);
+        }
+
+        if(m_Bus.ReadAddress >= BASE_REGISTER_EDID && m_Bus.ReadAddress < BASE_REGISTER_EDID + SIZE_EDID * DisplayManager<>::MaxDisplayCount)
+        {
+            ExecuteReadEdid();
+        }
+        else if(m_Bus.ReadAddress >= BASE_REGISTER_DI && m_Bus.ReadAddress < BASE_REGISTER_DI + SIZE_REGISTER_DI * DisplayManager<>::MaxDisplayCount)
+        {
+            ExecuteReadDI();
+        }
+        else if(m_Bus.WriteAddress >= BASE_REGISTER_DMA && m_Bus.WriteAddress < BASE_REGISTER_DMA + SIZE_REGISTER_DMA * DMAController::DMA_CHANNEL_COUNT)
+        {
+            ExecuteReadDMA();
+        }
+
+        switch(m_Bus.ReadAddress)
+        {
+            case REGISTER_MAGIC: m_Bus.ReadResponse = REGISTER_MAGIC_VALUE; break;
+            case REGISTER_REVISION: m_Bus.ReadResponse = REGISTER_REVISION_VALUE; break;
+            case REGISTER_EMULATION: m_Bus.ReadResponse = VALUE_REGISTER_EMULATION_SIMULATION; break;
+            case REGISTER_RESET: m_Parent->ReceivePciControlRegisters_TriggerResetN(StdLogic::H); break;
+            case REGISTER_CONTROL: m_Bus.ReadResponse = m_ControlRegister.Value; break;
+            case REGISTER_VRAM_SIZE_LOW: m_Bus.ReadResponse = 256 * 1024 * 1024; break;
+            case REGISTER_VRAM_SIZE_HIGH: m_Bus.ReadResponse = 0; break;
+            // case REGISTER_VRAM_SIZE_LOW: m_Bus.ReadResponse = 0; break;
+            // case REGISTER_VRAM_SIZE_HIGH: m_Bus.ReadResponse = 1; break; // 8 GiB
+            case REGISTER_VGA_WIDTH: m_Bus.ReadResponse = m_VgaWidth; break;
+            case REGISTER_VGA_HEIGHT: m_Bus.ReadResponse = m_VgaHeight; break;
+            case REGISTER_INTERRUPT_TYPE: m_Bus.ReadResponse = m_CurrentInterruptMessage; break;
+            case REGISTER_DMA_CHANNEL_COUNT: m_Bus.ReadResponse = DMA_CHANNEL_COUNT; break;
+            case REGISTER_DEBUG_PRINT: m_Bus.ReadResponse = 0; break;
+            case REGISTER_DEBUG_LOG_LOCK: m_Bus.ReadResponse = m_DebugLogLock; break;
+            case REGISTER_DEBUG_LOG_MULTI: m_Bus.ReadResponse = 0; break;
+            default: break;
+        }
+
+        m_Bus.ReadBusLocked = 2;
+    }
+
+    void ExecuteReadEdid() noexcept
+    {
+        const u32 offset = m_Bus.ReadAddress - BASE_REGISTER_EDID;
+
+        const u32 displayIndex = offset / SIZE_EDID;
+        const u32 registerOffset = offset % SIZE_EDID;
+
+        if(m_ReadState == 0)
+        {
+            m_Parent->ReceivePciControlRegisters_DisplayManagerRequestActive(StdLogic::One);
+            m_Parent->ReceivePciControlRegisters_DisplayManagerRequestPacketType(DisplayRequestPacketType::Edid);
+            m_Parent->ReceivePciControlRegisters_DisplayManagerRequestReadWrite(EReadWrite::Read);
+            m_Parent->ReceivePciControlRegisters_DisplayManagerRequestDisplayIndex(displayIndex);
+            m_Parent->ReceivePciControlRegisters_DisplayManagerRequestRegister(registerOffset);
+            m_ReadState = 1;
+            return;
+        }
+        else if(m_ReadState == 1)
+        {
+            if(!BIT_TO_BOOL(p_DisplayManagerAcknowledge))
+            {
+                return;
+            }
+
+            m_Parent->ReceivePciControlRegisters_DisplayManagerRequestActive(StdLogic::HighImpedance);
+
+            if(m_Bus.ReadSize == 1)
+            {
+                const u8* rawData = reinterpret_cast<const u8*>(&m_DisplayEdidStorage);
+                m_Bus.ReadResponse = rawData[registerOffset];
+            }
+            else if(m_Bus.ReadSize == 2)
+            {
+                const u16* rawData = reinterpret_cast<const u16*>(&m_DisplayEdidStorage);
+                m_Bus.ReadResponse = rawData[registerOffset / sizeof(u16)];
+            }
+            else if(m_Bus.ReadSize == 4)
+            {
+                const u32* rawData = reinterpret_cast<const u32*>(&m_DisplayEdidStorage);
+                m_Bus.ReadResponse = rawData[registerOffset / sizeof(u32)];
+            }
+
+            m_ReadState = 0;
+        }
+    }
+
+    void ExecuteReadDI() noexcept
+    {
+        const u32 offset = m_Bus.ReadAddress - BASE_REGISTER_DI;
+
+        const u32 displayIndex = offset / SIZE_REGISTER_DI;
+        const u32 registerOffset = (offset % SIZE_REGISTER_DI) / sizeof(u32);
+
+        if(m_ReadState == 0)
+        {
+            m_Parent->ReceivePciControlRegisters_DisplayManagerRequestActive(StdLogic::One);
+            m_Parent->ReceivePciControlRegisters_DisplayManagerRequestPacketType(DisplayRequestPacketType::DisplayInfo);
+            m_Parent->ReceivePciControlRegisters_DisplayManagerRequestReadWrite(EReadWrite::Read);
+            m_Parent->ReceivePciControlRegisters_DisplayManagerRequestDisplayIndex(displayIndex);
+            m_Parent->ReceivePciControlRegisters_DisplayManagerRequestRegister(registerOffset);
+            m_ReadState = 1;
+            return;
+        }
+        else if(m_ReadState == 1)
+        {
+            if(!BIT_TO_BOOL(p_DisplayManagerAcknowledge))
+            {
+                return;
+            }
+
+            m_Parent->ReceivePciControlRegisters_DisplayManagerRequestActive(StdLogic::HighImpedance);
+
+            if(m_Bus.ReadSize == 1)
+            {
+                const u8* rawData = reinterpret_cast<const u8*>(&m_DisplayDataStorage);
+                m_Bus.ReadResponse = *rawData;
+            }
+            else if(m_Bus.ReadSize == 2)
+            {
+                const u16* rawData = reinterpret_cast<const u16*>(&m_DisplayDataStorage);
+                m_Bus.ReadResponse = *rawData;
+            }
+            else if(m_Bus.ReadSize == 4)
+            {
+                const u32* rawData = &m_DisplayDataStorage;
+                m_Bus.ReadResponse = *rawData;
+            }
+
+            m_ReadState = 0;
+        }
+    }
+
+    void ExecuteReadDMA() noexcept
+    {
+        const u32 offset = m_Bus.WriteAddress - BASE_REGISTER_DI;
+
+        const u32 displayIndex = offset / SIZE_REGISTER_DI;
+        const u32 registerOffset = (offset % SIZE_REGISTER_DI) / sizeof(u32);
+
+        if(registerOffset == OFFSET_REGISTER_DMA_LOCK)
+        {
+            m_Bus.ReadResponse = m_DmaLock[displayIndex];
+        }
+    }
+
+    void ExecuteWrite() noexcept
+    {
+        HandleDmaBus();
+
+        if(m_Bus.WriteBusLocked != 1)
+        {
+            return;
+        }
+
+        if(m_DebugWriteCallback)
+        {
+            m_DebugWriteCallback(m_Bus.WriteAddress, m_Bus.WriteAddress);
+        }
+
+        if(m_Bus.WriteAddress >= BASE_REGISTER_DI && m_Bus.WriteAddress < BASE_REGISTER_DI + SIZE_REGISTER_DI * DisplayManager<>::MaxDisplayCount)
+        {
+            ExecuteWriteDI();
+        }
+        else if(m_Bus.WriteAddress >= BASE_REGISTER_DMA && m_Bus.WriteAddress < BASE_REGISTER_DMA + SIZE_REGISTER_DMA * DMAController::DMA_CHANNEL_COUNT)
+        {
+            ExecuteWriteDMA();
+        }
+
+        switch(m_Bus.WriteAddress)
+        {
+            case REGISTER_CONTROL: m_ControlRegister.Value = m_Bus.WriteValue & CONTROL_REGISTER_VALID_MASK; break;
+            case REGISTER_VGA_WIDTH: m_VgaWidth = static_cast<u16>(m_Bus.WriteValue); break;
+            case REGISTER_VGA_HEIGHT: m_VgaHeight = static_cast<u16>(m_Bus.WriteValue); break;
+            case REGISTER_INTERRUPT_TYPE: m_CurrentInterruptMessage = 0; break; // The CPU can only clear the interrupt.
+            case REGISTER_DEBUG_LOG_LOCK:
+                if(m_DebugLogLock == VALUE_DEBUG_LOG_LOCK_UNLOCKED)
+                {
+                    m_DebugLogLock = m_Bus.WriteValue;
+                }
+                else if(m_Bus.WriteValue == VALUE_DEBUG_LOG_LOCK_UNLOCKED)
+                {
+                    m_DebugLogLock = VALUE_DEBUG_LOG_LOCK_UNLOCKED;
+                }
+                break;
+            default: break;
+        }
+
+        m_Bus.WriteBusLocked = 2;
+    }
+
+    void ExecuteWriteDI() noexcept
+    {
+        const u32 offset = m_Bus.WriteAddress - BASE_REGISTER_DI;
+
+        const u32 displayIndex = offset / SIZE_REGISTER_DI;
+        const u32 registerOffset = (offset % SIZE_REGISTER_DI) / sizeof(u32);
+
+        if(m_WriteState == 0)
+        {
+            m_Parent->ReceivePciControlRegisters_DisplayManagerRequestActive(StdLogic::One);
+            m_Parent->ReceivePciControlRegisters_DisplayManagerRequestPacketType(DisplayRequestPacketType::DisplayInfo);
+            m_Parent->ReceivePciControlRegisters_DisplayManagerRequestReadWrite(EReadWrite::Write);
+            m_Parent->ReceivePciControlRegisters_DisplayManagerRequestDisplayIndex(displayIndex);
+            m_Parent->ReceivePciControlRegisters_DisplayManagerRequestRegister(registerOffset);
+            m_Parent->ReceivePciControlRegisters_DisplayManagerRequestData(m_Bus.WriteValue);
+            m_WriteState = 1;
+            return;
+        }
+        else if(m_WriteState == 1)
+        {
+            if(!BIT_TO_BOOL(p_DisplayManagerAcknowledge))
+            {
+                return;
+            }
+
+            m_Parent->ReceivePciControlRegisters_DisplayManagerRequestActive(StdLogic::HighImpedance);
+
+            m_WriteState = 0;
+        }
+    }
+
+    void ExecuteWriteDMA() noexcept;
+
     void HandleDmaBus() noexcept;
 private:
+    Receiver* m_Parent;
+
     u32 p_Reset_n : 1;
     u32 p_Clock : 1;
-    u32 p_Pad0 : 30;
+    u32 p_DisplayManagerAcknowledge : 1;
+    u32 p_Pad0 : 29;
 
-    Processor* m_Processor;
+    u32 p_DisplayManagerData;
+
     ControlRegister m_ControlRegister;
     u16 m_VgaWidth;
     u16 m_VgaHeight;
