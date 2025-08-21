@@ -2,8 +2,16 @@
 
 #include <Objects.hpp>
 #include <NumTypes.hpp>
+#include <BitSet.hpp>
+#include <cassert>
 
 #define SET_HI_Z(X)
+
+enum class EReadWrite : u32
+{
+    Read = 0,
+    Write = 1
+};
 
 [[nodiscard]] static u32 BOOL_TO_BIT(const bool b) noexcept
 {
@@ -13,6 +21,101 @@
 [[nodiscard]] static bool BIT_TO_BOOL(const u32 b) noexcept
 {
     return b != 0;
+}
+
+// 4 bits, 3 if you don't care about don't care.
+enum class StdULogic : u32
+{
+    Uninitialized,          // U
+    MultipleDrivers,        // X
+    Zero,                   // 1
+    One,                    // 0
+    HighImpedance,          // Z
+    WeakMultipleDrivers,    // W
+    WeakLow,                // L
+    WeakHigh,               // H
+    DontCare,               // -
+
+    MAX_PRIME,
+    MAX = MAX_PRIME - 1,
+    U = Uninitialized,
+    X = MultipleDrivers,
+    O = Zero,
+    I = One,
+    Z = HighImpedance,
+    W = WeakMultipleDrivers,
+    L = WeakLow,
+    H = WeakHigh,
+    _ = DontCare
+};
+
+using StdLogic = StdULogic;
+
+namespace vhdl::internal {
+
+static constexpr StdLogic ResolutionTable[StdLogic::MAX_PRIME][StdLogic::MAX_PRIME] = {
+    //       U            X            0            1            Z            W            L            H            -
+    { StdLogic::U, StdLogic::U, StdLogic::U, StdLogic::U, StdLogic::U, StdLogic::U, StdLogic::U, StdLogic::U, StdLogic::U }, // U
+    { StdLogic::U, StdLogic::X, StdLogic::X, StdLogic::X, StdLogic::X, StdLogic::X, StdLogic::X, StdLogic::X, StdLogic::X }, // X
+    { StdLogic::U, StdLogic::X, StdLogic::O, StdLogic::X, StdLogic::O, StdLogic::O, StdLogic::O, StdLogic::O, StdLogic::X }, // 0
+    { StdLogic::U, StdLogic::X, StdLogic::X, StdLogic::I, StdLogic::I, StdLogic::I, StdLogic::I, StdLogic::I, StdLogic::X }, // 1
+    { StdLogic::U, StdLogic::X, StdLogic::O, StdLogic::I, StdLogic::Z, StdLogic::W, StdLogic::L, StdLogic::H, StdLogic::X }, // Z
+    { StdLogic::U, StdLogic::X, StdLogic::O, StdLogic::I, StdLogic::W, StdLogic::W, StdLogic::W, StdLogic::W, StdLogic::X }, // W
+    { StdLogic::U, StdLogic::X, StdLogic::O, StdLogic::I, StdLogic::L, StdLogic::W, StdLogic::L, StdLogic::W, StdLogic::X }, // L
+    { StdLogic::U, StdLogic::X, StdLogic::O, StdLogic::I, StdLogic::H, StdLogic::W, StdLogic::W, StdLogic::H, StdLogic::X }, // H
+    { StdLogic::U, StdLogic::X, StdLogic::X, StdLogic::X, StdLogic::X, StdLogic::X, StdLogic::X, StdLogic::X, StdLogic::X }, // -
+};
+
+}
+
+[[nodiscard]] static StdLogic ResolveStdLogic(const StdLogic a, const StdLogic b) noexcept
+{
+    return vhdl::internal::ResolutionTable[static_cast<u32>(a)][static_cast<u32>(b)];
+}
+
+[[nodiscard]] static bool LOGIC_TO_BOOL(const StdLogic b) noexcept
+{
+    assert(b != StdLogic::X);
+    assert(b != StdLogic::W);
+
+    switch(b)
+    {
+        case StdLogic::U: return false;
+        case StdLogic::X: return false;
+        case StdLogic::O: return false;
+        case StdLogic::I: return true;
+        case StdLogic::Z: return false;
+        case StdLogic::W: return false;
+        case StdLogic::L: return false;
+        case StdLogic::H: return true;
+        case StdLogic::_: return false;
+        default: return false;
+    }
+}
+
+[[nodiscard]] static u32 LOGIC_TO_BIT(const StdLogic b) noexcept
+{
+    return BOOL_TO_BIT(LOGIC_TO_BOOL(b));
+}
+
+[[nodiscard]] static StdLogic BOOL_TO_LOGIC(const bool b) noexcept
+{
+    return b ? StdLogic::One : StdLogic::Zero;
+}
+
+[[nodiscard]] static StdLogic BOOL_TO_LOGIC_WEAK(const bool b) noexcept
+{
+    return b ? StdLogic::WeakHigh : StdLogic::WeakLow;
+}
+
+[[nodiscard]] static StdLogic BIT_TO_LOGIC(const u32 b) noexcept
+{
+    return BOOL_TO_LOGIC(BIT_TO_BOOL(b));
+}
+
+[[nodiscard]] static StdLogic BIT_TO_LOGIC_WEAK(const u32 b) noexcept
+{
+    return BOOL_TO_LOGIC_WEAK(BIT_TO_BOOL(b));
 }
 
 template<typename T, typename TBit>
@@ -155,3 +258,37 @@ class Processor;
 
 #define ENTER_PROCESS_M(Name) \
     Name(trigger)
+
+
+#define STD_LOGIC_DECL(...) \
+    enum class StdLogicVars : u8                                                                        \
+    {                                                                                                   \
+        __VA_ARGS__                                                                                     \
+    };                                                                                                  \
+    void StdLogicResetHandler() noexcept                                                                \
+    {                                                                                                   \
+        m_StdLogicTracker = 0;                                                                          \
+    }                                                                                                   \
+    u64 m_StdLogicTracker = 0                                                                           \
+
+#define STD_LOGIC_PROCESS_RESET_HANDLER(...) \
+    PROCESS_BEGIN(__VA_ARGS__)                                                                          \
+    {                                                                                                   \
+        StdLogicResetHandler();                                                                         \
+    }
+
+#define STD_LOGIC_SET(Name, Value) \
+    if((m_StdLogicTracker & (1 << static_cast<u32>(StdLogicVars::Name)) == 0))                          \
+    {                                                                                                   \
+        Name = Value;                                                                                   \
+    }                                                                                                   \
+    else                                                                                                \
+    {                                                                                                   \
+        Name = ResolveStdLogic(Name, Value);                                                            \
+    }                                                                                                   \
+    m_StdLogicTracker |= (1 << static_cast<u32>(StdLogicVars::Name))
+
+#define STD_ULOGIC_SET(Name, Value) \
+    assert((m_StdLogicTracker & (1 << static_cast<u32>(StdLogicVars::Name)) == 0));                     \
+    Name = Value;                                                                                       \
+    m_StdLogicTracker |= (1 << static_cast<u32>(StdLogicVars::Name))
