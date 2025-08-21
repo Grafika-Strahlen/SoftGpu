@@ -996,4 +996,218 @@ static void ShifterBarrelCheck31S3Left(bool log = false) noexcept
     TAU_UNIT_EQ(receiver.Result, 248, "Result should be 248 after 7th clock cycle. {}");
 }
 
+static void ShifterSerialCheckMaxS31Left(bool log = false) noexcept
+{
+    TAU_UNIT_TEST();
+
+    ShifterReceiver receiver;
+    Shifter<ShifterReceiver, false> ip(&receiver);
+
+    receiver.Log = log;
+
+    ip.SetResetN(true);
+
+    ip.SetRS1(0xFFFFFFFF);
+    ip.SetShiftAmount(31);
+    ControlBus controlBus {};
+    controlBus.ALU_BaseCoProcessorTrigger = 1;
+    controlBus.IR_Function3 = ControlBus::Function3_ALU_ShiftLeft;
+    controlBus.IR_Function12 = 0;
+    ip.SetControlBus(controlBus);
+
+    ip.SetClock(true);
+    ip.SetClock(false);
+
+    TAU_UNIT_EQ(receiver.Valid, false, "Result should not be valid after 1st clock cycle. {}");
+    TAU_UNIT_EQ(receiver.Result, 0, "Result should be 0 after 1st clock cycle. {}");
+
+    ip.SetClock(true);
+    ip.SetClock(false);
+
+    TAU_UNIT_EQ(receiver.Valid, false, "Result should not be valid after 2nd clock cycle. {}");
+    TAU_UNIT_EQ(receiver.Result, 0, "Result should be 0 after 2nd clock cycle. {}");
+
+    ip.SetClock(true);
+    ip.SetClock(false);
+
+    TAU_UNIT_EQ(receiver.Valid, false, "Result should not be valid after 3rd clock cycle. {}");
+    TAU_UNIT_EQ(receiver.Result, 0, "Result should be 0 after 3rd clock cycle. {}");
+
+    controlBus.ALU_BaseCoProcessorTrigger = 0;
+    ip.SetControlBus(controlBus);
+    ip.SetRS1(0);
+    ip.SetShiftAmount(0);
+
+    for(uSys i = 0; i < 30; ++i)
+    {
+        ip.SetClock(true);
+        ip.SetClock(false);
+
+        TAU_UNIT_EQ(receiver.Valid, false, "Result should not be valid after {}} clock cycle. {}", i + 3);
+        TAU_UNIT_EQ(receiver.Result, 0, "Result should be 0 after {} clock cycle. {}", i + 3);
+    }
+
+    ip.SetClock(true);
+    ip.SetClock(false);
+
+    TAU_UNIT_EQ(receiver.Valid, true, "Result should be valid after 34th clock cycle. {}");
+    TAU_UNIT_EQ(receiver.Result, 0x8000'0000, "Result should be 1 after 34th clock cycle. {}");
+}
+
+static void ShifterBarrelCheckMaxS31Left(bool log = false) noexcept
+{
+    TAU_UNIT_TEST();
+
+    ShifterReceiver receiver;
+    Shifter<ShifterReceiver, true> ip(&receiver);
+
+    receiver.Log = log;
+
+    ip.SetResetN(true);
+
+    ip.SetRS1(0xFFFFFFFF);
+    ip.SetShiftAmount(31);
+    ControlBus controlBus {};
+    controlBus.ALU_BaseCoProcessorTrigger = 1;
+    controlBus.IR_Function3 = ControlBus::Function3_ALU_ShiftLeft;
+    controlBus.IR_Function12 = 0;
+    ip.SetControlBus(controlBus);
+
+    ip.SetClock(true);
+    ip.SetClock(false);
+
+    TAU_UNIT_EQ(receiver.Valid, true, "Result should be valid after 1st clock cycle. {}");
+    TAU_UNIT_EQ(receiver.Result, 0x8000'0000, "Result should be 1 after 1st clock cycle. {}");
+
+    ip.SetClock(true);
+    ip.SetClock(false);
+
+    TAU_UNIT_EQ(receiver.Valid, true, "Result should be valid after 2nd clock cycle. {}");
+    TAU_UNIT_EQ(receiver.Result, 0x8000'0000, "Result should be 1 after 2nd clock cycle. {}");
+
+    ip.SetClock(true);
+    ip.SetClock(false);
+
+    TAU_UNIT_EQ(receiver.Valid, true, "Result should be valid after 3rd clock cycle. {}");
+    TAU_UNIT_EQ(receiver.Result, 0x8000'0000, "Result should be 1 after 3rd clock cycle. {}");
+
+    controlBus.ALU_BaseCoProcessorTrigger = 0;
+    ip.SetControlBus(controlBus);
+    ip.SetRS1(0);
+    ip.SetShiftAmount(0);
+
+    ip.SetClock(true);
+    ip.SetClock(false);
+
+    TAU_UNIT_EQ(receiver.Valid, true, "Result should be valid after 4th clock cycle. {}");
+    TAU_UNIT_EQ(receiver.Result, 0x8000'0000, "Result should be 1 after 4th clock cycle. {}");
+}
+
+static void ShifterSerialCheckMaxS32Left(bool log = false) noexcept
+{
+    TAU_UNIT_TEST();
+
+    ShifterReceiver receiver;
+    Shifter<ShifterReceiver, false> ip(&receiver);
+
+    receiver.Log = log;
+
+    ip.SetResetN(true);
+
+    ip.SetRS1(0xFFFFFFFF);
+    ip.SetShiftAmount(32);
+    ControlBus controlBus {};
+    controlBus.ALU_BaseCoProcessorTrigger = 1;
+    controlBus.IR_Function3 = ControlBus::Function3_ALU_ShiftLeft;
+    controlBus.IR_Function12 = 0;
+    ip.SetControlBus(controlBus);
+
+    ip.SetClock(true);
+    ip.SetClock(false);
+
+    TAU_UNIT_EQ(receiver.Valid, false, "Result should not be valid after 1st clock cycle. {}");
+    TAU_UNIT_EQ(receiver.Result, 0, "Result should be 0 after 1st clock cycle. {}");
+
+    ip.SetClock(true);
+    ip.SetClock(false);
+
+    TAU_UNIT_EQ(receiver.Valid, false, "Result should not be valid after 2nd clock cycle. {}");
+    TAU_UNIT_EQ(receiver.Result, 0, "Result should be 0 after 2nd clock cycle. {}");
+
+    ip.SetClock(true);
+    ip.SetClock(false);
+
+    TAU_UNIT_EQ(receiver.Valid, false, "Result should not be valid after 3rd clock cycle. {}");
+    TAU_UNIT_EQ(receiver.Result, 0, "Result should be 0 after 3rd clock cycle. {}");
+
+    controlBus.ALU_BaseCoProcessorTrigger = 0;
+    ip.SetControlBus(controlBus);
+    ip.SetRS1(0);
+    ip.SetShiftAmount(0);
+
+    for(uSys i = 0; i < 31; ++i)
+    {
+        ip.SetClock(true);
+        ip.SetClock(false);
+
+        TAU_UNIT_EQ(receiver.Valid, false, "Result should not be valid after {}} clock cycle. {}", i + 3);
+        TAU_UNIT_EQ(receiver.Result, 0, "Result should be 0 after {} clock cycle. {}", i + 3);
+    }
+
+    ip.SetClock(true);
+    ip.SetClock(false);
+
+    TAU_UNIT_EQ(receiver.Valid, true, "Result should be valid after 35th clock cycle. {}");
+    TAU_UNIT_EQ(receiver.Result, 0, "Result should be 0 after 35th clock cycle. {}");
+}
+
+static void ShifterBarrelCheckMaxS32Left(bool log = false) noexcept
+{
+    TAU_UNIT_TEST();
+
+    ShifterReceiver receiver;
+    Shifter<ShifterReceiver, true> ip(&receiver);
+
+    receiver.Log = log;
+
+    ip.SetResetN(true);
+
+    ip.SetRS1(0xFFFFFFFF);
+    ip.SetShiftAmount(32);
+    ControlBus controlBus {};
+    controlBus.ALU_BaseCoProcessorTrigger = 1;
+    controlBus.IR_Function3 = ControlBus::Function3_ALU_ShiftLeft;
+    controlBus.IR_Function12 = 0;
+    ip.SetControlBus(controlBus);
+
+    ip.SetClock(true);
+    ip.SetClock(false);
+
+    TAU_UNIT_EQ(receiver.Valid, true, "Result should be valid after 1st clock cycle. {}");
+    TAU_UNIT_EQ(receiver.Result, 0, "Result should be 0 after 1st clock cycle. {}");
+
+    ip.SetClock(true);
+    ip.SetClock(false);
+
+    TAU_UNIT_EQ(receiver.Valid, true, "Result should be valid after 2nd clock cycle. {}");
+    TAU_UNIT_EQ(receiver.Result, 0, "Result should be 0 after 2nd clock cycle. {}");
+
+    ip.SetClock(true);
+    ip.SetClock(false);
+
+    TAU_UNIT_EQ(receiver.Valid, true, "Result should be valid after 3rd clock cycle. {}");
+    TAU_UNIT_EQ(receiver.Result, 0, "Result should be 0 after 3rd clock cycle. {}");
+
+    controlBus.ALU_BaseCoProcessorTrigger = 0;
+    ip.SetControlBus(controlBus);
+    ip.SetRS1(0);
+    ip.SetShiftAmount(0);
+
+    ip.SetClock(true);
+    ip.SetClock(false);
+
+    TAU_UNIT_EQ(receiver.Valid, true, "Result should be valid after 4th clock cycle. {}");
+    TAU_UNIT_EQ(receiver.Result, 0, "Result should be 0 after 4th clock cycle. {}");
+}
+
 }

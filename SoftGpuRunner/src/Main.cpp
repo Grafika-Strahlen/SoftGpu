@@ -139,11 +139,16 @@ int main(int argCount, char* args[])
         // riscv::coprocessor::test::ShifterSerialCheckMaxS32Right(false);
         // riscv::coprocessor::test::ShifterBarrelCheckMaxS32Right(true);
 
-        riscv::coprocessor::test::ShifterBarrelCheckFuzzRight(false);
-        riscv::coprocessor::test::ShifterSerialCheckFuzzRight(false);
+        // riscv::coprocessor::test::ShifterBarrelCheckFuzzRight(false);
+        // riscv::coprocessor::test::ShifterSerialCheckFuzzRight(false);
 
-        // riscv::coprocessor::test::ShifterSerialCheck31S3Left(true);
-        // riscv::coprocessor::test::ShifterBarrelCheck31S3Left(true);
+        riscv::coprocessor::test::ShifterSerialCheck31S3Left(true);
+        riscv::coprocessor::test::ShifterBarrelCheck31S3Left(true);
+        riscv::coprocessor::test::ShifterSerialCheckMaxS31Left(false);
+        riscv::coprocessor::test::ShifterBarrelCheckMaxS31Left(true);
+        riscv::coprocessor::test::ShifterSerialCheckMaxS32Left(false);
+        riscv::coprocessor::test::ShifterBarrelCheckMaxS32Left(true);
+
         // riscv::test::ClockGateTestBench();
         // riscv::fifo::test::SynchronizerResetTest();
         // riscv::fifo::test::SynchronizerSingleTest();
