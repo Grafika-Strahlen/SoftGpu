@@ -420,16 +420,6 @@ public:
 
     }
 
-    void SetDisplayManagerBus(const DisplayDataPacket& bus) noexcept
-    {
-        m_DisplayManager.SetBus(bus);
-    }
-
-    void ResetDisplayManagerBus() noexcept
-    {
-        m_DisplayManager.ResetBus();
-    }
-
     [[nodiscard]] u64 RamBaseAddress() const noexcept { return m_RamBaseAddress; }
     [[nodiscard]] u64 RamSize() const noexcept { return m_RamSize; }
     [[nodiscard]] u16 PCITransferLimit() const noexcept { return 1024; }
