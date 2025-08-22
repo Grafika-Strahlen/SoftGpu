@@ -4,17 +4,15 @@
 
 #include <cstring>
 
-#include <immintrin.h>
-
 void DispatchUnit::ResetCycle() noexcept
 {
     m_IsStalled = false;
     m_ClockIndex = 0;
     ++m_TotalIterationsTracker;
-    m_FpSaturationTracker += 8 - _mm_popcnt_u32(m_FpAvailabilityMap);
-    m_IntFpSaturationTracker += 8 - _mm_popcnt_u32(m_IntFpAvailabilityMap);
-    m_LdStSaturationTracker += 4 - _mm_popcnt_u32(m_LdStAvailabilityMap);
-    m_TextureSaturationTracker += 2 - _mm_popcnt_u32(m_TextureSamplerAvailabilityMap);
+    m_FpSaturationTracker += 8 - ::std::popcount(m_FpAvailabilityMap);
+    m_IntFpSaturationTracker += 8 - ::std::popcount(m_IntFpAvailabilityMap);
+    m_LdStSaturationTracker += 4 - ::std::popcount(m_LdStAvailabilityMap);
+    m_TextureSaturationTracker += 2 - ::std::popcount(m_TextureSamplerAvailabilityMap);
 }
 
 void DispatchUnit::Clock() noexcept
