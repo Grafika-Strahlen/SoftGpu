@@ -5,6 +5,13 @@
 #include <BitSet.hpp>
 #include <cassert>
 
+#if (defined(_M_X64) && _M_X64 == 100) || defined(__x86_64__)
+    #define HAS_X86_INTRINSICS (1)
+#else
+    #define HAS_X86_INTRINSICS (0)
+#endif
+
+
 #define SET_HI_Z(X)
 
 enum class EReadWrite : u32
@@ -53,7 +60,7 @@ using StdLogic = StdULogic;
 
 namespace vhdl::internal {
 
-static constexpr StdLogic ResolutionTable[StdLogic::MAX_PRIME][StdLogic::MAX_PRIME] = {
+static constexpr StdLogic ResolutionTable[static_cast<u32>(StdLogic::MAX_PRIME)][static_cast<u32>(StdLogic::MAX_PRIME)] = {
     //       U            X            0            1            Z            W            L            H            -
     { StdLogic::U, StdLogic::U, StdLogic::U, StdLogic::U, StdLogic::U, StdLogic::U, StdLogic::U, StdLogic::U, StdLogic::U }, // U
     { StdLogic::U, StdLogic::X, StdLogic::X, StdLogic::X, StdLogic::X, StdLogic::X, StdLogic::X, StdLogic::X, StdLogic::X }, // X
@@ -278,7 +285,7 @@ class Processor;
     }
 
 #define STD_LOGIC_SET(Name, Value) \
-    if((m_StdLogicTracker & (1 << static_cast<u32>(StdLogicVars::Name)) == 0))                          \
+    if((m_StdLogicTracker & (1 << static_cast<u32>(StdLogicVars::Name))) == 0)                          \
     {                                                                                                   \
         Name = Value;                                                                                   \
     }                                                                                                   \
@@ -289,6 +296,6 @@ class Processor;
     m_StdLogicTracker |= (1 << static_cast<u32>(StdLogicVars::Name))
 
 #define STD_ULOGIC_SET(Name, Value) \
-    assert((m_StdLogicTracker & (1 << static_cast<u32>(StdLogicVars::Name)) == 0));                     \
+    assert((m_StdLogicTracker & (1 << static_cast<u32>(StdLogicVars::Name))) == 0);                     \
     Name = Value;                                                                                       \
     m_StdLogicTracker |= (1 << static_cast<u32>(StdLogicVars::Name))
