@@ -397,8 +397,6 @@ private:
         }
     }
 private:
-    void HandleVSyncEvent() noexcept;
-private:
     Receiver* m_Parent;
 
     u32 p_Reset_n : 1;
