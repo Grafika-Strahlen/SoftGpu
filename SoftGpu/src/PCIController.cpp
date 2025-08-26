@@ -55,21 +55,21 @@ void PciController::ExecuteMemRead() noexcept
     {
         if(m_ReadState == 0)
         {
-            if(m_Processor->PciControlRegistersBus().ReadBusLocked == 0)
+            if(m_Parent->PciControlRegistersBus().ReadBusLocked == 0)
             {
-                m_Processor->PciControlRegistersBus().ReadBusLocked = 1;
-                m_Processor->PciControlRegistersBus().ReadAddress = static_cast<u32>(addressOffset);
-                m_Processor->PciControlRegistersBus().ReadSize = m_ReadRequestSize;
+                m_Parent->PciControlRegistersBus().ReadBusLocked = 1;
+                m_Parent->PciControlRegistersBus().ReadAddress = static_cast<u32>(addressOffset);
+                m_Parent->PciControlRegistersBus().ReadSize = m_ReadRequestSize;
                 m_ReadState = 1;
             }
         }
         else if(m_ReadState == 1)
         {
-            if(m_Processor->PciControlRegistersBus().ReadBusLocked == 2)
+            if(m_Parent->PciControlRegistersBus().ReadBusLocked == 2)
             {
-                *m_ReadRequestResponseData = m_Processor->PciControlRegistersBus().ReadResponse;
+                *m_ReadRequestResponseData = m_Parent->PciControlRegistersBus().ReadResponse;
                 *m_ReadCountResponse = 1;
-                m_Processor->PciControlRegistersBus().ReadBusLocked = 0;
+                m_Parent->PciControlRegistersBus().ReadBusLocked = 0;
                 m_ReadState = 0;
 
                 m_ReadRequestActive = false;
@@ -89,14 +89,14 @@ void PciController::ExecuteMemRead() noexcept
     if(bar == 1)
     {
         // Shift right 2 to match the MMU granularity of 4 bytes.
-        const u64 realAddress4 = (addressOffset + m_Processor->RamBaseAddress()) >> 2;
+        const u64 realAddress4 = (addressOffset + m_Parent->RamBaseAddress()) >> 2;
 
         const u16 sizeWords = m_ReadRequestSize / 4;
 
         for(u16 i = 0; i < sizeWords; ++i)
         {
             // ~Use the real address as that is mapped into the system virtual page.~
-            m_ReadRequestResponseData[i] = m_Processor->MemReadPhy(realAddress4 + i);
+            m_ReadRequestResponseData[i] = m_Parent->MemReadPhy(realAddress4 + i);
         }
 
         *m_ReadCountResponse = m_ReadRequestSize;
@@ -112,7 +112,7 @@ void PciController::ExecuteMemRead() noexcept
     {
         // ConPrinter::PrintLn("Reading from Expansion ROM");
 
-        *m_ReadCountResponse = m_Processor->PciReadExpansionRom(addressOffset, m_ReadRequestSize, m_ReadRequestResponseData);
+        *m_ReadCountResponse = m_Parent->PciReadExpansionRom(addressOffset, m_ReadRequestSize, m_ReadRequestResponseData);
 
         m_ReadRequestActive = false;
 #ifdef _WIN32
@@ -168,21 +168,21 @@ void PciController::ExecuteMemWrite() noexcept
     {
         if(m_WriteState == 0)
         {
-            if(m_Processor->PciControlRegistersBus().WriteBusLocked == 0)
+            if(m_Parent->PciControlRegistersBus().WriteBusLocked == 0)
             {
-                m_Processor->PciControlRegistersBus().WriteBusLocked = 1;
-                m_Processor->PciControlRegistersBus().WriteAddress = static_cast<u32>(addressOffset);
-                m_Processor->PciControlRegistersBus().WriteSize = m_WriteRequestSize;
-                m_Processor->PciControlRegistersBus().WriteValue = static_cast<u32>(*m_WriteRequestData);
+                m_Parent->PciControlRegistersBus().WriteBusLocked = 1;
+                m_Parent->PciControlRegistersBus().WriteAddress = static_cast<u32>(addressOffset);
+                m_Parent->PciControlRegistersBus().WriteSize = m_WriteRequestSize;
+                m_Parent->PciControlRegistersBus().WriteValue = static_cast<u32>(*m_WriteRequestData);
                 
                 m_WriteState = 1;
             }
         }
         else if(m_WriteState == 1)
         {
-            if(m_Processor->PciControlRegistersBus().WriteBusLocked == 2)
+            if(m_Parent->PciControlRegistersBus().WriteBusLocked == 2)
             {
-                m_Processor->PciControlRegistersBus().WriteBusLocked = 0;
+                m_Parent->PciControlRegistersBus().WriteBusLocked = 0;
                 m_WriteState = 0;
 
                 m_WriteRequestActive = false;
@@ -198,14 +198,14 @@ void PciController::ExecuteMemWrite() noexcept
     else if(bar == 1)
     {
         // Shift right 2 to match the MMU granularity of 4 bytes.
-        const u64 realAddress4 = (addressOffset + m_Processor->RamBaseAddress()) >> 2;
+        const u64 realAddress4 = (addressOffset + m_Parent->RamBaseAddress()) >> 2;
 
         const u16 sizeWords = m_WriteRequestSize / 4;
 
         for(u16 i = 0; i < sizeWords; ++i)
         {
             // ~Use the real address as that is mapped into the system virtual page.~
-            m_Processor->MemWritePhy(realAddress4 + i, m_WriteRequestData[i]);
+            m_Parent->MemWritePhy(realAddress4 + i, m_WriteRequestData[i]);
         }
     }
 
