@@ -4,6 +4,7 @@
 #include <NumTypes.hpp>
 #include <ConPrinter.hpp>
 #include <Common.hpp>
+#include <PcieProtocol.hpp>
 #include <riscv/DualClockFIFO/DualClockFIFO.hpp>
 #include "VirtualBoxPciPhy.hpp"
 
@@ -22,296 +23,19 @@
 class Processor;
 
 #pragma pack(push, 1)
-struct PciConfigHeader final
-{
-    u16 VendorID;
-    u16 DeviceID;
-    u16 Command;
-    u16 Status;
-    u32 RevisionID : 8;
-    u32 ClassCode : 24;
-    u8 CacheLineSize;
-    u8 MasterLatencyTimer;
-    u8 HeaderType;
-    u8 BIST;
-    u32 BAR0;
-    u32 BAR1;
-    u32 BAR2;
-    u32 BAR3;
-    u32 BAR4;
-    u32 BAR5;
-    u32 CardBusCISPointer;
-    u16 SubsystemVendorID;
-    u16 SubsystemID;
-    u32 ExpansionROMBaseAddress;
-    u32 CapPointer : 8;
-    u32 Reserved0 : 24;
-    u32 Reserved1;
-    u8 InterruptLine;
-    u8 InterruptPin;
-    u8 MinGnt;
-    u8 MaxLat;
-};
-
-static_assert(sizeof(PciConfigHeader) == 64, "PCI Config Header is not 64 bytes.");
-
-struct PciCapabilityHeader final
-{
-    u8 CapabilityId;
-    u8 NextCapabilityPointer;
-};
-
-static_assert(sizeof(PciCapabilityHeader) == 2, "PCI Capability Header is not 2 bytes.");
-
-struct PciExtendedCapabilityHeader final
-{
-    u16 CapabilityId;
-    u16 CapabilityVersion : 4;
-    u16 NextCapabilityPointer : 12;
-};
-
-static_assert(sizeof(PciExtendedCapabilityHeader) == 4, "PCIe Extended Capability Header is not 2 bytes.");
-
-struct PcieCapabilitiesRegister final
-{
-    u16 CapabilityVersion : 4;
-    u16 DeviceType : 4;
-    u16 SlotImplemented : 1;
-    u16 InterruptMessageNumber : 5;
-    u16 ReservedP : 2;
-};
-
-static_assert(sizeof(PcieCapabilitiesRegister) == 2, "PCIe Capabilities Register is not 2 bytes.");
-
-struct DeviceCapabilitiesRegister final
-{
-    u32 MaxPayloadSizeSupported : 3;
-    u32 PhantomFunctionsSupported : 2;
-    u32 ExtendedTagFieldSupported : 1;
-    u32 EndpointL0sAcceptableLatency : 3;
-    u32 EndpointL1AcceptableLatency : 3;
-    u32 Undefined : 3;
-    u32 RoleBasedErrorReporting : 1;
-    u32 ReservedP0 : 2;
-    u32 CapturedSlotPowerLimitValue : 8;
-    u32 CapturedSlotPowerLimitScale : 2;
-    u32 ReservedP1 : 4;
-};
-
-static_assert(sizeof(DeviceCapabilitiesRegister) == 4, "Device Capabilities Register is not 4 bytes.");
-
-union DeviceControlRegister final
-{
-    u16 Packed;
-    struct
-    {
-        u16 CorrectableErrorReportingEnable : 1;
-        u16 NonFatalErrorReportingEnable : 1;
-        u16 FatalErrorReportingEnable : 1;
-        u16 UnsupportedRequestReportingEnable : 1;
-        u16 EnableRelaxedOrdering : 1;
-        u16 MaxPayloadSize : 3;
-        u16 ExtendedTagFieldEnable : 1;
-        u16 PhantomFunctionsEnable : 1;
-        u16 AuxPowerPmEnable : 1;
-        u16 EnableSnoopNotRequired : 1;
-        u16 MaxReadRequestSize : 3;
-        u16 Reserved : 1;
-    };
-};
-
-static_assert(sizeof(DeviceControlRegister) == 2, "Device Control Register is not 2 bytes.");
-
-struct DeviceStatusRegister final
-{
-    u16 CorrectableErrorDetected : 1;
-    u16 NonFatalErrorDetected : 1;
-    u16 FatalErrorDetected : 1;
-    u16 UnsupportedRequestDetected : 1;
-    u16 AuxPowerDetected : 1;
-    u16 TransactionsPending : 1;
-    u16 ReservedZ : 10;
-};
-
-static_assert(sizeof(DeviceStatusRegister) == 2, "Device Status Register is not 2 bytes.");
-
-struct LinkCapabilitiesRegister final
-{
-    u32 MaximumLinkSpeed : 4;
-    u32 MaximumLinkWidth : 6;
-    u32 ASPMSupport : 2;
-    u32 L0sExitLatency : 3;
-    u32 L1ExitLatency : 3;
-    u32 ClockPowerManagement : 1;
-    u32 SurpriseDownErrorReportingCapable : 1;
-    u32 DataLinkLayerActiveReportingCapable : 1;
-    u32 Reserved : 3;
-    u32 PortNumber : 8;
-};
-
-static_assert(sizeof(LinkCapabilitiesRegister) == 4, "Link Capabilities Register is not 4 bytes.");
-
-union LinkControlRegister final
-{
-    u16 Packed;
-    struct
-    {
-        u16 ASPMControl : 2;
-        u16 ReservedP0 : 1;
-        u16 ReadCompletionBoundary : 1;
-        u16 LinkDisable : 1;
-        u16 RetrainLink : 1;
-        u16 CommonClockConfiguration : 1;
-        u16 ExtendedSynch : 1;
-        u16 EnableClockPowerManagement : 1;
-        u16 ReservedP1 : 7;
-    };
-};
-
-static_assert(sizeof(LinkControlRegister) == 2, "Link Control Register is not 2 bytes.");
-
-struct LinkStatusRegister final
-{
-    u16 LinkSpeed : 4;
-    u16 NegotiatedLinkWidth : 6;
-    u16 Undefined : 1;
-    u16 LinkTraining : 1;
-    u16 SlotClockConfiguration : 1;
-    u16 DataLinkLayerActive : 1;
-    u16 ReservedZ : 2;
-};
-
-static_assert(sizeof(LinkStatusRegister) == 2, "Link Status Register is not 2 bytes.");
-
-struct PcieCapabilityStructure final
-{
-    PciCapabilityHeader Header;
-    PcieCapabilitiesRegister CapabilitiesRegister;
-    DeviceCapabilitiesRegister DeviceCapabilities;
-    DeviceControlRegister DeviceControl;
-    DeviceStatusRegister DeviceStatus;
-    LinkCapabilitiesRegister LinkCapabilities;
-    LinkControlRegister LinkControl;
-    LinkStatusRegister LinkStatus;
-};
-
-static_assert(sizeof(PcieCapabilityStructure) == 0x14, "PCIe Capability Structure is not 20 bytes.");
-
-union PowerManagementCapabilitiesRegister final
-{
-    u16 Packed;
-    struct
-    {
-        u16 Version : 3;
-        u16 PmeClock : 1;
-        u16 Reserved : 1;
-        u16 DeviceSpecificInitialization : 1;
-        u16 AuxCurrent : 3;
-        u16 D1Support : 1;
-        u16 D2Support : 1;
-        u16 PmeSupport : 5;
-    };
-};
-
-static_assert(sizeof(PowerManagementCapabilitiesRegister) == 2, "Power Management Capability Register is not 2 bytes.");
-
-union PowerManagementControlStatusRegister final
-{
-    u16 Packed;
-    struct
-    {
-        u16 PowerState : 2;
-        u16 Reserved0 : 1;
-        u16 NoSoftReset : 1;
-        u16 Reserved1 : 4;
-        u16 PmeEnable : 1;
-        u16 DataSelect : 4;
-        u16 DataScale : 2;
-        u16 PmeStatus : 1;
-    };
-};
-
-static_assert(sizeof(PowerManagementControlStatusRegister) == 2, "Power Management Control/Status Register is not 2 bytes.");
-
-struct PowerManagementCapabilityStructure final
-{
-    PciCapabilityHeader Header;
-    PowerManagementCapabilitiesRegister PowerManagementCapabilities;
-    PowerManagementControlStatusRegister PowerManagementControlStatusRegister;
-    u8 BridgeExtensions;
-    u8 Data;
-};
-
-static_assert(sizeof(PowerManagementCapabilityStructure) == 8, "PCI Power Management Capability Structure is not 8 bytes.");
-
-union MessageSignalledInterruptControlRegister final
-{
-    u16 Packed;
-    struct
-    {
-        u16 Enabled : 1;
-        u16 MultipleMessageCapable : 3;
-        u16 MultipleMessageEnabled : 3;
-        u16 Capable64Bit : 1;
-        u16 PerVectorMasking : 1;
-        u16 Reserved : 7;
-    };
-};
-
-static_assert(sizeof(MessageSignalledInterruptControlRegister) == 2, "Message Signalled Interrupt Control Register is not 2 bytes.");
-
-struct MessageSignalledInterruptCapabilityStructure final
-{
-    PciCapabilityHeader Header;
-    MessageSignalledInterruptControlRegister MessageControl;
-    u32 MessageAddress;
-    u32 MessageUpperAddress;
-    u16 MessageData;
-    u16 Reserved;
-    u32 MaskBits;
-    u32 PendingBits;
-};
-
-static_assert(sizeof(MessageSignalledInterruptCapabilityStructure) == 0x18, "Message Signalled Interrupt Capability Structure is not 24 bytes.");
-
-struct MessageSignalledInterruptXCapabilityStructure final
-{
-    PciCapabilityHeader Header;
-    u16 MessageControl;
-    u32 MessageUpperAddress;
-    u32 TableOffset : 29;
-    u32 BIR : 3;
-};
-
-static_assert(sizeof(MessageSignalledInterruptXCapabilityStructure) == 0x0C, "Message Signalled Interrupt X Capability Structure is not 12 bytes.");
-
-struct AdvancedErrorReportingCapabilityStructure final
-{
-    PciExtendedCapabilityHeader Header;
-    u32 UncorrectableErrorStatusRegister;
-    u32 UncorrectableErrorMaskRegister;
-    u32 UncorrectableErrorSeverityRegister;
-    u32 CorrectableErrorStatusRegister;
-    u32 CorrectableErrorMaskRegister;
-    u32 AdvancedCapabilitiesAndControlRegister;
-    u32 HeaderLogRegister[4];
-};
-
-static_assert(sizeof(AdvancedErrorReportingCapabilityStructure) == 0x2C, "Advanced Error Reporting Capability Structure is not 44 bytes.");
-
 struct PciConfigData final
 {
-    PciConfigHeader ConfigHeader;
-    PcieCapabilityStructure PcieCapability;
-    PowerManagementCapabilityStructure PowerManagementCapability;
-    MessageSignalledInterruptCapabilityStructure MessageSignalledInterruptCapability;
+    pci::PciConfigHeader ConfigHeader;
+    pcie::PcieCapabilityStructure PcieCapability;
+    pci::PowerManagementCapabilityStructure PowerManagementCapability;
+    pci::MessageSignalledInterruptCapabilityStructure MessageSignalledInterruptCapability;
     u8 PciConfig[256 - sizeof(ConfigHeader) - sizeof(PcieCapability) - sizeof(PowerManagementCapability) - sizeof(MessageSignalledInterruptCapability)];
-    AdvancedErrorReportingCapabilityStructure AdvancedErrorReportingCapability;
+    pcie::AdvancedErrorReportingCapabilityStructure AdvancedErrorReportingCapability;
     u8 PciExtendedConfig[4096 - 256 - sizeof(AdvancedErrorReportingCapability)];
 };
-#pragma pack(pop)
 
 static_assert(sizeof(PciConfigData) == 4096, "PCIe Config Data Structure is not 4096 bytes.");
+#pragma pack(pop)
 
 class PciControllerReceiverSample
 {
@@ -527,56 +251,56 @@ public:
                 }
                 m_ConfigData.ConfigHeader.InterruptLine = static_cast<u8>(value);
                 break;
-            case offsetof(PciConfigData, PcieCapability) + offsetof(PcieCapabilityStructure, DeviceControl):
+            case offsetof(PciConfigData, PcieCapability) + offsetof(pcie::PcieCapabilityStructure, DeviceControl):
                 if(size != 2)
                 {
                     break;
                 }
                 m_ConfigData.PcieCapability.DeviceControl.Packed = (value & DEVICE_CONTROL_REGISTER_MASK_BITS) | DEVICE_CONTROL_REGISTER_READ_ONLY_BITS;
                 break;
-            case offsetof(PciConfigData, PcieCapability) + offsetof(PcieCapabilityStructure, LinkControl):
+            case offsetof(PciConfigData, PcieCapability) + offsetof(pcie::PcieCapabilityStructure, LinkControl):
                 if(size != 2)
                 {
                     break;
                 }
                 m_ConfigData.PcieCapability.LinkControl.Packed = (value & LINK_CONTROL_REGISTER_MASK_BITS) | LINK_CONTROL_REGISTER_READ_ONLY_BITS;
                 break;
-            case offsetof(PciConfigData, PowerManagementCapability) + offsetof(PowerManagementCapabilityStructure, PowerManagementControlStatusRegister):
+            case offsetof(PciConfigData, PowerManagementCapability) + offsetof(pci::PowerManagementCapabilityStructure, PowerManagementControlStatusRegister):
                 if(size != 2)
                 {
                     break;
                 }
                 m_ConfigData.PowerManagementCapability.PowerManagementControlStatusRegister.Packed = (value & PM_CONTROL_REGISTER_MASK_BITS) | PM_CONTROL_REGISTER_READ_ONLY_BITS;
                 break;
-            case offsetof(PciConfigData, MessageSignalledInterruptCapability) + offsetof(MessageSignalledInterruptCapabilityStructure, MessageControl):
+            case offsetof(PciConfigData, MessageSignalledInterruptCapability) + offsetof(pci::MessageSignalledInterruptCapabilityStructure, MessageControl):
                 if(size != 2)
                 {
                     break;
                 }
                 m_ConfigData.MessageSignalledInterruptCapability.MessageControl.Packed = (value & MESSAGE_CONTROL_REGISTER_MASK_BITS) | MESSAGE_CONTROL_REGISTER_READ_ONLY_BITS;
                 break;
-            case offsetof(PciConfigData, MessageSignalledInterruptCapability) + offsetof(MessageSignalledInterruptCapabilityStructure, MessageAddress):
+            case offsetof(PciConfigData, MessageSignalledInterruptCapability) + offsetof(pci::MessageSignalledInterruptCapabilityStructure, MessageAddress):
                 if(size != 4)
                 {
                     break;
                 }
                 m_ConfigData.MessageSignalledInterruptCapability.MessageAddress = (value & MESSAGE_ADDRESS_REGISTER_MASK_BITS) | MESSAGE_ADDRESS_REGISTER_READ_ONLY_BITS;
                 break;
-            case offsetof(PciConfigData, MessageSignalledInterruptCapability) + offsetof(MessageSignalledInterruptCapabilityStructure, MessageUpperAddress):
+            case offsetof(PciConfigData, MessageSignalledInterruptCapability) + offsetof(pci::MessageSignalledInterruptCapabilityStructure, MessageUpperAddress):
                 if(size != 4)
                 {
                     break;
                 }
                 m_ConfigData.MessageSignalledInterruptCapability.MessageUpperAddress = value;
                 break;
-            case offsetof(PciConfigData, MessageSignalledInterruptCapability) + offsetof(MessageSignalledInterruptCapabilityStructure, MessageData):
+            case offsetof(PciConfigData, MessageSignalledInterruptCapability) + offsetof(pci::MessageSignalledInterruptCapabilityStructure, MessageData):
                 if(size != 2)
                 {
                     break;
                 }
                 m_ConfigData.MessageSignalledInterruptCapability.MessageData = static_cast<u16>(value);
                 break;
-            case offsetof(PciConfigData, MessageSignalledInterruptCapability) + offsetof(MessageSignalledInterruptCapabilityStructure, MaskBits):
+            case offsetof(PciConfigData, MessageSignalledInterruptCapability) + offsetof(pci::MessageSignalledInterruptCapabilityStructure, MaskBits):
                 if(size != 4)
                 {
                     break;
