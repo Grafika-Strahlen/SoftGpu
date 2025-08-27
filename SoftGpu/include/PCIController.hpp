@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <Objects.hpp>
 #include <NumTypes.hpp>
@@ -18,7 +18,9 @@
 #include <Windows.h>
 #endif
 
+#ifdef DeviceCapabilities
 #undef DeviceCapabilities
+#endif
 
 class Processor;
 
@@ -97,16 +99,18 @@ public:
 private:
     using Receiver = PciControllerReceiverSample;
 
-    SENSITIVITY_DECL(p_Reset_n, p_Clock);
+    SENSITIVITY_DECL(p_Reset_n, p_Clock, p_RxClock);
 
     SIGNAL_ENTITIES();
 public:
-    PciController(Receiver* const parent) noexcept
+    explicit PciController(Receiver* const parent) noexcept
         : m_ConfigData{ }
         , m_Parent(parent)
         , p_Clock(0)
         , p_Reset_n(0)
         , p_Pad0{}
+        , p_RxClock(0)
+        , p_Pad1{}
         , m_ReadRequestActive(false)
         , m_ReadRequestAddress(0)
         , m_ReadRequestSize(0)
@@ -125,6 +129,7 @@ public:
         , m_Pad0{}
         , m_PhyInputFifo(this, 0)
         , m_PhyOutputFifo(this, 1)
+        , m_PciPhy(this)
 #ifdef _WIN32
         , m_SimulationSyncEvent(INVALID_HANDLE_VALUE)
 #endif
@@ -367,7 +372,7 @@ public:
         m_InterruptSet = true;
     }
 
-    [[nodiscard]] u8 GetBARFromAddress(const u64 address) noexcept
+    [[nodiscard]] u8 GetBARFromAddress(const u64 address) const noexcept
     {
         if(address < 0xFFFFFFFF)
         {
@@ -376,7 +381,10 @@ public:
                 return 0;
             }
 
-            if(address >= (m_ConfigData.ConfigHeader.ExpansionROMBaseAddress & EXPANSION_ROM_BAR_ADDRESS_MASK_BITS) && address < ((m_ConfigData.ConfigHeader.ExpansionROMBaseAddress & EXPANSION_ROM_BAR_ADDRESS_MASK_BITS) + EXPANSION_ROM_SIZE))
+            if(
+                address >= (m_ConfigData.ConfigHeader.ExpansionROMBaseAddress & EXPANSION_ROM_BAR_ADDRESS_MASK_BITS) &&
+                address < ((m_ConfigData.ConfigHeader.ExpansionROMBaseAddress & EXPANSION_ROM_BAR_ADDRESS_MASK_BITS) + EXPANSION_ROM_SIZE)
+            )
             {
                 return EXPANSION_ROM_BAR_ID;
             }
@@ -392,7 +400,7 @@ public:
         return 0xFF;
     }
 
-    [[nodiscard]] u64 GetBAROffset(const u64 address, const u8 bar) noexcept
+    [[nodiscard]] u64 GetBAROffset(const u64 address, const u8 bar) const noexcept
     {
         if(bar == 0)
         {
@@ -431,10 +439,68 @@ public:
     [[nodiscard]] InterruptCallback_f& InterruptCallback() noexcept { return m_InterruptCallback; }
     [[nodiscard]] BusMasterReadCallback_f& BusMasterReadCallback() noexcept { return m_BusMasterReadCallback; }
     [[nodiscard]] BusMasterWriteCallback_f& BusMasterWriteCallback() noexcept { return m_BusMasterWriteCallback; }
+
+    [[nodiscard]] VirtualBoxPciPhy<PciController>& VirtualBoxPciPhy() noexcept { return m_PciPhy; }
+public:
+    // PIPE Data Interface
+    void ReceiveVirtualBoxPciPhy_RxData(const u32 index, const SerDesData& data) noexcept
+    {
+        (void) index;
+        m_PhyInputFifo.SetWriteData(data.Data());
+    }
+
+    // PIPE Data Interface - SerDes
+    void ReceiveVirtualBoxPciPhy_RxClock(const u32 index, const bool clock) noexcept
+    {
+        (void) index;
+        p_RxClock = BOOL_TO_BIT(clock);
+
+        {
+            ::std::lock_guard lock(m_PhyInputFifoMutex);
+            m_PhyInputFifo.SetWriteClock(clock);
+        }
+
+        TRIGGER_SENSITIVITY(p_RxClock);
+    }
+
+    // PIPE Command Interface
+    void ReceiveVirtualBoxPciPhy_RefClockRequired(const u32 index, const bool required) noexcept { }
+    void ReceiveVirtualBoxPciPhy_RxStandbyStatus(const u32 index, const bool status) noexcept { }
+
+    // PIPE Status Interface
+    void ReceiveVirtualBoxPciPhy_RxValid(const u32 index, const bool rxValid) noexcept
+    {
+        (void) index;
+        m_PhyInputFifo.SetWriteIncoming(rxValid);
+    }
+
+    void ReceiveVirtualBoxPciPhy_PhyStatus(const u32 index, const bool phyStatus) noexcept { }
+    void ReceiveVirtualBoxPciPhy_RxElectricalIdle(const u32 index, const bool electricalIdle) noexcept { }
+    void ReceiveVirtualBoxPciPhy_RxStatus(const u32 index, const u8 rxStatus) noexcept { }
+    void ReceiveVirtualBoxPciPhy_PowerPresent(const u32 index, const bool powerPresent) noexcept { }
+    void ReceiveVirtualBoxPciPhy_ClockChangeOk(const u32 index, const bool clockChangeOk) noexcept { }
+
+    // PIPE Message Bus Interface
+    void ReceiveVirtualBoxPciPhy_P2M_MessageBus(const u32 index, const u8 p2mMessageBus) noexcept { }
+
+
+    void ReceiveDualClockFIFO_WriteFull(const u32 index, const bool writeFull) noexcept { }
+
+    void ReceiveDualClockFIFO_ReadData(const u32 index, const u32 data) noexcept
+    {
+    }
+
+    void ReceiveDualClockFIFO_ReadEmpty(const u32 index, const bool readEmpty) noexcept
+    {
+    }
+
+    void ReceiveDualClockFIFO_WriteAddress(const u32 index, const u64 writeAddress) noexcept { }
+    void ReceiveDualClockFIFO_ReadAddress(const u32 index, const u64 readAddress) noexcept { }
 private:
     PROCESSES_DECL()
     {
         PROCESS_ENTER(ClockHandler, p_Reset_n, p_Clock);
+        PROCESS_ENTER(RxClockHandler, p_Reset_n, p_RxClock);
     }
 
     PROCESS_DECL(ClockHandler)
@@ -453,6 +519,17 @@ private:
         }
     }
 
+    PROCESS_DECL(RxClockHandler)
+    {
+        if(!BIT_TO_BOOL(p_Reset_n))
+        {
+
+        }
+        else if(RISING_EDGE(p_RxClock))
+        {
+        }
+    }
+private:
     /**
      * @brief Initializes the PCI configuration header.
      *
@@ -694,6 +771,11 @@ private:
     u32 p_Clock : 1;
     u32 p_Pad0 : 30;
 
+    //   This needs to be a separate word since it's being accessed from
+    // another thread.
+    u32 p_RxClock : 1;
+    i32 p_Pad1 : 31;
+
     bool m_ReadRequestActive;
     u64 m_ReadRequestAddress;
     u16 m_ReadRequestSize;
@@ -712,8 +794,10 @@ private:
     u32 m_InterruptSet : 1;
     u32 m_Pad0 : 29; // NOLINT(clang-diagnostic-unused-private-field)
 
-    riscv::fifo::DualClockFIFO<PciController, u32, 2> m_PhyInputFifo;
+    riscv::fifo::DualClockFIFO<PciController, u32, 5> m_PhyInputFifo;
     riscv::fifo::DualClockFIFO<PciController, u32, 2> m_PhyOutputFifo;
+
+    ::VirtualBoxPciPhy<PciController> m_PciPhy;
 
     #ifdef _WIN32
     HANDLE m_SimulationSyncEvent;
@@ -722,6 +806,7 @@ private:
     ::std::binary_semaphore m_SimulationSyncBinarySemaphore;
     ::std::mutex m_ReadDataMutex;
     ::std::mutex m_WriteDataMutex;
+    ::std::mutex m_PhyInputFifoMutex;
 };
 
 /**
@@ -745,13 +830,15 @@ public:
     static inline constexpr u16 PowerManagementCapabilityOffsetEnd = PowerManagementCapabilityOffsetBegin + sizeof(PciConfigData::PowerManagementCapability);
 
     static inline constexpr u16 MessageSignalledInterruptsCapabilityOffsetBegin = offsetof(PciConfigData, MessageSignalledInterruptCapability);
-    static inline constexpr u16 MessageSignalledInterruptsCapabilityOffsetEnd = MessageSignalledInterruptsCapabilityOffsetBegin + sizeof(PciConfigData::MessageSignalledInterruptCapability);
+    static inline constexpr u16 MessageSignalledInterruptsCapabilityOffsetEnd =
+        MessageSignalledInterruptsCapabilityOffsetBegin + sizeof(PciConfigData::MessageSignalledInterruptCapability);
 
     static inline constexpr u16 PciConfigOffsetBegin = offsetof(PciConfigData, PciConfig);
     static inline constexpr u16 PciConfigOffsetEnd = PciConfigOffsetBegin + sizeof(PciConfigData::PciConfig);
 
     static inline constexpr u16 AdvancedErrorReportingCapabilityOffsetBegin = offsetof(PciConfigData, AdvancedErrorReportingCapability);
-    static inline constexpr u16 AdvancedErrorReportingCapabilityOffsetEnd = AdvancedErrorReportingCapabilityOffsetBegin + sizeof(PciConfigData::AdvancedErrorReportingCapability);
+    static inline constexpr u16 AdvancedErrorReportingCapabilityOffsetEnd =
+        AdvancedErrorReportingCapabilityOffsetBegin + sizeof(PciConfigData::AdvancedErrorReportingCapability);
 
     static inline constexpr u16 PciExtendedConfigOffsetBegin = offsetof(PciConfigData, PciExtendedConfig);
     static inline constexpr u16 PciExtendedConfigOffsetEnd = PciExtendedConfigOffsetBegin + sizeof(PciConfigData::PciExtendedConfig);

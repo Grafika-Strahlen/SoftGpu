@@ -28,9 +28,9 @@ public:
         , m_Pad0(0)
         , m_TriggerReset_n(StdLogic::U)
         , m_Pad1(0)
-        , m_PciController(this)
+        , m_PciController(nullptr)
         , m_RomController(this)
-        , m_PciRegisters(this)
+        , m_PciRegisters(nullptr)
         , m_CacheController(this)
         , m_DmaController(this)
         , m_SMs { { this, 0 }, { this, 1 }, { this, 2 }, { this, 3 } }

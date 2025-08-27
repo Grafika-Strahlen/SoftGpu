@@ -8,6 +8,10 @@
 
 struct SerDesData final
 {
+    DEFAULT_CONSTRUCT_PU(SerDesData);
+    DEFAULT_DESTRUCT(SerDesData);
+    DEFAULT_CM_PU(SerDesData);
+public:
     u64 Data0 : 8;
     u64 DataExtra0 : 2;
     u64 Data1 : 8;
@@ -17,6 +21,33 @@ struct SerDesData final
     u64 Data3 : 8;
     u64 DataExtra3 : 2;
     u64 Pad0 : 24;
+
+    SerDesData(const u32 data) noexcept
+        : Data0(data & 0xFF)
+        , DataExtra0(0)
+        , Data1((data >> 8) & 0xFF)
+        , DataExtra1(0)
+        , Data2((data >> 16) & 0xFF)
+        , DataExtra2(0)
+        , Data3((data >> 24) & 0xFF)
+        , DataExtra3(0)
+        , Pad0{}
+    { }
+
+    SerDesData& operator=(const u32 data) noexcept
+    {
+        Data0 = data & 0xFF;
+        Data1 = (data >> 8) & 0xFF;
+        Data2 = (data >> 16) & 0xFF;
+        Data3 = (data >> 24) & 0xFF;
+
+        return *this;
+    }
+
+    [[nodiscard]] u32 Data() const noexcept
+    {
+        return Data3 << 24 | Data2 << 16 | Data1 << 8 | Data0;
+    }
 };
 
 class VirtualBoxPciPhyReceiverSample
@@ -44,6 +75,7 @@ public:
     void ReceiveVirtualBoxPciPhy_P2M_MessageBus(const u32 index, const u8 p2mMessageBus) noexcept { }
 };
 
+template<typename Receiver = VirtualBoxPciPhyReceiverSample>
 class VirtualBoxPciPhy final
 {
     DEFAULT_DESTRUCT(VirtualBoxPciPhy);
@@ -56,8 +88,6 @@ public:
     static inline constexpr u8 MESSAGE_BUS_COMMAND_READ_COMPLETION   = 0b0100;
     static inline constexpr u8 MESSAGE_BUS_COMMAND_WRITE_ACKNOWLEDGE = 0b0101;
 public:
-    using Receiver = VirtualBoxPciPhyReceiverSample;
-
     SENSITIVITY_DECL(p_Reset_n, p_Clock);
 
     SIGNAL_ENTITIES();
@@ -98,11 +128,13 @@ public:
         , m_Pad4{}
         , m_TxConstructWord(0)
         , m_TxConstructWordState(0)
+        , m_PciSendReadEmpty(0)
         , m_Pad5{}
+        , m_TxResponseDwordFromFifo(0)
         , m_PciSendFifo(this, 1)
         , m_SimulationSyncBinarySemaphore(0)
         , m_ReadDataMutex()
-        , m_WriteDataMutex()
+        , m_PhyOutDataMutex()
     { }
 
     void SetResetN(const bool reset_n) noexcept
@@ -118,7 +150,11 @@ public:
     {
         p_Clock = BOOL_TO_BIT(clock);
 
-        m_PciSendFifo.SetWriteClock(clock);
+        {
+            // We need to interlock on the clock events for the FIFOs.
+            ::std::lock_guard lock(m_PhyOutDataMutex);
+            m_PciSendFifo.SetWriteClock(clock);
+        }
 
         TRIGGER_SENSITIVITY(p_Clock);
     }
@@ -202,190 +238,102 @@ public:
     {
         p_M2P_MessageBus = messageBus;
     }
-public:
-    void VirtualBoxMemReadSet(const u64 address, const u16 size, u32* const data, u16* const readResponse) noexcept
+
+    void SignalSimulationSyncEvent() noexcept
     {
-        pcie::TlpHeader header {};
-        if(address <= 0xFFFFFFFF)
+        m_SimulationSyncBinarySemaphore.release();
+    }
+public:
+    void VirtualBoxMemReadSet(const u64 address, const u16 size, u32* const data, u16* const readResponse)
+    {
+        SendReadToSoftGpu(
+            address,
+            size
+        );
+
+        if(!m_SimulationSyncBinarySemaphore.try_acquire_for(::std::chrono::milliseconds(250)))
         {
-            header.Fmt = pcie::TlpHeader::FORMAT_3_DW_HEADER_NO_DATA;
+            return;
+        }
+
+        SpinOnPciSendFifo();
+
+        // Read the first word from a transaction.
+        ReadWordFromPciSendFifo<true>();
+
+        // Cast the first word to the TLP Header.
+        const auto header = ::std::bit_cast<pcie::TlpHeader>(m_TxResponseDwordFromFifo);
+
+        // If it isn't a completion header we have a problem.
+        if(header.Type != pcie::TlpHeader::TYPE_COMPLETION && header.Type != pcie::TlpHeader::TYPE_COMPLETION_LOCKED_READ)
+        {
+            assert(header.Type == pcie::TlpHeader::TYPE_COMPLETION || header.Type == pcie::TlpHeader::TYPE_COMPLETION_LOCKED_READ);
+            return;
+        }
+
+        // There should never be a 4 DW header for completion responses.
+        if(header.Fmt == pcie::TlpHeader::FORMAT_4_DW_HEADER_NO_DATA || header.Fmt == pcie::TlpHeader::FORMAT_4_DW_HEADER_WITH_DATA)
+        {
+            assert(header.Fmt != pcie::TlpHeader::FORMAT_4_DW_HEADER_NO_DATA && header.Fmt != pcie::TlpHeader::FORMAT_4_DW_HEADER_WITH_DATA);
+            return;
+        }
+
+        // Read 2 more words of the header.
+        SpinOnPciSendFifo();
+        ReadWordFromPciSendFifo();
+        SpinOnPciSendFifo();
+        ReadWordFromPciSendFifo<true>();
+
+        if(header.Fmt == pcie::TlpHeader::FORMAT_3_DW_HEADER_NO_DATA)
+        {
+            // With no data we can exit.
+            return;
+        }
+        else if(header.Fmt == pcie::TlpHeader::FORMAT_3_DW_HEADER_WITH_DATA)
+        {
+            for(u16 i = 0; i < header.Length; ++i)
+            {
+                SpinOnPciSendFifo();
+                ReadWordFromPciSendFifo();
+
+                data[i] = m_TxResponseDwordFromFifo;
+            }
+
+            StopReadingPciSendFifo();
+            *readResponse = header.Length;
         }
         else
         {
-            header.Fmt = pcie::TlpHeader::FORMAT_4_DW_HEADER_NO_DATA;
+            assert(false);
         }
-
-        header.Type = pcie::TlpHeader::TYPE_MEMORY_REQUEST;
-        header.TC = 0;
-        header.Attr = 0;
-        header.TD = 0;
-        header.EP = 0;
-        header.Length = size;
-
-        const u32 headerWord = ::std::bit_cast<u32>(header);
-
-        SerDesData serDesData {};
-        serDesData.Data0 = headerWord & 0xFF;
-        serDesData.Data1 = (headerWord >> 8) & 0xFF;
-        serDesData.Data2 = (headerWord >> 16) & 0xFF;
-        serDesData.Data3 = (headerWord >> 24) & 0xFF;
-
-        m_Parent->ReceiveVirtualBoxPciPhy_RxData(m_Index, serDesData);
-        m_Parent->ReceiveVirtualBoxPciPhy_RxValid(m_Index, true);
-        m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
-        m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
-
-        serDesData.Data0 = 0;
-        serDesData.Data1 = 0;
-        serDesData.Data2 = 0;
-        serDesData.Data3 = 0;
-
-        m_Parent->ReceiveVirtualBoxPciPhy_RxData(m_Index, serDesData);
-        m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
-        m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
-
-        if(address <= 0xFFFFFFFF)
-        {
-            const u32 address32 = static_cast<u32>(address & 0xFFFFFFFC);
-
-            serDesData.Data0 = address32 & 0xFF;
-            serDesData.Data1 = (address32 >> 8) & 0xFF;
-            serDesData.Data2 = (address32 >> 16) & 0xFF;
-            serDesData.Data3 = (address32 >> 24) & 0xFF;
-
-            m_Parent->ReceiveVirtualBoxPciPhy_RxData(m_Index, serDesData);
-            m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
-            m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
-        }
-        else
-        {
-            u32 address32 = static_cast<u32>(address >> 32);
-
-            serDesData.Data0 = address32 & 0xFF;
-            serDesData.Data1 = (address32 >> 8) & 0xFF;
-            serDesData.Data2 = (address32 >> 16) & 0xFF;
-            serDesData.Data3 = (address32 >> 24) & 0xFF;
-
-            m_Parent->ReceiveVirtualBoxPciPhy_RxData(m_Index, serDesData);
-            m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
-            m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
-
-            address32 = static_cast<u32>(address & 0xFFFFFFFC);
-
-            serDesData.Data0 = address32 & 0xFF;
-            serDesData.Data1 = (address32 >> 8) & 0xFF;
-            serDesData.Data2 = (address32 >> 16) & 0xFF;
-            serDesData.Data3 = (address32 >> 24) & 0xFF;
-
-            m_Parent->ReceiveVirtualBoxPciPhy_RxData(m_Index, serDesData);
-            m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
-            m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
-        }
-
-        m_Parent->ReceiveVirtualBoxPciPhy_RxValid(m_Index, false);
     }
 
+    // ReSharper disable once CppMemberFunctionMayBeConst
     void VirtualBoxMemWriteSet(const u64 address, const u16 size, const u32* const data) noexcept
     {
-        pcie::TlpHeader header {};
-        if(address <= 0xFFFFFFFF)
-        {
-            header.Fmt = pcie::TlpHeader::FORMAT_3_DW_HEADER_WITH_DATA;
-        }
-        else
-        {
-            header.Fmt = pcie::TlpHeader::FORMAT_4_DW_HEADER_WITH_DATA;
-        }
-
-        header.Type = pcie::TlpHeader::TYPE_MEMORY_REQUEST;
-        header.TC = 0;
-        header.Attr = 0;
-        header.TD = 0;
-        header.EP = 0;
-        header.Length = size;
-
-        const u32 headerWord = ::std::bit_cast<u32>(header);
-
-        SerDesData serDesData {};
-        serDesData.Data0 = headerWord & 0xFF;
-        serDesData.Data1 = (headerWord >> 8) & 0xFF;
-        serDesData.Data2 = (headerWord >> 16) & 0xFF;
-        serDesData.Data3 = (headerWord >> 24) & 0xFF;
-
-        m_Parent->ReceiveVirtualBoxPciPhy_RxData(m_Index, serDesData);
-        m_Parent->ReceiveVirtualBoxPciPhy_RxValid(m_Index, true);
-        m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
-        m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
-
-        serDesData.Data0 = 0;
-        serDesData.Data1 = 0;
-        serDesData.Data2 = 0;
-        serDesData.Data3 = 0;
-
-        m_Parent->ReceiveVirtualBoxPciPhy_RxData(m_Index, serDesData);
-        m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
-        m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
-
-        if(address <= 0xFFFFFFFF)
-        {
-            const u32 address32 = static_cast<u32>(address & 0xFFFFFFFC);
-
-            serDesData.Data0 = address32 & 0xFF;
-            serDesData.Data1 = (address32 >> 8) & 0xFF;
-            serDesData.Data2 = (address32 >> 16) & 0xFF;
-            serDesData.Data3 = (address32 >> 24) & 0xFF;
-
-            m_Parent->ReceiveVirtualBoxPciPhy_RxData(m_Index, serDesData);
-            m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
-            m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
-        }
-        else
-        {
-            u32 address32 = static_cast<u32>(address >> 32);
-
-            serDesData.Data0 = address32 & 0xFF;
-            serDesData.Data1 = (address32 >> 8) & 0xFF;
-            serDesData.Data2 = (address32 >> 16) & 0xFF;
-            serDesData.Data3 = (address32 >> 24) & 0xFF;
-
-            m_Parent->ReceiveVirtualBoxPciPhy_RxData(m_Index, serDesData);
-            m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
-            m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
-
-            address32 = static_cast<u32>(address & 0xFFFFFFFC);
-
-            serDesData.Data0 = address32 & 0xFF;
-            serDesData.Data1 = (address32 >> 8) & 0xFF;
-            serDesData.Data2 = (address32 >> 16) & 0xFF;
-            serDesData.Data3 = (address32 >> 24) & 0xFF;
-
-            m_Parent->ReceiveVirtualBoxPciPhy_RxData(m_Index, serDesData);
-            m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
-            m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
-        }
-
-        for(u16 i = 0; i < size; ++i)
-        {
-            const u32 word = data[i];
-
-            serDesData.Data0 = word & 0xFF;
-            serDesData.Data1 = (word >> 8) & 0xFF;
-            serDesData.Data2 = (word >> 16) & 0xFF;
-            serDesData.Data3 = (word >> 24) & 0xFF;
-
-            m_Parent->ReceiveVirtualBoxPciPhy_RxData(m_Index, serDesData);
-            m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
-            m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
-        }
-
-        m_Parent->ReceiveVirtualBoxPciPhy_RxValid(m_Index, false);
+        SendWriteToSoftGpu(
+            address,
+            size,
+            data
+        );
     }
 public:
     void ReceiveDualClockFIFO_WriteFull(const u32 index, const bool writeFull) noexcept { }
-    void ReceiveDualClockFIFO_ReadData(const u32 index, const u32& data) noexcept { }
+
+    void ReceiveDualClockFIFO_ReadData(const u32 index, const u32 data) noexcept
+    {
+        if(index == 1)
+        {
+            m_TxResponseDwordFromFifo = data;
+        }
+    }
 
     void ReceiveDualClockFIFO_ReadEmpty(const u32 index, const bool readEmpty) noexcept
     {
+        if(index == 1)
+        {
+            m_PciSendReadEmpty = BOOL_TO_BIT(readEmpty);
+        }
     }
 
     void ReceiveDualClockFIFO_WriteAddress(const u32 index, const u64 writeAddress) noexcept { }
@@ -498,7 +446,179 @@ private:
                     }
                 }
             }
+            else
+            {
+                m_PciSendFifo.SetWriteIncoming(false);
+            }
         }
+    }
+private:
+    /**
+     * Spins on the PciSendFifo until it has data.
+     *   This has to be done since technically this code is operating from
+     * VirtualBox's CPU's PHY.
+     */
+    void SpinOnPciSendFifo()
+    {
+        //   I don't think this can trigger affect any behaviour in the
+        // write domain without a clock event in the read domain.
+        m_PciSendFifo.SetReadIncoming(false);
+
+        // Wait until we have data to read.
+        while(m_PciSendReadEmpty)
+        {
+            ::std::lock_guard lock(m_PhyOutDataMutex);
+            m_PciSendFifo.SetReadClock(true);
+            m_PciSendFifo.SetReadClock(false);
+        }
+    }
+
+    /**
+     * Reads one word from the PciSendFifo.
+     *   This has to be done since technically this code is operating from
+     * VirtualBox's CPU's PHY.
+     */
+    template<bool CloseOnExit = false>
+    void ReadWordFromPciSendFifo()
+    {
+        // This always needs to be set since we always have to spin before reading.
+        //   I don't think this can trigger affect any behaviour in the
+        // write domain without a clock event in the read domain.
+        m_PciSendFifo.SetReadIncoming(true);
+
+        {
+            ::std::lock_guard lock(m_PhyOutDataMutex);
+
+            m_PciSendFifo.SetReadClock(true);
+            m_PciSendFifo.SetReadClock(false);
+        }
+
+        // If requested we'll make sure that there is not another read incoming.
+        if constexpr(CloseOnExit)
+        {
+            //   I don't think this can trigger affect any behaviour in the
+            // write domain without a clock event in the read domain.
+            m_PciSendFifo.SetReadIncoming(false);
+        }
+    }
+
+    void StopReadingPciSendFifo()
+    {
+        //   I don't think this can trigger affect any behaviour in the
+        // write domain without a clock event in the read domain.
+        // ::std::lock_guard lock(m_PhyOutDataMutex);
+        m_PciSendFifo.SetReadIncoming(false);
+    }
+
+    void SendMemoryRequestHeaderToSoftGpu(
+        const pcie::TlpHeader::EFormat fmt,
+        const u64 address,
+        const u16 size
+    ) const noexcept
+    {
+        pcie::TlpHeader header {};
+        header.Fmt = fmt;
+        header.TC = 0;
+        header.Attr = 0;
+        header.TD = 0;
+        header.EP = 0;
+        header.Length = size;
+
+        SerDesData serDesData = ::std::bit_cast<u32>(header);
+
+        m_Parent->ReceiveVirtualBoxPciPhy_RxData(m_Index, serDesData);
+        m_Parent->ReceiveVirtualBoxPciPhy_RxValid(m_Index, true);
+        m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
+        m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
+
+        serDesData = 0;
+
+        m_Parent->ReceiveVirtualBoxPciPhy_RxData(m_Index, serDesData);
+        m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
+        m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
+
+        if(address <= 0xFFFFFFFF)
+        {
+            serDesData = static_cast<u32>(address & 0xFFFFFFFC);
+
+            m_Parent->ReceiveVirtualBoxPciPhy_RxData(m_Index, serDesData);
+            m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
+            m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
+        }
+        else
+        {
+            serDesData = static_cast<u32>(address >> 32);
+
+            m_Parent->ReceiveVirtualBoxPciPhy_RxData(m_Index, serDesData);
+            m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
+            m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
+
+            serDesData = static_cast<u32>(address & 0xFFFFFFFC);
+
+            m_Parent->ReceiveVirtualBoxPciPhy_RxData(m_Index, serDesData);
+            m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
+            m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
+        }
+    }
+
+    void SendReadToSoftGpu(
+        const u64 address,
+        const u16 size
+    ) const noexcept
+    {
+        if(address <= 0xFFFFFFFF)
+        {
+            SendMemoryRequestHeaderToSoftGpu(
+                pcie::TlpHeader::FORMAT_3_DW_HEADER_NO_DATA,
+                address,
+                size
+            );
+        }
+        else
+        {
+            SendMemoryRequestHeaderToSoftGpu(
+                pcie::TlpHeader::FORMAT_4_DW_HEADER_NO_DATA,
+                address,
+                size
+            );
+        }
+
+        m_Parent->ReceiveVirtualBoxPciPhy_RxValid(m_Index, false);
+    }
+
+    void SendWriteToSoftGpu(
+        const u64 address,
+        const u16 size,
+        const u32* const data
+    ) const noexcept
+    {
+        if(address <= 0xFFFFFFFF)
+        {
+            SendMemoryRequestHeaderToSoftGpu(
+                pcie::TlpHeader::FORMAT_3_DW_HEADER_WITH_DATA,
+                address,
+                size
+            );
+        }
+        else
+        {
+            SendMemoryRequestHeaderToSoftGpu(
+                pcie::TlpHeader::FORMAT_4_DW_HEADER_WITH_DATA,
+                address,
+                size
+            );
+        }
+
+        for(u16 i = 0; i < size; ++i)
+        {
+            const SerDesData serDesData = data[i];
+
+            m_Parent->ReceiveVirtualBoxPciPhy_RxData(m_Index, serDesData);
+            m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
+            m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
+        }
+
+        m_Parent->ReceiveVirtualBoxPciPhy_RxValid(m_Index, false);
     }
 private:
     Receiver* m_Parent;
@@ -545,11 +665,14 @@ private:
 
     u32 m_TxConstructWord;
     u32 m_TxConstructWordState : 2;
-    u32 m_Pad5 : 30;
+    u32 m_PciSendReadEmpty : 1;
+    u32 m_Pad5 : 29;
 
-    riscv::fifo::DualClockFIFO<VirtualBoxPciPhy, u32, 4> m_PciSendFifo;
+    u32 m_TxResponseDwordFromFifo;
+
+    riscv::fifo::DualClockFIFO<VirtualBoxPciPhy, u32, 5> m_PciSendFifo;
 
     ::std::binary_semaphore m_SimulationSyncBinarySemaphore;
     ::std::mutex m_ReadDataMutex;
-    ::std::mutex m_WriteDataMutex;
+    ::std::mutex m_PhyOutDataMutex;
 };
