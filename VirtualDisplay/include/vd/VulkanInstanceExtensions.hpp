@@ -1,4 +1,10 @@
-﻿#pragma once
+﻿/**
+ * @file
+ *
+ * Copyright (c) 2025. Grafika Strahlen LLC
+ * All rights reserved.
+ */
+#pragma once
 
 #include <DynArray.hpp>
 #include <String.hpp>

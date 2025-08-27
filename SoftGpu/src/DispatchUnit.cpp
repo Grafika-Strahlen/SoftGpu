@@ -1,3 +1,9 @@
+/**
+ * @file
+ *
+ * Copyright (c) 2025. Grafika Strahlen LLC
+ * All rights reserved.
+ */
 #include "DispatchUnit.hpp"
 #include "StreamingMultiprocessor.hpp"
 #include "LoadStore.hpp"

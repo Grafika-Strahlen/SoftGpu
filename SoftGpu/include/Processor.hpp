@@ -1,3 +1,9 @@
+/**
+ * @file
+ *
+ * Copyright (c) 2025. Grafika Strahlen LLC
+ * All rights reserved.
+ */
 #pragma once
 
 #include <ConPrinter.hpp>

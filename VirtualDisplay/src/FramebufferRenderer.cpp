@@ -1,3 +1,9 @@
+/**
+ * @file
+ *
+ * Copyright (c) 2025. Grafika Strahlen LLC
+ * All rights reserved.
+ */
 #include "vd/FramebufferRenderer.hpp"
 #include "vd/VulkanCommandPools.hpp"
 #include <ConPrinter.hpp>

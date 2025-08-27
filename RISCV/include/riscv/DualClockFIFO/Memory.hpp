@@ -1,3 +1,9 @@
+/**
+ * @file
+ *
+ * Copyright (c) 2025. Grafika Strahlen LLC
+ * All rights reserved.
+ */
 #pragma once
 
 #include <Common.hpp>
@@ -99,7 +105,6 @@ private:
             }
         }
     }
-
 private:
     Receiver* m_Parent;
     u32 m_Index;

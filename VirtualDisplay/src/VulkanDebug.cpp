@@ -1,4 +1,10 @@
-﻿#include "vd/VulkanDebug.hpp"
+﻿/**
+ * @file
+ *
+ * Copyright (c) 2025. Grafika Strahlen LLC
+ * All rights reserved.
+ */
+#include "vd/VulkanDebug.hpp"
 #include <ConPrinter.hpp>
 
 namespace tau::vd {

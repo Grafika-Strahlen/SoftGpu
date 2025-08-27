@@ -1,4 +1,10 @@
-﻿#include "vd/MemoryRecovery.hpp"
+﻿/**
+ * @file
+ *
+ * Copyright (c) 2025. Grafika Strahlen LLC
+ * All rights reserved.
+ */
+#include "vd/MemoryRecovery.hpp"
 #include <NumTypes.hpp>
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>

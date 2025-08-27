@@ -1,3 +1,9 @@
+/**
+ * @file
+ *
+ * Copyright (c) 2025. Grafika Strahlen LLC
+ * All rights reserved.
+ */
 #define LOG_GROUP LOG_GROUP_MISC
 
 #define RT_STRICT

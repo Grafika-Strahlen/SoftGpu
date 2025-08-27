@@ -1,3 +1,9 @@
+/**
+ * @file
+ *
+ * Copyright (c) 2025. Grafika Strahlen LLC
+ * All rights reserved.
+ */
 #include <bit>
 
 #include <riscv/DualClockFIFO/Memory.TestBench.hpp>
@@ -22,7 +28,6 @@
 #include <numeric>
 #include <Safeties.hpp>
 #include <TauUnit.hpp>
-
 
 static Processor processor;
 DebugManager GlobalDebug;

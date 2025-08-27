@@ -1,3 +1,9 @@
+/**
+ * @file
+ *
+ * Copyright (c) 2025. Grafika Strahlen LLC
+ * All rights reserved.
+ */
 #include "vd/VulkanManager.hpp"
 #include "vd/VulkanDebug.hpp"
 #include "vd/MemoryRecovery.hpp"
@@ -13,7 +19,6 @@
 #include <String.hpp>
 #include <ConPrinter.hpp>
 #include <TUMaths.hpp>
-
 
 struct RankedDevice;
 using namespace tau::vd;

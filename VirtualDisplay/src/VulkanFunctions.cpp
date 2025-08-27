@@ -1,3 +1,9 @@
+/**
+ * @file
+ *
+ * Copyright (c) 2025. Grafika Strahlen LLC
+ * All rights reserved.
+ */
 #include "vd/VulkanFunctions.hpp"
 #include <vulkan/vk_enum_string_helper.h>
 #include <ConPrinter.hpp>

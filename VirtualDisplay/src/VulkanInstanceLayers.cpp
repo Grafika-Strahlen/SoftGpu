@@ -1,3 +1,9 @@
+/**
+ * @file
+ *
+ * Copyright (c) 2025. Grafika Strahlen LLC
+ * All rights reserved.
+ */
 #include "vd/VulkanInstanceExtensions.hpp"
 #include "vd/MemoryRecovery.hpp"
 #include <vulkan/vulkan.h>

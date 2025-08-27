@@ -1,3 +1,9 @@
+/**
+ * @file
+ *
+ * Copyright (c) 2025. Grafika Strahlen LLC
+ * All rights reserved.
+ */
 #ifndef SOFTGPUGOPDXE_ROM_H
 #define SOFTGPUGOPDXE_ROM_H
 
