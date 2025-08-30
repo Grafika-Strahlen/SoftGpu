@@ -6,12 +6,16 @@
  */
 #pragma once
 
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#endif
 #include <Objects.hpp>
 #include <ReferenceCountingPointer.hpp>
 #include <functional>
 #include <atomic>
+#include <memory>
+#include <SDL3/SDL_video.h>
 
 #undef CreateWindow
 
@@ -21,7 +25,7 @@ class Window final
 {
     DELETE_CM(Window);
 public:
-    static ReferenceCountingPointer<Window> CreateWindow() noexcept;
+    static ReferenceCountingPointer<Window> CreateWindow();
 
     using WindowResizeCallback_f = ::std::function<void(u32 width, u32 height)>;
 public:
@@ -30,6 +34,7 @@ public:
 
     void SetSize(const u32 width, const u32 height) noexcept;
 public:
+#ifdef _WIN32
     Window(const WNDCLASSEXW& windowClass) noexcept
         : m_WindowClass(windowClass)
         , m_Window(nullptr)
@@ -38,6 +43,19 @@ public:
         , m_ResizeCallback(nullptr)
         , m_ShouldClose(false)
     { }
+#endif
+
+    Window(
+        SDL_Window* const window,
+        const i32 width,
+        const i32 height
+    ) noexcept
+            : m_SdlWindow(window)
+            , m_Width(width)
+            , m_Height(height)
+            , m_ResizeCallback(nullptr)
+            , m_ShouldClose(false)
+    { }
 
     ~Window() noexcept;
 
@@ -45,6 +63,7 @@ public:
 
     void Close() noexcept;
 
+#ifdef _WIN32
     [[nodiscard]] WNDCLASSEXW WindowClass() const noexcept { return m_WindowClass; }
     [[nodiscard]] HINSTANCE ModuleInstance() const noexcept { return m_WindowClass.hInstance; }
     [[nodiscard]] HWND WindowHandle() const noexcept { return m_Window; }
@@ -52,17 +71,31 @@ public:
     [[nodiscard]] const RECT& FramebufferSize() const noexcept { return m_FramebufferSize; }
     [[nodiscard]] u32 FramebufferWidth() const noexcept { return static_cast<u32>(m_FramebufferSize.right); }
     [[nodiscard]] u32 FramebufferHeight() const noexcept { return static_cast<u32>(m_FramebufferSize.bottom); }
+#endif
+    [[nodiscard]] SDL_Window* SdlWindow() const noexcept { return m_SdlWindow; }
+    [[nodiscard]] u32 FramebufferWidth() const noexcept { return static_cast<u32>(m_Width); }
+    [[nodiscard]] u32 FramebufferHeight() const noexcept { return static_cast<u32>(m_Height); }
+
     [[nodiscard]] WindowResizeCallback_f& ResizeCallback() noexcept { return m_ResizeCallback; }
     [[nodiscard]] const ::std::atomic<bool>& ShouldClose() const noexcept { return m_ShouldClose; }
 private:
+#ifdef _WIN32
     LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+#endif
 public:
+#ifdef _WIN32
     static LRESULT CALLBACK StaticWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+#endif
 private:
+#ifdef _WIN32
     WNDCLASSEXW m_WindowClass;
     HWND m_Window;
     HDC m_hDc;
     RECT m_FramebufferSize;
+#endif
+    SDL_Window* m_SdlWindow;
+    i32 m_Width;
+    i32 m_Height;
     WindowResizeCallback_f m_ResizeCallback;
     ::std::atomic<bool> m_ShouldClose;
     u32 m_VerticalSlop;

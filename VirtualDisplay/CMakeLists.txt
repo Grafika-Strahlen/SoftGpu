@@ -24,9 +24,13 @@ target_include_directories(${PROJECT_NAME} PRIVATE src)
 
 find_package(TauUtils REQUIRED)
 find_package(glm REQUIRED)
+find_package(EASTL REQUIRED)
 find_package(Vulkan REQUIRED)
+find_package(vulkan-memory-allocator REQUIRED)
 
-target_link_libraries(${PROJECT_NAME} PUBLIC tauutils::tauutils glm::glm Vulkan::Vulkan)
+add_dependencies(${PROJECT_NAME} SDL3::SDL3)
+
+target_link_libraries(${PROJECT_NAME} PUBLIC tauutils::tauutils glm::glm SDL3::SDL3 EASTL::EASTL Vulkan::Vulkan vulkan-memory-allocator::vulkan-memory-allocator)
 
 if(Vulkan_MoltenVK_FOUND)
     target_link_libraries(${PROJECT_NAME} PUBLIC Vulkan::MoltenVK)
@@ -37,6 +41,6 @@ if(APPLE)
     target_compile_definitions(${PROJECT_NAME} PUBLIC -DVK_USE_PLATFORM_METAL_EXT)
 endif()
 
-target_compile_definitions(${PROJECT_NAME} PUBLIC -DGLM_ENABLE_EXPERIMENTAL)
+target_compile_definitions(${PROJECT_NAME} PUBLIC -DGLM_ENABLE_EXPERIMENTAL -DEA_PRAGMA_ONCE_SUPPORTED)
 
 SetCompileFlags(${PROJECT_NAME} PUBLIC PRIVATE)

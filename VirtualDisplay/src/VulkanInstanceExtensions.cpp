@@ -10,6 +10,7 @@
 #include <vulkan/vulkan.h>
 #include <String.hpp>
 #include <ConPrinter.hpp>
+#include <SDL3/SDL_vulkan.h>
 
 namespace tau::vd {
 
@@ -105,6 +106,30 @@ DynArray<const char*> GetRequestedInstanceExtensions(const u32 vulkanVersion, u3
         return { };
     }
 
+    u32 sdlRequiredCount;
+    const char* const* sdlRequiredExtensions = SDL_Vulkan_GetInstanceExtensions(&sdlRequiredCount);
+
+    for(u32 i = 0; i < sdlRequiredCount; ++i)
+    {
+        bool found = false;
+
+        for(const VkExtensionProperties& availableExtension : instanceExtensions)
+        {
+            if(::std::strcmp(sdlRequiredExtensions[i], availableExtension.extensionName) == 0)
+            {
+                found = true;
+                break;
+            }
+        }
+
+        // We failed to find a required extension.
+        if(!found)
+        {
+            ConPrinter::PrintLn("Failed to find required instance extension {}.", sdlRequiredExtensions[i]);
+            return { };
+        }
+    }
+
     for(const ConstExprString& extension : RequiredInstanceExtensions)
     {
         bool found = false;
@@ -129,6 +154,11 @@ DynArray<const char*> GetRequestedInstanceExtensions(const u32 vulkanVersion, u3
     DynArray<const char*> enabledInstanceExtensions(instanceExtensions.Length());
 
     uSys insertIndex = 0;
+
+    for(u32 i = 0; i < sdlRequiredCount; ++i)
+    {
+        enabledInstanceExtensions[insertIndex++] = sdlRequiredExtensions[i];
+    }
 
     for(const ConstExprString& extension : RequiredInstanceExtensions)
     {

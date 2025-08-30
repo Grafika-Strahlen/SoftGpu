@@ -80,7 +80,9 @@ public:
     [[nodiscard]] VkResult CreateDebugUtilsMessengerEXT(const VkDebugUtilsMessengerCreateInfoEXT* const pCreateInfo, VkDebugUtilsMessengerEXT* const pMessenger) const noexcept;
     void DestroyDebugUtilsMessengerEXT(VkDebugUtilsMessengerEXT messenger) const noexcept;
 
+#ifdef _WIN32
     [[nodiscard]] VkResult CreateWin32SurfaceKHR(const VkWin32SurfaceCreateInfoKHR* const pCreateInfo, VkSurfaceKHR* const pSurface) const noexcept;
+#endif
     void DestroySurfaceKHR(VkSurfaceKHR surface) const noexcept;
 
     [[nodiscard]] VkResult EnumeratePhysicalDevices(uint32_t* const pPhysicalDeviceCount, VkPhysicalDevice* const pPhysicalDevices) const noexcept;
@@ -90,7 +92,9 @@ public:
     VulkanDeclFunc(CreateDebugUtilsMessengerEXT) = nullptr;
     VulkanDeclFunc(DestroyDebugUtilsMessengerEXT) = nullptr;
 
+#ifdef _WIN32
     VulkanDeclFunc(CreateWin32SurfaceKHR) = nullptr;
+#endif
     VulkanDeclFunc(DestroySurfaceKHR) = nullptr;
 
     VulkanDeclFunc(EnumeratePhysicalDevices) = nullptr;

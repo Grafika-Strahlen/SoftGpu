@@ -5,7 +5,10 @@
  * All rights reserved.
  */
 #include "vd/VulkanFunctions.hpp"
+#ifdef _WIN32
 #include <vulkan/vk_enum_string_helper.h>
+#endif
+#include <SDL3/SDL_vulkan.h>
 #include <ConPrinter.hpp>
 
 #include "vd/MemoryRecovery.hpp"
@@ -14,8 +17,8 @@
 
 #define LoadFunc(BaseName, Loader, LoaderParam) Vk##BaseName = reinterpret_cast<PFN_vk##BaseName>(Loader((LoaderParam), "vk" #BaseName))
 
-#define LoadNonInstanceFunc(BaseName) LoadFunc(BaseName, vkGetInstanceProcAddr, nullptr)
-#define LoadInstanceFunc(BaseName) LoadFunc(BaseName, vkGetInstanceProcAddr, m_Instance)
+#define LoadNonInstanceFunc(BaseName) LoadFunc(BaseName, GetInstanceProcAddr, nullptr)
+#define LoadInstanceFunc(BaseName) LoadFunc(BaseName, GetInstanceProcAddr, m_Instance)
 #define LoadDeviceFunc(BaseName) LoadFunc(BaseName, m_Vulkan->VkGetDeviceProcAddr, m_Device)
 
 #define LoadFunc2(BaseName0, BaseName1, Loader, LoaderParam) \
@@ -27,13 +30,32 @@
         } \
     } while(false)
 
-#define LoadNonInstanceFunc2(BaseName0, BaseName1) LoadFunc2(BaseName0, BaseName1, vkGetInstanceProcAddr, nullptr)
-#define LoadInstanceFunc2(BaseName0, BaseName1) LoadFunc2(BaseName0, BaseName1, vkGetInstanceProcAddr, m_Instance)
+#define LoadNonInstanceFunc2(BaseName0, BaseName1) LoadFunc2(BaseName0, BaseName1, GetInstanceProcAddr, nullptr)
+#define LoadInstanceFunc2(BaseName0, BaseName1) LoadFunc2(BaseName0, BaseName1, GetInstanceProcAddr, m_Instance)
 #define LoadDeviceFunc2(BaseName0, BaseName1) LoadFunc2(BaseName0, BaseName1, m_Vulkan->VkGetDeviceProcAddr, m_Device)
 
 VulkanDeclFunc(EnumerateInstanceVersion);
 
 namespace tau::vd {
+
+static PFN_vkVoidFunction GetInstanceProcAddr(
+    VkInstance instance,
+    const char* pName)
+{
+    static PFN_vkGetInstanceProcAddr getInstanceProcAddr = nullptr;
+
+    if(!getInstanceProcAddr)
+    {
+        getInstanceProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(SDL_Vulkan_GetVkGetInstanceProcAddr());
+    }
+
+    if(!getInstanceProcAddr)
+    {
+        return nullptr;
+    }
+
+    return getInstanceProcAddr(instance, pName);
+}
 
 void LoadNonInstanceFunctions() noexcept
 {
@@ -56,7 +78,9 @@ void VulkanInstance::LoadInstanceFunctions() noexcept
     LoadInstanceFunc(CreateDebugUtilsMessengerEXT);
     LoadInstanceFunc(DestroyDebugUtilsMessengerEXT);
 
+#ifdef _WIN32
     LoadInstanceFunc(CreateWin32SurfaceKHR);
+#endif
     LoadInstanceFunc(DestroySurfaceKHR);
 
     LoadInstanceFunc(EnumeratePhysicalDevices);
@@ -123,6 +147,7 @@ void VulkanInstance::DestroyDebugUtilsMessengerEXT(VkDebugUtilsMessengerEXT mess
     VkDestroyDebugUtilsMessengerEXT(m_Instance, messenger, m_Allocator);
 }
 
+#ifdef _WIN32
 VkResult VulkanInstance::CreateWin32SurfaceKHR(const VkWin32SurfaceCreateInfoKHR* const pCreateInfo, VkSurfaceKHR* const pSurface) const noexcept
 {
     if(!VkCreateWin32SurfaceKHR)
@@ -132,6 +157,7 @@ VkResult VulkanInstance::CreateWin32SurfaceKHR(const VkWin32SurfaceCreateInfoKHR
 
     return VkCreateWin32SurfaceKHR(m_Instance, pCreateInfo, m_Allocator, pSurface);
 }
+#endif
 
 void VulkanInstance::DestroySurfaceKHR(VkSurfaceKHR surface) const noexcept
 {
@@ -479,7 +505,11 @@ void PrintError(const VkResult result, const DynString& source) noexcept
             break;
     }
 
+#ifdef _WIN32
     ConPrinter::PrintLn(u8"[{}]: {} {}\n", string_VkResult(result), message, source);
+#else
+    ConPrinter::PrintLn(u8"[{}]: {} {}\n", static_cast<int>(result), message, source);
+#endif
 }
 
 }

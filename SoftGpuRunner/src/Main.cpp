@@ -24,6 +24,7 @@
 #include <vd/VulkanManager.hpp>
 #include <vd/VulkanCommandPools.hpp>
 #include <vd/FramebufferRenderer.hpp>
+#include <vd/SdlManager.hpp>
 
 #include <numeric>
 #include <Safeties.hpp>
@@ -127,7 +128,7 @@ int main(int argCount, char* args[])
     UNUSED2(argCount, args);
     InitEnvironment();
 
-    if constexpr(true)
+    if constexpr(false)
     {
         // riscv::coprocessor::test::ShifterSerialCheckResetResult(true);
         // riscv::coprocessor::test::ShifterBarrelCheckResetResult(true);
@@ -192,6 +193,7 @@ int main(int argCount, char* args[])
     ::tau::test::register_allocator::RunTests();
 #endif
 
+    tau::vd::InitSdl();
     Ref<tau::vd::Window> window = tau::vd::Window::CreateWindow();
     Ref<tau::vd::VulkanManager> vulkanManager = tau::vd::VulkanManager::CreateVulkanManager(window);
     ConPrinter::PrintLn("Created vulkan manager.");
@@ -257,9 +259,10 @@ int main(int argCount, char* args[])
     u32 resetRead;
     // processor.PciMemRead(BAR0 + PciControlRegisters::REGISTER_RESET, 4, &resetRead);
 
-    while(!window->ShouldClose())
+    while(!window->ShouldClose() && !tau::vd::ShouldClose())
     {
-        window->PollMessages();
+//        window->PollMessages();
+        tau::vd::PollEvents();
 
         const u32 frameIndex = vulkanManager->WaitForFrame();
         VkCommandBuffer commandBuffer = frameBufferRenderer->Record(frameIndex);
@@ -785,10 +788,12 @@ static void InitEnvironment() noexcept
 {
     Console::Init();
 
+#ifdef _WIN32
     if(SUCCEEDED(DebugManager::Create(&GlobalDebug, L"\\\\.\\pipe\\gpu-pipe-step", L"\\\\.\\pipe\\gpu-pipe-info", true)))
     {
         ConPrinter::Print("Debug enabled.\n");
     }
+#endif
 }
 
 static void* RawGpuMemory = nullptr;

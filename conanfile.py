@@ -4,7 +4,12 @@ from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
 
 class SoftGpu(ConanFile):
     settings = "os", "compiler", "arch", "build_type"
-    requires = "tauutils/[^1.4.0]", "glm/[^1.0.1]", "vulkan-memory-allocator/[^3.0.1]"
+    requires = (
+        "tauutils/[^1.4.0]",
+        "glm/[^1.0.1]",
+        "vulkan-memory-allocator/[^3.0.1]",
+        "eastl/[^3.21.12]"
+    )
 
     def configure(self):
         self.options["tauutils"].shared = False

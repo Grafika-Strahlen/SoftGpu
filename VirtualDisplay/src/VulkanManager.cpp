@@ -15,6 +15,8 @@
 #include "vd/VulkanCommandPools.hpp"
 #include <vk_mem_alloc.h>
 
+#include <SDL3/SDL_vulkan.h>
+
 #include <DynArray.hpp>
 #include <String.hpp>
 #include <ConPrinter.hpp>
@@ -883,6 +885,9 @@ static void PickDevice(const StrongRef<VulkanInstance>& vulkan, const DynArray<V
 
 [[nodiscard]] static VkSurfaceKHR CreateSurface(const Ref<Window>& window, const StrongRef<VulkanInstance>& vulkan) noexcept
 {
+    VkSurfaceKHR surface;
+
+#if defined(_WIN32) && 0
     VkWin32SurfaceCreateInfoKHR createInfo { };
     createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
     createInfo.pNext = nullptr;
@@ -890,9 +895,21 @@ static void PickDevice(const StrongRef<VulkanInstance>& vulkan, const DynArray<V
     createInfo.hinstance = window->ModuleInstance();
     createInfo.hwnd = window->WindowHandle();
 
-    VkSurfaceKHR surface;
-
     VK_CALL(vulkan->CreateWin32SurfaceKHR(&createInfo, &surface), "creating surface.");
+#endif
+
+    const bool createSurfaceResult = SDL_Vulkan_CreateSurface(
+        window->SdlWindow(),
+        vulkan->Instance(),
+        nullptr,
+        &surface
+    );
+
+    if(!createSurfaceResult)
+    {
+        ConPrinter::PrintLn("Error creating VkSurface: {}", SDL_GetError());
+        goto VK_ERROR_HANDLER_LABEL_NAME;
+    }
 
     return surface;
 
@@ -1105,6 +1122,12 @@ static void PickDevice(const StrongRef<VulkanInstance>& vulkan, const DynArray<V
 
 ReferenceCountingPointer<VulkanManager> VulkanManager::CreateVulkanManager(const Ref<Window>& window) noexcept
 {
+    if(!SDL_Vulkan_LoadLibrary(nullptr))
+    {
+        ConPrinter::PrintLn("Error loading Vulkan loader: {}", SDL_GetError());
+        return nullptr;
+    }
+
     const u32 vulkanVersion = GetVulkanVersion();
 
     VkDebugUtilsMessengerCreateInfoEXT debugMessengerCreateInfo { };

@@ -10,23 +10,30 @@
 
 namespace tau::vd {
 
+#ifdef _WIN32
 static constexpr const wchar_t WindowClassName[] = L"SoftGpu Virtual Display Window";
+#endif
 
 Window::~Window() noexcept
 {
+#ifdef _WIN32
     ReleaseDC(m_Window, m_hDc);
     DestroyWindow(m_Window);
     UnregisterClassW(WindowClassName, GetModuleHandleW(nullptr));
+#endif
+    SDL_DestroyWindow(m_SdlWindow);
 }
 
 void Window::PollMessages() const noexcept
 {
+#ifdef _WIN32
     MSG msg;
     while(PeekMessageW(&msg, m_Window, 0, 0, PM_REMOVE))
     {
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }
+#endif
 }
 
 void Window::Close() noexcept
@@ -34,7 +41,8 @@ void Window::Close() noexcept
     m_ShouldClose = true;
 }
 
-ReferenceCountingPointer<Window> Window::CreateWindow() noexcept
+#ifdef _WIN32
+static void CreateWindowWin32()
 {
     WNDCLASSEXW windowClass { };
 
@@ -54,15 +62,15 @@ ReferenceCountingPointer<Window> Window::CreateWindow() noexcept
     }
 
     HWND hWnd = CreateWindowExW(
-        0,
-        WindowClassName,
-        L"SoftGpu Display",
-        WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME ^ WS_MAXIMIZEBOX,
-        CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-        nullptr,
-        nullptr,
-        windowClass.hInstance,
-        window.Get()
+            0,
+            WindowClassName,
+            L"SoftGpu Display",
+            WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME ^ WS_MAXIMIZEBOX,
+            CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+            nullptr,
+            nullptr,
+            windowClass.hInstance,
+            window.Get()
     );
 
     if(!hWnd)
@@ -94,7 +102,49 @@ ReferenceCountingPointer<Window> Window::CreateWindow() noexcept
 
     return window;
 }
+#endif
 
+ReferenceCountingPointer<Window> Window::CreateWindow()
+{
+#ifdef _WIN32
+    return CreateWindowWin32();
+#else
+    SDL_WindowFlags windowFlags = SDL_WINDOW_VULKAN | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+
+    SDL_Window* window = SDL_CreateWindow(
+        "SoftGPU Display",
+        1024,
+        768,
+        windowFlags
+    );
+
+    if(!window)
+    {
+        ConPrinter::PrintLn("Error creating window: {}", SDL_GetError());
+        return nullptr;
+    }
+
+    int frameWidth;
+    int frameHeight;
+    if(!SDL_GetWindowSizeInPixels(window, &frameWidth, &frameHeight))
+    {
+        ConPrinter::PrintLn("Error getting window pixel size: {}", SDL_GetError());
+
+        SDL_DestroyWindow(window);
+        return nullptr;
+    }
+
+    SDL_ShowWindow(window);
+
+    return ReferenceCountingPointer<Window>(
+        window,
+        frameWidth,
+        frameHeight
+    );
+#endif
+}
+
+#ifdef _WIN32
 LRESULT Window::WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     switch(uMsg)
@@ -138,19 +188,27 @@ LRESULT Window::StaticWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 
     return windowPtr->WindowProc(hWnd, uMsg, wParam, lParam);
 }
+#endif
 
 void Window::ShowWindow() noexcept
 {
+#ifdef _WIN32
     ::ShowWindow(m_Window, SW_SHOWNA);
+#endif
+    SDL_ShowWindow(m_SdlWindow);
 }
 
 void Window::HideWindow() noexcept
 {
+#ifdef _WIN32
     ::ShowWindow(m_Window, SW_HIDE);
+#endif
+    SDL_HideWindow(m_SdlWindow);
 }
 
 void Window::SetSize(const u32 width, const u32 height) noexcept
 {
+#ifdef _WIN32
     RECT newRect;
     newRect.left = 0;
     newRect.top = 0;
@@ -162,6 +220,12 @@ void Window::SetSize(const u32 width, const u32 height) noexcept
     // (void) AdjustWindowRect(&newRect, WS_OVERLAPPEDWINDOW, FALSE);
 
     ::SetWindowPos(m_Window, nullptr, 0, 0, newRect.right, newRect.bottom, SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOOWNERZORDER);
+#endif
+    (void) SDL_SetWindowSize(
+        m_SdlWindow,
+        static_cast<int>(width),
+        static_cast<int>(height)
+    );
 }
 
 }

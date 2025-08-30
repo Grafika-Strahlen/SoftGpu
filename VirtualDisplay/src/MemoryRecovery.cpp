@@ -6,8 +6,12 @@
  */
 #include "vd/MemoryRecovery.hpp"
 #include <NumTypes.hpp>
+
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#else
+#endif
 
 namespace tau::vd {
 
@@ -15,7 +19,8 @@ static constexpr uSys SacrificialBlockPageCount = 1024;
 
 static void* s_SacrificialMemory = nullptr;
 
-void InitSacrificialMemory() noexcept
+#ifdef _WIN32
+static void InitSacrificialMemoryWindows() noexcept
 {
     if(!s_SacrificialMemory)
     {
@@ -71,14 +76,33 @@ void InitSacrificialMemory() noexcept
         VirtualLock(s_SacrificialMemory, SacrificialBlockPageCount * 4096);
     }
 }
+#else
+static void InitSacrificialMemoryLinux() noexcept
+{
+    if(!s_SacrificialMemory)
+    {
+    }
+}
+#endif
+
+void InitSacrificialMemory() noexcept
+{
+#ifdef _WIN32
+    InitSacrificialMemoryWindows();
+#else
+    InitSacrificialMemoryLinux();
+#endif
+}
 
 void RecoverSacrificialMemory() noexcept
 {
+#ifdef _WIN32
     if(s_SacrificialMemory)
     {
         VirtualFree(s_SacrificialMemory, SacrificialBlockPageCount * 4096, MEM_DECOMMIT | MEM_RELEASE);
         s_SacrificialMemory = nullptr;
     }
+#endif
 }
 
 }
