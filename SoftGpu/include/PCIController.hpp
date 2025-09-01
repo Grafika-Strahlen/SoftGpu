@@ -133,6 +133,16 @@ public:
         , m_WriteState(0)
         , m_InterruptSet(0)
         , m_Pad0{}
+        , m_PhyInputFifoEmpty(0)
+        , m_PhyInputReceivedDataThisCycle(0)
+        , m_PhyInputReceivingDataNextCycle(0)
+        , m_PhyInputReadState(0)
+        , m_PhyOutputWriteState(0)
+        , m_Pad1{}
+        , m_PhyInputData(0)
+        , m_PhyInputRequestHeader()
+        , m_PhyInputTransactionDescriptor(0)
+        , m_PhyInputAddress(0)
         , m_PhyInputFifo(this, 0)
         , m_PhyOutputFifo(this, 1)
         , m_PciPhy(this)
@@ -148,11 +158,19 @@ public:
         InitPowerManagementCapabilityStructure();
         InitMessageSignalledInterruptCapabilityStructure();
         InitAdvancedErrorReportingCapabilityStructure();
+
+        m_PciPhy.SetTxWidth(2);
+        m_PciPhy.SetRxWidth(2);
+
+        m_PhyInputFifo.SetWriteResetN(true);
     }
 
     void SetResetN(const bool reset_n) noexcept
     {
         p_Reset_n = BOOL_TO_BIT(reset_n);
+
+        m_PciPhy.SetResetN(reset_n);
+        m_PhyInputFifo.SetReadResetN(reset_n);
 
         TRIGGER_SENSITIVITY(p_Reset_n);
     }
@@ -160,6 +178,9 @@ public:
     void SetClock(const bool clock) noexcept
     {
         p_Clock = BOOL_TO_BIT(clock);
+
+        m_PciPhy.SetClock(p_Clock);
+        m_PhyInputFifo.SetReadClock(clock);
 
         TRIGGER_SENSITIVITY(p_Clock);
     }
@@ -494,10 +515,18 @@ public:
 
     void ReceiveDualClockFIFO_ReadData(const u32 index, const u32 data) noexcept
     {
+        if(index == 0)
+        {
+            m_PhyInputData = data;
+        }
     }
 
     void ReceiveDualClockFIFO_ReadEmpty(const u32 index, const bool readEmpty) noexcept
     {
+        if(index == 0)
+        {
+            m_PhyInputFifoEmpty = BOOL_TO_BIT(readEmpty);
+        }
     }
 
     void ReceiveDualClockFIFO_WriteAddress(const u32 index, const u64 writeAddress) noexcept { }
@@ -521,7 +550,153 @@ private:
         }
         else if(RISING_EDGE(p_Clock))
         {
+            // Track whether we have an active word from the PHY.
+            // m_PhyInputReceivedDataThisCycle = !BOOL_TO_BIT(BIT_TO_BOOL(m_PhyInputFifoEmpty));
 
+            // Update whether we'll have an active word from the PHY next clock cycle.
+            if(!BIT_TO_BOOL(m_PhyInputFifoEmpty))
+            {
+                m_PhyInputFifo.SetReadIncoming(true);
+                m_PhyInputReceivedDataThisCycle = 1;
+                // m_PhyInputReceivingDataNextCycle = 1;
+            }
+            else
+            {
+                m_PhyInputFifo.SetReadIncoming(false);
+                m_PhyInputReceivedDataThisCycle = 0;
+                // m_PhyInputReceivingDataNextCycle = 0;
+            }
+
+            if(BIT_TO_BOOL(m_PhyInputReceivedDataThisCycle) || m_PhyInputReadState == 4)
+            {
+                switch(m_PhyInputReadState)
+                {
+                    case 0:
+                        m_PhyInputRequestHeader = ::std::bit_cast<pcie::TlpHeader>(m_PhyInputData);
+                        m_PhyInputReadState = 1;
+                        break;
+                    case 1:
+                        m_PhyInputTransactionDescriptor = ::std::bit_cast<pcie::TlpTransactionDescriptor>(m_PhyInputData);
+                        m_PhyInputReadState = 2;
+                        break;
+                    case 2:
+                        m_PhyInputDW3 = m_PhyInputData;
+
+                        if(m_PhyInputRequestHeader.Fmt == pcie::TlpHeader::FORMAT_3_DW_HEADER_NO_DATA ||
+                           m_PhyInputRequestHeader.Fmt == pcie::TlpHeader::FORMAT_3_DW_HEADER_WITH_DATA)
+                        {
+                            // If we only have a 3 word header then we skip reading header word 4.
+                            m_PhyInputReadState = 4;
+                        }
+                        else
+                        {
+                            m_PhyInputReadState = 3;
+                        }
+                        break;
+                    case 3:
+                        m_PhyInputDW4 = m_PhyInputData;
+                        m_PhyInputReadState = 4;
+                        break;
+                    case 4:
+                    {
+                        if(m_PhyInputRequestHeader.Fmt == pcie::TlpHeader::FORMAT_3_DW_HEADER_NO_DATA &&
+                           m_PhyInputRequestHeader.Type == pcie::TlpHeader::TYPE_CONFIG_TYPE_0_REQUEST)
+                        {
+                            switch(m_PhyOutputWriteState)
+                            {
+                                case 0:
+                                {
+                                    pcie::TlpHeader responseHeader { };
+                                    responseHeader.Fmt = pcie::TlpHeader::FORMAT_3_DW_HEADER_WITH_DATA;
+                                    responseHeader.Type = pcie::TlpHeader::TYPE_COMPLETION;
+                                    responseHeader.TC = 0;
+                                    responseHeader.TD = 0;
+                                    responseHeader.EP = 0;
+                                    responseHeader.Attr = 0;
+                                    responseHeader.Length(1);
+
+                                    const SerDesData data = ::std::bit_cast<u32>(responseHeader);
+
+                                    m_PciPhy.SetTxData(data);
+                                    m_PciPhy.SetTxDataValid(true);
+                                    m_PhyOutputWriteState = 1;
+                                    break;
+                                }
+                                case 1:
+                                {
+                                    pcie::TlpCompletionHeader0 configHeader { };
+                                    configHeader.BusNumber = 0;
+                                    configHeader.DeviceNumber = 0;
+                                    configHeader.FunctionNumber = 0;
+                                    configHeader.CompletionStatus = pcie::TlpCompletionHeader0::SuccessfulCompletion;
+                                    configHeader.ByteCountModified = 0;
+                                    configHeader.ByteCount(
+                                        pcie::TlpTransactionDescriptor::ByteEnableToByteCount(m_PhyInputTransactionDescriptor.FirstDwordByteEnable)
+                                    );
+
+                                    const SerDesData data = ::std::bit_cast<u32>(configHeader);
+
+                                    m_PciPhy.SetTxData(data);
+                                    m_PciPhy.SetTxDataValid(true);
+                                    m_PhyOutputWriteState = 2;
+                                    break;
+                                }
+                                case 2:
+                                {
+                                    pcie::TlpCompletionHeader1 configHeader { };
+                                    configHeader.BusNumber = 0;
+                                    configHeader.DeviceNumber = 0;
+                                    configHeader.FunctionNumber = 0;
+                                    configHeader.Tag = 0;
+                                    configHeader.LowerAddress = 0;
+
+                                    const SerDesData data = ::std::bit_cast<u32>(configHeader);
+
+                                    m_PciPhy.SetTxData(data);
+                                    m_PciPhy.SetTxDataValid(true);
+                                    m_PhyOutputWriteState = 3;
+                                    break;
+                                }
+                                case 3:
+                                {
+                                    const u32 configValue = ConfigRead(
+                                        m_PhyInputConfigRequestHeader.ExtendedRegisterNumber << 6 | m_PhyInputConfigRequestHeader.RegisterNumber,
+                                        pcie::TlpTransactionDescriptor::ByteEnableToByteCount(m_PhyInputTransactionDescriptor.FirstDwordByteEnable)
+                                    );
+                                    const SerDesData data = configValue;
+
+                                    m_PciPhy.SetTxData(data);
+                                    m_PciPhy.SetTxDataValid(true);
+                                    m_PhyOutputWriteState = 4;
+                                    break;
+                                }
+                                case 4:
+                                {
+                                    m_PhyInputReadState = 0;
+                                    m_PhyOutputWriteState = 0;
+                                    m_PciPhy.SetTxDataValid(false);
+                                    m_PciPhy.SignalSimulationSyncEvent();
+                                    break;
+                                }
+                                default:
+                                    m_PhyInputReadState = 0;
+                                    m_PhyOutputWriteState = 0;
+                                    m_PciPhy.SetTxDataValid(false);
+                                    break;
+                            }
+                        }
+                        else
+                        {
+                            m_PhyInputReadState = 0;
+                        }
+                        break;
+                    }
+                    default:
+                        m_PhyInputReadState = 0;
+                        break;
+                }
+
+            }
         }
     }
 
@@ -799,6 +974,27 @@ private:
     u32 m_WriteState : 1;
     u32 m_InterruptSet : 1;
     u32 m_Pad0 : 29; // NOLINT(clang-diagnostic-unused-private-field)
+
+    u32 m_PhyInputFifoEmpty : 1;
+    u32 m_PhyInputReceivedDataThisCycle : 1;
+    u32 m_PhyInputReceivingDataNextCycle : 1;
+    u32 m_PhyInputReadState : 3;
+    u32 m_PhyOutputWriteState : 3;
+    u32 m_Pad1 : 23;
+
+    u32 m_PhyInputData;
+    pcie::TlpHeader m_PhyInputRequestHeader;
+    pcie::TlpTransactionDescriptor m_PhyInputTransactionDescriptor;
+    union
+    {
+        u64 m_PhyInputAddress;
+        pcie::TlpConfigRequestHeader m_PhyInputConfigRequestHeader;
+        struct
+        {
+            u32 m_PhyInputDW3;
+            u32 m_PhyInputDW4;
+        };
+    };
 
     riscv::fifo::DualClockFIFO<PciController, u32, 5> m_PhyInputFifo;
     riscv::fifo::DualClockFIFO<PciController, u32, 2> m_PhyOutputFifo;

@@ -44,6 +44,12 @@ void PollEvents() noexcept
             case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
                 s_ShouldClose = true;
                 break;
+            case SDL_EVENT_KEY_UP:
+                if(event.key.key == SDLK_ESCAPE)
+                {
+                    s_ShouldClose = true;
+                }
+                break;
             default:
                 break;
         }

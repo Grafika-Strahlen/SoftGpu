@@ -50,6 +50,10 @@ public:
     {
         p_Reset_n = BOOL_TO_BIT(reset_n);
 
+        m_PciController.SetResetN(reset_n);
+        m_PciRegisters.SetResetN(reset_n);
+        m_DisplayManager.SetResetN(reset_n);
+
         TRIGGER_SENSITIVITY(p_Reset_n);
     }
 
@@ -57,6 +61,7 @@ public:
     {
         p_Clock = BOOL_TO_BIT(clock);
 
+        m_PciController.SetClock(clock);
         m_PciRegisters.SetClock(clock);
         // m_DmaController.SetClock(clock);
         m_DisplayManager.SetClock(clock);

@@ -9,13 +9,13 @@ function(SetCompileFlags ProjectName PublicType PrivateType)
         if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
             # using clang with clang-cl front end
 
-            target_compile_options(${ProjectName} ${PrivateType} -Wno-unknown-attributes)
+            target_compile_options(${ProjectName} ${PrivateType} -Wno-unknown-attributes -Wno-invalid-offsetof -Wno-shift-count-overflow)
         elseif(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
             # using clang with regular front end
 
             target_compile_options(${ProjectName} ${PrivateType} -mf16c -mfma)
 
-            target_compile_options(${ProjectName} ${PrivateType} -Wno-unknown-attributes -Wno-invalid-offsetof)
+            target_compile_options(${ProjectName} ${PrivateType} -Wno-unknown-attributes -Wno-invalid-offsetof -Wno-shift-count-overflow)
 
             # Enable PIC
             set_target_properties(${ProjectName} PROPERTIES POSITION_INDEPENDENT_CODE ON)

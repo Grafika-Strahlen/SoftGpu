@@ -152,6 +152,11 @@ public:
         TRIGGER_SENSITIVITY(p_Reset_n);
     }
 
+    void SetVirtualBoxReadResetN(const bool reset_n) noexcept
+    {
+        m_PciSendFifo.SetReadResetN(reset_n);
+    }
+
     void SetClock(const bool clock) noexcept
     {
         p_Clock = BOOL_TO_BIT(clock);
@@ -163,6 +168,11 @@ public:
         }
 
         TRIGGER_SENSITIVITY(p_Clock);
+    }
+
+    void SetVirtualBoxReadClock(const bool clock) noexcept
+    {
+        m_PciSendFifo.SetReadClock(clock);
     }
 
     void SetTxData(const SerDesData txData) noexcept
@@ -250,9 +260,104 @@ public:
         m_SimulationSyncBinarySemaphore.release();
     }
 public:
-    void VirtualBoxMemReadSet(const u64 address, const u16 size, u32* const data, u16* const readResponse)
+    u32 VirtualBoxConfigRead(
+        const u16 address,
+        const u8 byteEnable
+    )
     {
-        SendReadToSoftGpu(
+        SendConfigReadToSoftGpu(
+            pcie::TlpHeader::TYPE_CONFIG_TYPE_0_REQUEST,
+            address,
+            byteEnable
+        );
+
+        // if(!m_SimulationSyncBinarySemaphore.try_acquire_for(::std::chrono::milliseconds(250)))
+        // {
+        //     return 0;
+        // }
+        m_SimulationSyncBinarySemaphore.acquire();
+
+        SpinOnPciSendFifo();
+
+        // Cast the first word to the TLP Header.
+        const auto header = ::std::bit_cast<pcie::TlpHeader>(m_TxResponseDwordFromFifo);
+
+        // Read the first word from a transaction.
+        ReadWordFromPciSendFifo<true>();
+
+        // If it isn't a completion header we have a problem.
+        if(header.Type != pcie::TlpHeader::TYPE_COMPLETION)
+        {
+            assert(header.Type == pcie::TlpHeader::TYPE_COMPLETION);
+            return 0;
+        }
+
+        // There should never be a 4 DW header for completion responses.
+        if(header.Fmt == pcie::TlpHeader::FORMAT_4_DW_HEADER_NO_DATA || header.Fmt == pcie::TlpHeader::FORMAT_4_DW_HEADER_WITH_DATA)
+        {
+            assert(header.Fmt != pcie::TlpHeader::FORMAT_4_DW_HEADER_NO_DATA && header.Fmt != pcie::TlpHeader::FORMAT_4_DW_HEADER_WITH_DATA);
+            return 0;
+        }
+
+        // Read 2 more words of the header.
+        SpinOnPciSendFifo();
+        ReadWordFromPciSendFifo();
+        SpinOnPciSendFifo();
+        ReadWordFromPciSendFifo<true>();
+
+        if(header.Fmt == pcie::TlpHeader::FORMAT_3_DW_HEADER_NO_DATA)
+        {
+            // With no data we can exit.
+            return 0;
+        }
+        else if(header.Fmt == pcie::TlpHeader::FORMAT_3_DW_HEADER_WITH_DATA)
+        {
+            u32 ret = 0;
+
+            for(u16 i = 0; i < header.Length(); ++i)
+            {
+                // Config Reads can only return 1 DWORD, but we still have to clear the FIFO.
+                if(i == 0)
+                {
+                    ret = m_TxResponseDwordFromFifo;
+                }
+
+                if(i < header.Length() - 1)
+                {
+                    SpinOnPciSendFifo();
+                    ReadWordFromPciSendFifo();
+                }
+            }
+
+            StopReadingPciSendFifo();
+
+            return ret;
+        }
+        else
+        {
+            assert(false);
+        }
+    }
+
+    // ReSharper disable once CppMemberFunctionMayBeConst
+    void VirtualBoxConfigWrite(
+        const u16 address,
+        const u8 byteEnable,
+        const u32 data
+    ) noexcept
+    {
+        SendConfigWriteToSoftGpu(
+            pcie::TlpHeader::TYPE_CONFIG_TYPE_0_REQUEST,
+            address,
+            byteEnable,
+            data
+        );
+    }
+
+    void VirtualBoxMemRead(const u64 address, const u16 size, u32* const data, u16* const readResponse)
+    {
+        SendMemReadToSoftGpu(
+            pcie::TlpHeader::TYPE_MEMORY_REQUEST,
             address,
             size
         );
@@ -297,7 +402,7 @@ public:
         }
         else if(header.Fmt == pcie::TlpHeader::FORMAT_3_DW_HEADER_WITH_DATA)
         {
-            for(u16 i = 0; i < header.Length; ++i)
+            for(u16 i = 0; i < header.Length(); ++i)
             {
                 SpinOnPciSendFifo();
                 ReadWordFromPciSendFifo();
@@ -306,7 +411,7 @@ public:
             }
 
             StopReadingPciSendFifo();
-            *readResponse = header.Length;
+            *readResponse = header.Length();
         }
         else
         {
@@ -315,9 +420,10 @@ public:
     }
 
     // ReSharper disable once CppMemberFunctionMayBeConst
-    void VirtualBoxMemWriteSet(const u64 address, const u16 size, const u32* const data) noexcept
+    void VirtualBoxMemWrite(const u64 address, const u16 size, const u32* const data) noexcept
     {
-        SendWriteToSoftGpu(
+        SendMemWriteToSoftGpu(
+            pcie::TlpHeader::TYPE_MEMORY_REQUEST,
             address,
             size,
             data
@@ -471,12 +577,13 @@ private:
         m_PciSendFifo.SetReadIncoming(false);
 
         // Wait until we have data to read.
-        while(m_PciSendReadEmpty)
+        do
         {
             ::std::lock_guard lock(m_PhyOutDataMutex);
             m_PciSendFifo.SetReadClock(true);
             m_PciSendFifo.SetReadClock(false);
         }
+        while(BIT_TO_BOOL(m_PciSendReadEmpty));
     }
 
     /**
@@ -518,17 +625,19 @@ private:
 
     void SendMemoryRequestHeaderToSoftGpu(
         const pcie::TlpHeader::EFormat fmt,
+        const pcie::TlpHeader::EType type,
         const u64 address,
         const u16 size
     ) const noexcept
     {
         pcie::TlpHeader header {};
         header.Fmt = fmt;
+        header.Type = type;
         header.TC = 0;
         header.Attr = 0;
         header.TD = 0;
         header.EP = 0;
-        header.Length = size;
+        header.Length(size);
 
         SerDesData serDesData = ::std::bit_cast<u32>(header);
 
@@ -537,7 +646,15 @@ private:
         m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
         m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
 
-        serDesData = 0;
+        pcie::TlpTransactionDescriptor transactionDescriptor {};
+        transactionDescriptor.BusNumber = 0;
+        transactionDescriptor.DeviceNumber = 0;
+        transactionDescriptor.FunctionNumber = 0;
+        transactionDescriptor.Tag = 0;
+        transactionDescriptor.LastDwordByteEnable = size > 1 ? 0xF : 0x0;
+        transactionDescriptor.FirstDwordByteEnable = 0xF;
+
+        serDesData = ::std::bit_cast<u32>(transactionDescriptor);
 
         m_Parent->ReceiveVirtualBoxPciPhy_RxData(m_Index, serDesData);
         m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
@@ -567,7 +684,8 @@ private:
         }
     }
 
-    void SendReadToSoftGpu(
+    void SendMemReadToSoftGpu(
+        const pcie::TlpHeader::EType type,
         const u64 address,
         const u16 size
     ) const noexcept
@@ -575,24 +693,27 @@ private:
         if(address <= 0xFFFFFFFF)
         {
             SendMemoryRequestHeaderToSoftGpu(
-                pcie::TlpHeader::FORMAT_3_DW_HEADER_NO_DATA,
-                address,
-                size
+                    pcie::TlpHeader::FORMAT_3_DW_HEADER_NO_DATA,
+                    type,
+                    address,
+                    size
             );
         }
         else
         {
             SendMemoryRequestHeaderToSoftGpu(
-                pcie::TlpHeader::FORMAT_4_DW_HEADER_NO_DATA,
-                address,
-                size
+                    pcie::TlpHeader::FORMAT_4_DW_HEADER_NO_DATA,
+                    type,
+                    address,
+                    size
             );
         }
 
         m_Parent->ReceiveVirtualBoxPciPhy_RxValid(m_Index, false);
     }
 
-    void SendWriteToSoftGpu(
+    void SendMemWriteToSoftGpu(
+            const pcie::TlpHeader::EType type,
         const u64 address,
         const u16 size,
         const u32* const data
@@ -601,17 +722,19 @@ private:
         if(address <= 0xFFFFFFFF)
         {
             SendMemoryRequestHeaderToSoftGpu(
-                pcie::TlpHeader::FORMAT_3_DW_HEADER_WITH_DATA,
-                address,
-                size
+                    pcie::TlpHeader::FORMAT_3_DW_HEADER_WITH_DATA,
+                    type,
+                    address,
+                    size
             );
         }
         else
         {
             SendMemoryRequestHeaderToSoftGpu(
-                pcie::TlpHeader::FORMAT_4_DW_HEADER_WITH_DATA,
-                address,
-                size
+                    pcie::TlpHeader::FORMAT_4_DW_HEADER_WITH_DATA,
+                    type,
+                    address,
+                    size
             );
         }
 
@@ -623,6 +746,96 @@ private:
             m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
             m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
         }
+
+        m_Parent->ReceiveVirtualBoxPciPhy_RxValid(m_Index, false);
+    }
+
+    void SendConfigRequestHeaderToSoftGpu(
+        const pcie::TlpHeader::EFormat fmt,
+        const pcie::TlpHeader::EType type,
+        const u16 address,
+        const u8 byteEnable
+    ) const noexcept
+    {
+        pcie::TlpHeader header {};
+        header.Fmt = fmt;
+        header.Type = type;
+        header.TC = 0;
+        header.Attr = 0;
+        header.TD = 0;
+        header.EP = 0;
+        header.Length(1);
+
+        SerDesData serDesData = ::std::bit_cast<u32>(header);
+
+        m_Parent->ReceiveVirtualBoxPciPhy_RxData(m_Index, serDesData);
+        m_Parent->ReceiveVirtualBoxPciPhy_RxValid(m_Index, true);
+        m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
+        m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
+
+        pcie::TlpTransactionDescriptor transactionDescriptor {};
+        transactionDescriptor.BusNumber = 0;
+        transactionDescriptor.DeviceNumber = 0;
+        transactionDescriptor.FunctionNumber = 0;
+        transactionDescriptor.Tag = 0;
+        transactionDescriptor.LastDwordByteEnable = 0;
+        transactionDescriptor.FirstDwordByteEnable = byteEnable;
+
+        serDesData = ::std::bit_cast<u32>(transactionDescriptor);
+
+        m_Parent->ReceiveVirtualBoxPciPhy_RxData(m_Index, serDesData);
+        m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
+        m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
+
+        pcie::TlpConfigRequestHeader configRequestHeader {};
+        configRequestHeader.BusNumber = 0;
+        configRequestHeader.DeviceNumber = 0;
+        configRequestHeader.FunctionNumber = 0;
+        configRequestHeader.ExtendedRegisterNumber = (address >> 6) & 0xF;
+        configRequestHeader.RegisterNumber = address & 0x3F;
+
+        serDesData = ::std::bit_cast<u32>(configRequestHeader);
+
+        m_Parent->ReceiveVirtualBoxPciPhy_RxData(m_Index, serDesData);
+        m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
+        m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
+    }
+
+    void SendConfigReadToSoftGpu(
+        const pcie::TlpHeader::EType type,
+        const u16 address,
+        const u8 byteEnable
+    ) const noexcept
+    {
+        SendConfigRequestHeaderToSoftGpu(
+            pcie::TlpHeader::FORMAT_3_DW_HEADER_NO_DATA,
+            type,
+            address,
+            byteEnable
+        );
+
+        m_Parent->ReceiveVirtualBoxPciPhy_RxValid(m_Index, false);
+    }
+
+    void SendConfigWriteToSoftGpu(
+        const pcie::TlpHeader::EType type,
+        const u16 address,
+        const u8 byteEnable,
+        const u32 data
+    ) const noexcept
+    {
+        SendConfigRequestHeaderToSoftGpu(
+            pcie::TlpHeader::FORMAT_3_DW_HEADER_WITH_DATA,
+            type,
+            address,
+            byteEnable
+        );
+
+        const SerDesData serDesData = data;
+
+        m_Parent->ReceiveVirtualBoxPciPhy_RxData(m_Index, serDesData);
+        m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, true);
+        m_Parent->ReceiveVirtualBoxPciPhy_RxClock(m_Index, false);
 
         m_Parent->ReceiveVirtualBoxPciPhy_RxValid(m_Index, false);
     }

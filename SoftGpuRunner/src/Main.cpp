@@ -30,6 +30,13 @@
 #include <Safeties.hpp>
 #include <TauUnit.hpp>
 
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#elif defined(__linux__)
+#include <pthread.h>
+#endif
+
 static Processor processor;
 DebugManager GlobalDebug;
 
@@ -122,6 +129,8 @@ static u8* BuildFramebuffer(const Ref<::tau::vd::Window>& window) noexcept
     FillFramebufferGradient(window, framebuffer);
     return framebuffer;
 }
+
+static ::std::atomic_bool s_ShouldExit = false;
 
 int main(int argCount, char* args[])
 {
@@ -232,9 +241,43 @@ int main(int argCount, char* args[])
         frameBufferRenderer->RebuildBuffers(vulkanManager->SwapchainImages(), framebuffer, 0);
     };
 
+    processor.SetResetN(false);
+
+    processor.SetClock(true);
+    processor.SetClock(false);
+    processor.SetClock(true);
+    processor.SetClock(false);
+
+    processor.SetResetN(true);
+
+    processor.GetPciController().VirtualBoxPciPhy().SetVirtualBoxReadResetN(false);
+    processor.GetPciController().VirtualBoxPciPhy().SetVirtualBoxReadClock(true);
+    processor.GetPciController().VirtualBoxPciPhy().SetVirtualBoxReadClock(false);
+    processor.GetPciController().VirtualBoxPciPhy().SetVirtualBoxReadClock(true);
+    processor.GetPciController().VirtualBoxPciPhy().SetVirtualBoxReadClock(false);
+    processor.GetPciController().VirtualBoxPciPhy().SetVirtualBoxReadResetN(true);
+
+    ::std::thread processorThread([]()
+    {
+        while(!s_ShouldExit)
+        {
+            processor.SetClock(true);
+            processor.SetClock(false);
+            ::std::this_thread::yield();
+        }
+
+        ConPrinter::PrintLn(u8"Processor Thread Exiting");
+    });
+
+#if defined(_WIN32)
+    (void) SetThreadDescription(processorThread.native_handle(), L"SoftGpuProcessorThread");
+#elif defined(__linux__)
+    (void) pthread_setname_np(processorThread.native_handle(), "SoftGpuProcessorThread");
+#endif
+
     {
         const int commandInit = InitCommandRegister();
-        if(commandInit)
+        if(commandInit && false)
         {
             return commandInit;
         }
@@ -270,6 +313,8 @@ int main(int argCount, char* args[])
         vulkanManager->Present(frameIndex);
     }
 
+    s_ShouldExit = true;
+
     if(vulkanManager->Device()->VkDeviceWaitIdle)
     {
         vulkanManager->Device()->VkDeviceWaitIdle(vulkanManager->Device()->Device());
@@ -285,8 +330,10 @@ int main(int argCount, char* args[])
     // processor.PciMemRead(BAR0 + REGISTER_RESET, 4, &resetRead);
     // TestMul2FReplicated();
     // processor.PciMemRead(BAR0 + REGISTER_RESET, 4, &resetRead);
-    TestMul2FReplicatedDualDispatch();
+    // TestMul2FReplicatedDualDispatch();
     // processor.PciMemRead(BAR0 + PciControlRegisters::REGISTER_RESET, 4, &resetRead);
+
+    processorThread.join();
 
     ReleaseMmu();
 
@@ -801,12 +848,37 @@ static u8* GpuMemory = nullptr;
 
 static int InitCommandRegister() noexcept
 {
+
+    if constexpr(false)
     {
         u16 commandRegister = static_cast<u16>(processor.PciConfigRead(0x04, 2));
         commandRegister |= 0x6;
         processor.PciConfigWrite(0x04, 2, commandRegister);
 
         commandRegister = static_cast<u16>(processor.PciConfigRead(0x04, 2));
+        if((commandRegister & 0x06) != 0x06)
+        {
+            return -501;
+        }
+    }
+    else
+    {
+        u16 commandRegister = processor.GetPciController().VirtualBoxPciPhy().VirtualBoxConfigRead(
+            0x004,
+            0x3
+        );
+
+        commandRegister |= 0x6;
+        processor.GetPciController().VirtualBoxPciPhy().VirtualBoxConfigWrite(
+            0x004,
+            0x3,
+            commandRegister
+        );
+
+        commandRegister = processor.GetPciController().VirtualBoxPciPhy().VirtualBoxConfigRead(
+            0x004,
+            0x3
+        );
         if((commandRegister & 0x06) != 0x06)
         {
             return -501;

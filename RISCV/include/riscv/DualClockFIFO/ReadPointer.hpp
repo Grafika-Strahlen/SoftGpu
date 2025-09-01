@@ -57,7 +57,7 @@ public:
 
     void SetReadIncoming(const bool readIncoming) noexcept
     {
-        p_ReadIncoming = readIncoming;
+        p_ReadIncoming = BOOL_TO_BIT(readIncoming);
     }
 
     void SetReadClockWriteAddress(const u64 readClockWriteAddress) noexcept

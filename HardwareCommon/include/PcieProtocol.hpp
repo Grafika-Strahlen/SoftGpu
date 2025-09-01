@@ -183,22 +183,114 @@ struct TlpHeader final
         TYPE_COMPLETION                 = 0b0'1010,
         TYPE_COMPLETION_LOCKED_READ     = 0b0'1011,
     };
-
 public:
-    u32 Reserved0 : 1;
-    EFormat Fmt : 2;
+    // Bitfields are declared in Big Endian order.
     EType Type : 5;
-    u32 Reserved1 : 1;
+    EFormat Fmt : 2;
+    u32 Reserved0 : 1;
+    u32 Reserved1 : 4;
     u32 TC : 3;
-    u32 Reserved2 : 4;
-    u32 TD : 1;
-    u32 EP : 1;
-    u32 Attr : 2;
+    u32 Reserved2 : 1;
+    // Length of request in DWORDs
+    u32 LengthHigh : 2;
     u32 Reserved3 : 2;
-    u32 Length : 10;
+    u32 Attr : 2;
+    u32 EP : 1;
+    u32 TD : 1;
+    u32 LengthLow : 8;
+
+    [[nodiscard]] u32 Length() const noexcept
+    {
+        return LengthHigh << 8 | LengthLow;
+    }
+
+    void Length(const u32 length) noexcept
+    {
+        LengthLow = length & 0xFF;
+        LengthHigh = (length >> 8) & 0x3;
+    }
 };
 
 static_assert(sizeof(TlpHeader) == 4, "TLP Header was not 4 bytes in length.");
+
+struct TlpTransactionDescriptor final
+{
+    // Bitfields are declared in Big Endian order.
+    u32 BusNumber : 8;
+    u32 FunctionNumber : 3;
+    u32 DeviceNumber : 5;
+    u32 Tag : 8;
+    u32 FirstDwordByteEnable : 4;
+    u32 LastDwordByteEnable : 4;
+
+    static u32 ByteEnableToByteCount(const u32 byteEnable)
+    {
+        return ::std::popcount(byteEnable & 0xF);
+    }
+};
+
+static_assert(sizeof(TlpTransactionDescriptor) == 4, "TLP Transaction Descriptor was not 4 bytes in length.");
+
+struct TlpConfigRequestHeader final
+{
+    // Bitfields are declared in Big Endian order.
+    u32 BusNumber : 8;
+    u32 FunctionNumber : 3;
+    u32 DeviceNumber : 5;
+    u32 ExtendedRegisterNumber : 4;
+    u32 Reserved0 : 4;
+    u32 Reserved1 : 2;
+    u32 RegisterNumber : 6;
+};
+
+static_assert(sizeof(TlpConfigRequestHeader) == 4, "TLP Config Request Header was not 4 bytes in length.");
+
+struct TlpCompletionHeader0 final
+{
+    enum ECompletionStatus : u32
+    {
+        SuccessfulCompletion            = 0b000,
+        UnsupportedRequest              = 0b001,
+        ConfigurationRequestRetryStatus = 0b010,
+        CompleterAbort                  = 0b100
+    };
+public:
+    // Bitfields are declared in Big Endian order.
+    u32 BusNumber : 8;
+    u32 FunctionNumber : 3;
+    u32 DeviceNumber : 5;
+    u32 ByteCountHigh : 4;
+    u32 ByteCountModified : 1;
+    ECompletionStatus CompletionStatus : 3;
+    u32 ByteCountLow : 8;
+
+    [[nodiscard]] u32 ByteCount() const noexcept
+    {
+        return ByteCountHigh << 8 | ByteCountLow;
+    }
+
+    void ByteCount(const u32 byteCount) noexcept
+    {
+        ByteCountLow = byteCount & 0xFF;
+        ByteCountHigh = (byteCount >> 8) & 0xF;
+    }
+};
+
+static_assert(sizeof(TlpCompletionHeader0) == 4, "TLP Completion Response Header 0 was not 4 bytes in length.");
+
+struct TlpCompletionHeader1 final
+{
+    // Bitfields are declared in Big Endian order.
+    u32 BusNumber : 8;
+    u32 FunctionNumber : 3;
+    u32 DeviceNumber : 5;
+    u32 Tag : 8;
+    u32 LowerAddress : 7;
+    u32 Reserved0 : 1;
+};
+
+static_assert(sizeof(TlpCompletionHeader1) == 4, "TLP Completion Response Header 1 was not 4 bytes in length.");
+
 #pragma pack(pop)
 
 }
