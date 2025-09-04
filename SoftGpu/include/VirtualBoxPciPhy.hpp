@@ -322,7 +322,7 @@ public:
                     ret = m_TxResponseDwordFromFifo;
                 }
 
-                if(i < header.Length() - 1)
+                if(i < header.Length())
                 {
                     SpinOnPciSendFifo();
                     ReadWordFromPciSendFifo();

@@ -56,6 +56,9 @@ class PciController final
     DEFAULT_DESTRUCT(PciController);
     DELETE_CM(PciController);
 public:
+    static inline constexpr bool WriteCompletionsOnWrites = false;
+    static inline constexpr bool Write0xCCToBuffers = true;
+public:
     static inline constexpr u16 COMMAND_REGISTER_MASK_BITS = 0x0446;
 
     static inline constexpr u16 COMMAND_REGISTER_MEMORY_SPACE_BIT = 0x0002;
@@ -108,6 +111,17 @@ private:
     SENSITIVITY_DECL(p_Reset_n, p_Clock, p_RxClock);
 
     SIGNAL_ENTITIES();
+
+    enum class EPciReadState : u32
+    {
+        Reset = 0,
+        ReadTlpHeader = 0,
+        ReadTransactionDescriptor,
+        ReadHeaderDW3,
+        ReadHeaderDW4,
+        ReadData,
+        Response
+    };
 public:
     explicit PciController(Receiver* const parent) noexcept
         : m_ConfigData{ }
@@ -136,15 +150,19 @@ public:
         , m_PhyInputFifoEmpty(0)
         , m_PhyInputReceivedDataThisCycle(0)
         , m_PhyInputReceivingDataNextCycle(0)
-        , m_PhyInputReadState(0)
-        , m_PhyOutputWriteState(0)
+        , m_PhyInputReadState(EPciReadState::Reset)
+        , m_PhyInputDataBlobIndex(0)
         , m_Pad1{}
         , m_PhyInputData(0)
         , m_PhyInputRequestHeader()
         , m_PhyInputTransactionDescriptor(0)
         , m_PhyInputAddress(0)
+        , m_PhyInputDataBlob{}
+        , m_PhyOutputWriteState(0)
+        , m_PhyOutputWriteLength(0)
+        , m_Pad2{}
+        , m_PhyOutputBuffer{}
         , m_PhyInputFifo(this, 0)
-        , m_PhyOutputFifo(this, 1)
         , m_PciPhy(this)
 #ifdef _WIN32
         , m_SimulationSyncEvent(INVALID_HANDLE_VALUE)
@@ -200,148 +218,7 @@ public:
 
     [[nodiscard]] u32 ConfigRead(u16 address, u8 size) noexcept;
 
-    void ConfigWrite(const u16 address, const u32 size, const u32 value) noexcept
-    {
-        switch(address)
-        {
-            case 4:
-                if(size != 2)
-                {
-                    break;
-                }
-                // Mask the command to only the RW bits.
-                m_ConfigData.ConfigHeader.Command = static_cast<u16>(value & COMMAND_REGISTER_MASK_BITS);
-                break;
-            case 6:
-                if(size != 2)
-                {
-                    break;
-                }
-                // Mask the status to only the RW bits.
-                m_ConfigData.ConfigHeader.Status = static_cast<u16>(value & 0xFB00);
-                break;
-            case 0xC:
-                if(size != 1)
-                {
-                    break;
-                }
-                m_ConfigData.ConfigHeader.CacheLineSize = static_cast<u8>(value);
-                break;
-            case 0x10:
-                if(size != 4)
-                {
-                    break;
-                }
-                m_ConfigData.ConfigHeader.BAR0 = (value & BAR0_MASK_BITS) | BAR0_READ_ONLY_BITS;
-                break;
-            case 0x14:
-                if(size != 4)
-                {
-                    break;
-                }
-                m_ConfigData.ConfigHeader.BAR1 = (value & BAR1_MASK_BITS) | BAR1_READ_ONLY_BITS;
-                break;
-            case 0x18:
-                if(size != 4)
-                {
-                    break;
-                }
-                m_ConfigData.ConfigHeader.BAR2 = (value & BAR2_MASK_BITS) | BAR2_READ_ONLY_BITS;
-                break;
-            case 0x1C:
-                if(size != 4)
-                {
-                    break;
-                }
-                m_ConfigData.ConfigHeader.BAR3 = (value & BAR3_MASK_BITS) | BAR3_READ_ONLY_BITS;
-                break;
-            case 0x20:
-                if(size != 4)
-                {
-                    break;
-                }
-                m_ConfigData.ConfigHeader.BAR4 = (value & BAR4_MASK_BITS) | BAR4_READ_ONLY_BITS;
-                break;
-            case 0x24:
-                if(size != 4)
-                {
-                    break;
-                }
-                m_ConfigData.ConfigHeader.BAR5 = (value & BAR5_MASK_BITS) | BAR5_READ_ONLY_BITS;
-                break;
-            case 0x30:
-                if(size != 4)
-                {
-                    break;
-                }
-                m_ConfigData.ConfigHeader.ExpansionROMBaseAddress = (value & EXPANSION_ROM_BAR_MASK_BITS) | EXPANSION_ROM_BAR_READ_ONLY_BITS;
-                break;
-            case 0x3C:
-                if(size != 1)
-                {
-                    break;
-                }
-                m_ConfigData.ConfigHeader.InterruptLine = static_cast<u8>(value);
-                break;
-            case offsetof(PciConfigData, PcieCapability) + offsetof(pcie::PcieCapabilityStructure, DeviceControl):
-                if(size != 2)
-                {
-                    break;
-                }
-                m_ConfigData.PcieCapability.DeviceControl.Packed = (value & DEVICE_CONTROL_REGISTER_MASK_BITS) | DEVICE_CONTROL_REGISTER_READ_ONLY_BITS;
-                break;
-            case offsetof(PciConfigData, PcieCapability) + offsetof(pcie::PcieCapabilityStructure, LinkControl):
-                if(size != 2)
-                {
-                    break;
-                }
-                m_ConfigData.PcieCapability.LinkControl.Packed = (value & LINK_CONTROL_REGISTER_MASK_BITS) | LINK_CONTROL_REGISTER_READ_ONLY_BITS;
-                break;
-            case offsetof(PciConfigData, PowerManagementCapability) + offsetof(pci::PowerManagementCapabilityStructure, PowerManagementControlStatusRegister):
-                if(size != 2)
-                {
-                    break;
-                }
-                m_ConfigData.PowerManagementCapability.PowerManagementControlStatusRegister.Packed = (value & PM_CONTROL_REGISTER_MASK_BITS) | PM_CONTROL_REGISTER_READ_ONLY_BITS;
-                break;
-            case offsetof(PciConfigData, MessageSignalledInterruptCapability) + offsetof(pci::MessageSignalledInterruptCapabilityStructure, MessageControl):
-                if(size != 2)
-                {
-                    break;
-                }
-                m_ConfigData.MessageSignalledInterruptCapability.MessageControl.Packed = (value & MESSAGE_CONTROL_REGISTER_MASK_BITS) | MESSAGE_CONTROL_REGISTER_READ_ONLY_BITS;
-                break;
-            case offsetof(PciConfigData, MessageSignalledInterruptCapability) + offsetof(pci::MessageSignalledInterruptCapabilityStructure, MessageAddress):
-                if(size != 4)
-                {
-                    break;
-                }
-                m_ConfigData.MessageSignalledInterruptCapability.MessageAddress = (value & MESSAGE_ADDRESS_REGISTER_MASK_BITS) | MESSAGE_ADDRESS_REGISTER_READ_ONLY_BITS;
-                break;
-            case offsetof(PciConfigData, MessageSignalledInterruptCapability) + offsetof(pci::MessageSignalledInterruptCapabilityStructure, MessageUpperAddress):
-                if(size != 4)
-                {
-                    break;
-                }
-                m_ConfigData.MessageSignalledInterruptCapability.MessageUpperAddress = value;
-                break;
-            case offsetof(PciConfigData, MessageSignalledInterruptCapability) + offsetof(pci::MessageSignalledInterruptCapabilityStructure, MessageData):
-                if(size != 2)
-                {
-                    break;
-                }
-                m_ConfigData.MessageSignalledInterruptCapability.MessageData = static_cast<u16>(value);
-                break;
-            case offsetof(PciConfigData, MessageSignalledInterruptCapability) + offsetof(pci::MessageSignalledInterruptCapabilityStructure, MaskBits):
-                if(size != 4)
-                {
-                    break;
-                }
-                m_ConfigData.MessageSignalledInterruptCapability.MaskBits = value;
-                break;
-            default: break;
-        }
-    }
+    void ConfigWrite(const u16 address, const u32 size, const u32 value) noexcept;
 
     void PciMemReadSet(const u64 address, const u16 size, u32* const data, u16* const readResponse) noexcept
     {
@@ -534,11 +411,12 @@ public:
 private:
     PROCESSES_DECL()
     {
+        PROCESS_ENTER(ConfigResetHandler, p_Reset_n);
         PROCESS_ENTER(ClockHandler, p_Reset_n, p_Clock);
-        PROCESS_ENTER(RxClockHandler, p_Reset_n, p_RxClock);
+        PROCESS_ENTER(PhyOutputHandler, p_Reset_n, p_Clock);
     }
 
-    PROCESS_DECL(ClockHandler)
+    PROCESS_DECL(ConfigResetHandler)
     {
         if(!BIT_TO_BOOL(p_Reset_n))
         {
@@ -548,166 +426,269 @@ private:
             InitMessageSignalledInterruptCapabilityStructure();
             InitAdvancedErrorReportingCapabilityStructure();
         }
+    }
+
+    PROCESS_DECL(ClockHandler)
+    {
+        if(!BIT_TO_BOOL(p_Reset_n))
+        {
+            m_PhyInputReadState = EPciReadState::ReadTlpHeader;
+            m_PhyInputReceivedDataThisCycle = 0;
+            m_PhyInputFifo.SetReadIncoming(false);
+        }
         else if(RISING_EDGE(p_Clock))
         {
-            // Track whether we have an active word from the PHY.
-            // m_PhyInputReceivedDataThisCycle = !BOOL_TO_BIT(BIT_TO_BOOL(m_PhyInputFifoEmpty));
-
             // Update whether we'll have an active word from the PHY next clock cycle.
             if(!BIT_TO_BOOL(m_PhyInputFifoEmpty))
             {
                 m_PhyInputFifo.SetReadIncoming(true);
                 m_PhyInputReceivedDataThisCycle = 1;
-                // m_PhyInputReceivingDataNextCycle = 1;
             }
             else
             {
                 m_PhyInputFifo.SetReadIncoming(false);
                 m_PhyInputReceivedDataThisCycle = 0;
-                // m_PhyInputReceivingDataNextCycle = 0;
             }
 
-            if(BIT_TO_BOOL(m_PhyInputReceivedDataThisCycle) || m_PhyInputReadState == 4)
+            if(BIT_TO_BOOL(m_PhyInputReceivedDataThisCycle) || m_PhyInputReadState == EPciReadState::Response)
             {
                 switch(m_PhyInputReadState)
                 {
-                    case 0:
+                    case EPciReadState::ReadTlpHeader:
                         m_PhyInputRequestHeader = ::std::bit_cast<pcie::TlpHeader>(m_PhyInputData);
-                        m_PhyInputReadState = 1;
+                        m_PhyInputReadState = EPciReadState::ReadTransactionDescriptor;
                         break;
-                    case 1:
+                    case EPciReadState::ReadTransactionDescriptor:
                         m_PhyInputTransactionDescriptor = ::std::bit_cast<pcie::TlpTransactionDescriptor>(m_PhyInputData);
-                        m_PhyInputReadState = 2;
+                        m_PhyInputReadState = EPciReadState::ReadHeaderDW3;
                         break;
-                    case 2:
+                    case EPciReadState::ReadHeaderDW3:
                         m_PhyInputDW3 = m_PhyInputData;
 
-                        if(m_PhyInputRequestHeader.Fmt == pcie::TlpHeader::FORMAT_3_DW_HEADER_NO_DATA ||
-                           m_PhyInputRequestHeader.Fmt == pcie::TlpHeader::FORMAT_3_DW_HEADER_WITH_DATA)
+                        if(m_PhyInputRequestHeader.Fmt == pcie::TlpHeader::FORMAT_3_DW_HEADER_NO_DATA)
                         {
                             // If we only have a 3 word header then we skip reading header word 4.
-                            m_PhyInputReadState = 4;
+                            m_PhyInputReadState = EPciReadState::Response;
+                        }
+                        else if(m_PhyInputRequestHeader.Fmt == pcie::TlpHeader::FORMAT_3_DW_HEADER_WITH_DATA)
+                        {
+                            // If we only have a 3 word header then we skip reading header word 4.
+                            m_PhyInputReadState = EPciReadState::ReadData;
                         }
                         else
                         {
-                            m_PhyInputReadState = 3;
+                            m_PhyInputReadState = EPciReadState::ReadHeaderDW4;
                         }
                         break;
-                    case 3:
+                    case EPciReadState::ReadHeaderDW4:
                         m_PhyInputDW4 = m_PhyInputData;
-                        m_PhyInputReadState = 4;
+                        m_PhyInputReadState = EPciReadState::ReadData;
                         break;
-                    case 4:
+                    case EPciReadState::ReadData:
                     {
+                        m_PhyInputDataBlob[m_PhyInputDataBlobIndex] = m_PhyInputData;
+                        ++m_PhyInputDataBlobIndex;
+
+                        if(m_PhyInputDataBlobIndex >= m_PhyInputRequestHeader.Length())
+                        {
+                            m_PhyInputReadState = EPciReadState::Response;
+                        }
+                    }
+                    case EPciReadState::Response:
+                    {
+                        if(m_PhyOutputWriteLength != 0)
+                        {
+                            break;
+                        }
+
                         if(m_PhyInputRequestHeader.Fmt == pcie::TlpHeader::FORMAT_3_DW_HEADER_NO_DATA &&
                            m_PhyInputRequestHeader.Type == pcie::TlpHeader::TYPE_CONFIG_TYPE_0_REQUEST)
                         {
-                            switch(m_PhyOutputWriteState)
-                            {
-                                case 0:
-                                {
-                                    pcie::TlpHeader responseHeader { };
-                                    responseHeader.Fmt = pcie::TlpHeader::FORMAT_3_DW_HEADER_WITH_DATA;
-                                    responseHeader.Type = pcie::TlpHeader::TYPE_COMPLETION;
-                                    responseHeader.TC = 0;
-                                    responseHeader.TD = 0;
-                                    responseHeader.EP = 0;
-                                    responseHeader.Attr = 0;
-                                    responseHeader.Length(1);
-
-                                    const SerDesData data = ::std::bit_cast<u32>(responseHeader);
-
-                                    m_PciPhy.SetTxData(data);
-                                    m_PciPhy.SetTxDataValid(true);
-                                    m_PhyOutputWriteState = 1;
-                                    break;
-                                }
-                                case 1:
-                                {
-                                    pcie::TlpCompletionHeader0 configHeader { };
-                                    configHeader.BusNumber = 0;
-                                    configHeader.DeviceNumber = 0;
-                                    configHeader.FunctionNumber = 0;
-                                    configHeader.CompletionStatus = pcie::TlpCompletionHeader0::SuccessfulCompletion;
-                                    configHeader.ByteCountModified = 0;
-                                    configHeader.ByteCount(
-                                        pcie::TlpTransactionDescriptor::ByteEnableToByteCount(m_PhyInputTransactionDescriptor.FirstDwordByteEnable)
-                                    );
-
-                                    const SerDesData data = ::std::bit_cast<u32>(configHeader);
-
-                                    m_PciPhy.SetTxData(data);
-                                    m_PciPhy.SetTxDataValid(true);
-                                    m_PhyOutputWriteState = 2;
-                                    break;
-                                }
-                                case 2:
-                                {
-                                    pcie::TlpCompletionHeader1 configHeader { };
-                                    configHeader.BusNumber = 0;
-                                    configHeader.DeviceNumber = 0;
-                                    configHeader.FunctionNumber = 0;
-                                    configHeader.Tag = 0;
-                                    configHeader.LowerAddress = 0;
-
-                                    const SerDesData data = ::std::bit_cast<u32>(configHeader);
-
-                                    m_PciPhy.SetTxData(data);
-                                    m_PciPhy.SetTxDataValid(true);
-                                    m_PhyOutputWriteState = 3;
-                                    break;
-                                }
-                                case 3:
-                                {
-                                    const u32 configValue = ConfigRead(
-                                        m_PhyInputConfigRequestHeader.ExtendedRegisterNumber << 6 | m_PhyInputConfigRequestHeader.RegisterNumber,
-                                        pcie::TlpTransactionDescriptor::ByteEnableToByteCount(m_PhyInputTransactionDescriptor.FirstDwordByteEnable)
-                                    );
-                                    const SerDesData data = configValue;
-
-                                    m_PciPhy.SetTxData(data);
-                                    m_PciPhy.SetTxDataValid(true);
-                                    m_PhyOutputWriteState = 4;
-                                    break;
-                                }
-                                case 4:
-                                {
-                                    m_PhyInputReadState = 0;
-                                    m_PhyOutputWriteState = 0;
-                                    m_PciPhy.SetTxDataValid(false);
-                                    m_PciPhy.SignalSimulationSyncEvent();
-                                    break;
-                                }
-                                default:
-                                    m_PhyInputReadState = 0;
-                                    m_PhyOutputWriteState = 0;
-                                    m_PciPhy.SetTxDataValid(false);
-                                    break;
-                            }
+                            HandleConfigRead();
+                            m_PhyInputReadState = EPciReadState::Reset;
+                        }
+                        else if(m_PhyInputRequestHeader.Fmt == pcie::TlpHeader::FORMAT_3_DW_HEADER_WITH_DATA &&
+                                m_PhyInputRequestHeader.Type == pcie::TlpHeader::TYPE_CONFIG_TYPE_0_REQUEST)
+                        {
+                            HandleConfigWrite();
+                            m_PhyInputReadState = EPciReadState::Reset;
                         }
                         else
                         {
-                            m_PhyInputReadState = 0;
+                            m_PhyInputReadState = EPciReadState::Reset;
+                        }
+
+                        if constexpr(Write0xCCToBuffers)
+                        {
+                            m_PhyInputRequestHeader = ::std::bit_cast<pcie::TlpHeader>(0xCCCCCCCC);
+                            m_PhyInputTransactionDescriptor = ::std::bit_cast<pcie::TlpTransactionDescriptor>(0xCCCCCCCC);
+                            m_PhyInputDW3 = 0xCCCCCCCC;
+                            m_PhyInputDW4 = 0xCCCCCCCC;
+                            (void) ::std::memset(m_PhyInputDataBlob, 0xCC, sizeof(m_PhyInputDataBlob));
                         }
                         break;
                     }
                     default:
-                        m_PhyInputReadState = 0;
+                        m_PhyInputReadState = EPciReadState::Reset;
                         break;
                 }
-
             }
         }
     }
 
-    PROCESS_DECL(RxClockHandler)
+    PROCESS_DECL(PhyOutputHandler)
     {
         if(!BIT_TO_BOOL(p_Reset_n))
         {
+            m_PhyOutputWriteState = 0;
+            m_PhyOutputWriteLength = 0;
 
+            if constexpr(true)
+            {
+                (void) ::std::memset(m_PhyOutputBuffer, 0xCC, sizeof(m_PhyOutputBuffer));
+            }
         }
-        else if(RISING_EDGE(p_RxClock))
+        else if(RISING_EDGE(p_Clock))
         {
+            if(m_PhyOutputWriteLength == 0)
+            {
+                m_PciPhy.SetTxDataValid(false);
+                if constexpr(Write0xCCToBuffers)
+                {
+                    m_PciPhy.SetTxData(0xCCCCCCCC);
+                }
+
+                // Trigger the simulation event on the next clock cycle.
+                if(m_PhyOutputWriteState != 0)
+                {
+                    m_PciPhy.SignalSimulationSyncEvent();
+                    m_PhyOutputWriteState = 0;
+                }
+                return;
+            }
+
+            m_PciPhy.SetTxData(m_PhyOutputBuffer[m_PhyOutputWriteState]);
+            m_PciPhy.SetTxDataValid(true);
+            ++m_PhyOutputWriteState;
+
+            if(m_PhyOutputWriteState >= m_PhyOutputWriteLength)
+            {
+                m_PhyOutputWriteLength = 0;
+
+                if constexpr(Write0xCCToBuffers)
+                {
+                    (void) ::std::memset(m_PhyOutputBuffer, 0xCC, sizeof(m_PhyOutputBuffer));
+                }
+            }
+        }
+    }
+
+    void HandleConfigRead() noexcept
+    {
+        pcie::TlpHeader responseHeader { };
+        responseHeader.Fmt = pcie::TlpHeader::FORMAT_3_DW_HEADER_WITH_DATA;
+        responseHeader.Type = pcie::TlpHeader::TYPE_COMPLETION;
+        responseHeader.TC = 0;
+        responseHeader.TD = 0;
+        responseHeader.EP = 0;
+        responseHeader.Attr = 0;
+        responseHeader.Length(1);
+
+        m_PhyOutputBuffer[0] = ::std::bit_cast<u32>(responseHeader);
+
+        {
+            pcie::TlpCompletionHeader0 configHeader { };
+            configHeader.BusNumber = 0;
+            configHeader.DeviceNumber = 0;
+            configHeader.FunctionNumber = 0;
+            configHeader.CompletionStatus = pcie::TlpCompletionHeader0::SuccessfulCompletion;
+            configHeader.ByteCountModified = 0;
+            configHeader.ByteCount(
+                pcie::TlpTransactionDescriptor::ByteEnableToByteCount(m_PhyInputTransactionDescriptor.FirstDwordByteEnable)
+            );
+
+            m_PhyOutputBuffer[1] = ::std::bit_cast<u32>(configHeader);
+        }
+
+        {
+            pcie::TlpCompletionHeader1 configHeader { };
+            configHeader.BusNumber = m_PhyInputTransactionDescriptor.BusNumber;
+            configHeader.DeviceNumber = m_PhyInputTransactionDescriptor.DeviceNumber;
+            configHeader.FunctionNumber = m_PhyInputTransactionDescriptor.FunctionNumber;
+            configHeader.Tag = m_PhyInputTransactionDescriptor.Tag;
+            configHeader.LowerAddress = 0;
+
+            m_PhyOutputBuffer[2] = ::std::bit_cast<u32>(configHeader);
+        }
+
+        {
+            const u32 configValue = ConfigRead(
+                m_PhyInputConfigRequestHeader.ExtendedRegisterNumber << 6 | m_PhyInputConfigRequestHeader.RegisterNumber,
+                pcie::TlpTransactionDescriptor::ByteEnableToByteCount(m_PhyInputTransactionDescriptor.FirstDwordByteEnable)
+            );
+
+            m_PhyOutputBuffer[3] = configValue;
+        }
+
+        m_PhyOutputWriteLength = 4;
+    }
+
+    void HandleConfigWrite() noexcept
+    {
+        if constexpr(WriteCompletionsOnWrites)
+        {
+            pcie::TlpHeader responseHeader { };
+            responseHeader.Fmt = pcie::TlpHeader::FORMAT_3_DW_HEADER_NO_DATA;
+            responseHeader.Type = pcie::TlpHeader::TYPE_COMPLETION;
+            responseHeader.TC = 0;
+            responseHeader.TD = 0;
+            responseHeader.EP = 0;
+            responseHeader.Attr = 0;
+            responseHeader.Length(1);
+
+            m_PhyOutputBuffer[0] = ::std::bit_cast<u32>(responseHeader);
+
+            {
+                pcie::TlpCompletionHeader0 configHeader { };
+                configHeader.BusNumber = 0;
+                configHeader.DeviceNumber = 0;
+                configHeader.FunctionNumber = 0;
+                configHeader.CompletionStatus = pcie::TlpCompletionHeader0::SuccessfulCompletion;
+                configHeader.ByteCountModified = 0;
+                configHeader.ByteCount(
+                    pcie::TlpTransactionDescriptor::ByteEnableToByteCount(m_PhyInputTransactionDescriptor.FirstDwordByteEnable)
+                );
+
+                m_PhyOutputBuffer[1] = ::std::bit_cast<u32>(configHeader);
+            }
+
+            {
+                pcie::TlpCompletionHeader1 configHeader { };
+                configHeader.BusNumber = m_PhyInputTransactionDescriptor.BusNumber;
+                configHeader.DeviceNumber = m_PhyInputTransactionDescriptor.DeviceNumber;
+                configHeader.FunctionNumber = m_PhyInputTransactionDescriptor.FunctionNumber;
+                configHeader.Tag = m_PhyInputTransactionDescriptor.Tag;
+                configHeader.LowerAddress = 0;
+
+                m_PhyOutputBuffer[2] = ::std::bit_cast<u32>(configHeader);
+            }
+
+            m_PhyOutputWriteLength = 3;
+        }
+        else
+        {
+            m_PhyOutputWriteLength = 0;
+        }
+
+        // For config writes we should've only received one word.
+        assert(m_PhyInputDataBlobIndex == 1);
+
+        {
+            ConfigWrite(
+                m_PhyInputConfigRequestHeader.ExtendedRegisterNumber << 6 | m_PhyInputConfigRequestHeader.RegisterNumber,
+                pcie::TlpTransactionDescriptor::ByteEnableToByteCount(m_PhyInputTransactionDescriptor.FirstDwordByteEnable),
+                m_PhyInputDataBlob[0]
+            );
         }
     }
 private:
@@ -745,179 +726,15 @@ private:
      *
      * @return void
      */
-    void InitConfigHeader() noexcept
-    {
-        m_ConfigData.ConfigHeader.VendorID = 0xFFFD;
-        m_ConfigData.ConfigHeader.DeviceID = 0x0001;
-        m_ConfigData.ConfigHeader.Command = 0x0000;
-        m_ConfigData.ConfigHeader.Status = 0x0010;
-        m_ConfigData.ConfigHeader.RevisionID = 0x01;
-        m_ConfigData.ConfigHeader.ClassCode = 0x030001;
-        m_ConfigData.ConfigHeader.CacheLineSize = 0x0;
-        m_ConfigData.ConfigHeader.MasterLatencyTimer = 0x0;
-        m_ConfigData.ConfigHeader.HeaderType = 0x00;
-        m_ConfigData.ConfigHeader.BIST = 0x00;
-        // Memory, 32 bit, Not Prefetchable.
-        m_ConfigData.ConfigHeader.BAR0 = 0x00000000;
-        // Memory, 64 bit, Prefetchable.
-        m_ConfigData.ConfigHeader.BAR1 = 0x0000000C;
-        // Part of BAR1
-        m_ConfigData.ConfigHeader.BAR2 = 0x00000000;
-        // Unused
-        m_ConfigData.ConfigHeader.BAR3 = 0x00000000;
-        // Unused
-        m_ConfigData.ConfigHeader.BAR4 = 0x00000000;
-        // Unused
-        m_ConfigData.ConfigHeader.BAR5 = 0x00000000;
-        m_ConfigData.ConfigHeader.CardBusCISPointer = 0x0;
-        m_ConfigData.ConfigHeader.SubsystemVendorID = 0x0;
-        m_ConfigData.ConfigHeader.SubsystemID = 0x0;
-        // 32KiB, Not Enabled
-        m_ConfigData.ConfigHeader.ExpansionROMBaseAddress = 0x00000000;
-        // m_ConfigHeader.CapPointer = 0;
-        m_ConfigData.ConfigHeader.CapPointer = offsetof(PciConfigData, PcieCapability);
-        m_ConfigData.ConfigHeader.Reserved0 = 0x0;
-        m_ConfigData.ConfigHeader.Reserved1 = 0x0;
-        m_ConfigData.ConfigHeader.InterruptLine = 0x0;
-        m_ConfigData.ConfigHeader.InterruptPin = 0x0;
-        m_ConfigData.ConfigHeader.MinGnt = 0x00;
-        m_ConfigData.ConfigHeader.MaxLat = 0x00;
-    }
+    void InitConfigHeader() noexcept;
 
-    void InitPcieCapabilityStructure() noexcept
-    {
-        // PCI Express Capability ID
-        m_ConfigData.PcieCapability.Header.CapabilityId = 0x10;
-        m_ConfigData.PcieCapability.Header.NextCapabilityPointer = offsetof(PciConfigData, PowerManagementCapability);
-        m_ConfigData.PcieCapability.CapabilitiesRegister.CapabilityVersion = 0x01;
-        // Legacy PCI Express Endpoint device, this is what my 3070 Ti reports, and as what makes the most sense based on its description.
-        m_ConfigData.PcieCapability.CapabilitiesRegister.DeviceType = 0b0001;
-        m_ConfigData.PcieCapability.CapabilitiesRegister.SlotImplemented = 0b0;
-        m_ConfigData.PcieCapability.CapabilitiesRegister.InterruptMessageNumber = 0b00000;
-        // 256 Bytes
-        m_ConfigData.PcieCapability.DeviceCapabilities.MaxPayloadSizeSupported = 0b001;
-        m_ConfigData.PcieCapability.DeviceCapabilities.PhantomFunctionsSupported = 0b00;
-        m_ConfigData.PcieCapability.DeviceCapabilities.ExtendedTagFieldSupported = 0b1;
-        // No limit
-        m_ConfigData.PcieCapability.DeviceCapabilities.EndpointL0sAcceptableLatency = 0b111;
-        // Maximum of 64 us
-        m_ConfigData.PcieCapability.DeviceCapabilities.EndpointL1AcceptableLatency = 0b110;
-        m_ConfigData.PcieCapability.DeviceCapabilities.Undefined = 0b000;
-        m_ConfigData.PcieCapability.DeviceCapabilities.RoleBasedErrorReporting = 0b1;
-        m_ConfigData.PcieCapability.DeviceCapabilities.ReservedP0 = 0b00;
-        m_ConfigData.PcieCapability.DeviceCapabilities.CapturedSlotPowerLimitValue = 0x00;
-        // 1.0x
-        m_ConfigData.PcieCapability.DeviceCapabilities.CapturedSlotPowerLimitScale = 0b00;
-        m_ConfigData.PcieCapability.DeviceCapabilities.ReservedP1 = 0x0;
+    void InitPcieCapabilityStructure() noexcept;
 
-        m_ConfigData.PcieCapability.DeviceControl.CorrectableErrorReportingEnable = 0b0;
-        m_ConfigData.PcieCapability.DeviceControl.NonFatalErrorReportingEnable = 0b0;
-        m_ConfigData.PcieCapability.DeviceControl.UnsupportedRequestReportingEnable = 0b0;
-        m_ConfigData.PcieCapability.DeviceControl.EnableRelaxedOrdering = 0b1;
-        m_ConfigData.PcieCapability.DeviceControl.MaxPayloadSize = 0b000;
-        m_ConfigData.PcieCapability.DeviceControl.ExtendedTagFieldEnable = 0b0;
-        m_ConfigData.PcieCapability.DeviceControl.PhantomFunctionsEnable = 0b0;
-        m_ConfigData.PcieCapability.DeviceControl.AuxPowerPmEnable = 0b0;
-        m_ConfigData.PcieCapability.DeviceControl.EnableSnoopNotRequired = 0b1;
-        // 512 bytes. This is the defined default.
-        m_ConfigData.PcieCapability.DeviceControl.MaxReadRequestSize = 0b010;
-        m_ConfigData.PcieCapability.DeviceControl.Reserved = 0b0;
+    void InitPowerManagementCapabilityStructure() noexcept;
 
-        m_ConfigData.PcieCapability.DeviceStatus.CorrectableErrorDetected = 0b0;
-        m_ConfigData.PcieCapability.DeviceStatus.NonFatalErrorDetected = 0b0;
-        m_ConfigData.PcieCapability.DeviceStatus.FatalErrorDetected = 0b0;
-        m_ConfigData.PcieCapability.DeviceStatus.UnsupportedRequestDetected = 0b0;
-        m_ConfigData.PcieCapability.DeviceStatus.TransactionsPending = 0b0;
+    void InitMessageSignalledInterruptCapabilityStructure() noexcept;
 
-        m_ConfigData.PcieCapability.LinkCapabilities.MaximumLinkSpeed = 0b0001;
-        m_ConfigData.PcieCapability.LinkCapabilities.MaximumLinkWidth = 0b001000;
-        m_ConfigData.PcieCapability.LinkCapabilities.ASPMSupport = 0b01;
-        m_ConfigData.PcieCapability.LinkCapabilities.L0sExitLatency = 0b100;
-        m_ConfigData.PcieCapability.LinkCapabilities.L1ExitLatency = 0b010;
-        m_ConfigData.PcieCapability.LinkCapabilities.ClockPowerManagement = 0b1;
-        m_ConfigData.PcieCapability.LinkCapabilities.SurpriseDownErrorReportingCapable = 0b0;
-        m_ConfigData.PcieCapability.LinkCapabilities.DataLinkLayerActiveReportingCapable = 0b0;
-        m_ConfigData.PcieCapability.LinkCapabilities.Reserved = 0x0;
-        m_ConfigData.PcieCapability.LinkCapabilities.PortNumber = 0x00;
-
-        m_ConfigData.PcieCapability.LinkControl.ASPMControl = 0b00;
-        m_ConfigData.PcieCapability.LinkControl.ReservedP0 = 0b0;
-        m_ConfigData.PcieCapability.LinkControl.ReadCompletionBoundary = 0b0;
-        m_ConfigData.PcieCapability.LinkControl.LinkDisable = 0b0;
-        m_ConfigData.PcieCapability.LinkControl.RetrainLink = 0b0;
-        m_ConfigData.PcieCapability.LinkControl.CommonClockConfiguration = 0b0;
-        m_ConfigData.PcieCapability.LinkControl.ExtendedSynch = 0b0;
-        m_ConfigData.PcieCapability.LinkControl.EnableClockPowerManagement = 0b0;
-        m_ConfigData.PcieCapability.LinkControl.ReservedP1 = 0b0000000;
-
-        m_ConfigData.PcieCapability.LinkStatus.LinkSpeed = 0b0001;
-        m_ConfigData.PcieCapability.LinkStatus.NegotiatedLinkWidth = 0b001000;
-        m_ConfigData.PcieCapability.LinkStatus.Undefined = 0b0;
-        m_ConfigData.PcieCapability.LinkStatus.LinkTraining = 0b0;
-        m_ConfigData.PcieCapability.LinkStatus.SlotClockConfiguration = 0b0;
-        m_ConfigData.PcieCapability.LinkStatus.DataLinkLayerActive = 0b0;
-        m_ConfigData.PcieCapability.LinkStatus.ReservedZ = 0x0;
-    }
-
-    void InitPowerManagementCapabilityStructure() noexcept
-    {
-        // PCI Power Management Capability ID
-        m_ConfigData.PowerManagementCapability.Header.CapabilityId = 0x01;
-        m_ConfigData.PowerManagementCapability.Header.NextCapabilityPointer = offsetof(PciConfigData, MessageSignalledInterruptCapability);
-        // The defined default version in PCI Bus Power Management Interface Specification Rev 1.2
-        m_ConfigData.PowerManagementCapability.PowerManagementCapabilities.Version = 0b011;
-        // PCI Express Base 1.1 requires this to be hardwired to 0
-        m_ConfigData.PowerManagementCapability.PowerManagementCapabilities.PmeClock = 0b0;
-        m_ConfigData.PowerManagementCapability.PowerManagementCapabilities.Reserved = 0b0;
-        m_ConfigData.PowerManagementCapability.PowerManagementCapabilities.DeviceSpecificInitialization = 0b0;
-        m_ConfigData.PowerManagementCapability.PowerManagementCapabilities.AuxCurrent = 0b000;
-        m_ConfigData.PowerManagementCapability.PowerManagementCapabilities.D1Support = 0b0;
-        m_ConfigData.PowerManagementCapability.PowerManagementCapabilities.D2Support = 0b0;
-        m_ConfigData.PowerManagementCapability.PowerManagementCapabilities.PmeSupport = 0b00000;
-
-        m_ConfigData.PowerManagementCapability.PowerManagementControlStatusRegister.PowerState = 0b00;
-        m_ConfigData.PowerManagementCapability.PowerManagementControlStatusRegister.Reserved0 = 0b0;
-        m_ConfigData.PowerManagementCapability.PowerManagementControlStatusRegister.NoSoftReset = 0b0;
-        m_ConfigData.PowerManagementCapability.PowerManagementControlStatusRegister.Reserved1 = 0x0;
-        m_ConfigData.PowerManagementCapability.PowerManagementControlStatusRegister.PmeEnable = 0b0;
-        m_ConfigData.PowerManagementCapability.PowerManagementControlStatusRegister.DataSelect = 0x0;
-        m_ConfigData.PowerManagementCapability.PowerManagementControlStatusRegister.DataScale = 0b00;
-        m_ConfigData.PowerManagementCapability.PowerManagementControlStatusRegister.PmeStatus = 0b0;
-    }
-
-    void InitMessageSignalledInterruptCapabilityStructure() noexcept
-    {
-        // The defined ID for the MSI Capability in the PCI Local Bus 3.0 spec.
-        m_ConfigData.MessageSignalledInterruptCapability.Header.CapabilityId = 0x0005;
-        m_ConfigData.MessageSignalledInterruptCapability.Header.NextCapabilityPointer = 0x0;
-
-        m_ConfigData.MessageSignalledInterruptCapability.MessageControl.Packed = MESSAGE_CONTROL_REGISTER_READ_ONLY_BITS;
-        m_ConfigData.MessageSignalledInterruptCapability.MessageAddress = 0x00000000;
-        m_ConfigData.MessageSignalledInterruptCapability.MessageUpperAddress = 0x00000000;
-        m_ConfigData.MessageSignalledInterruptCapability.MessageData = 0x0000;
-        m_ConfigData.MessageSignalledInterruptCapability.Reserved = 0x0000;
-        m_ConfigData.MessageSignalledInterruptCapability.MaskBits = 0x00000000;
-        m_ConfigData.MessageSignalledInterruptCapability.PendingBits = 0x00000000;
-    }
-
-    void InitAdvancedErrorReportingCapabilityStructure() noexcept
-    {
-        // The defined ID for the Advanced Error Reporting Capability in the PCI Express Base 1.1 spec.
-        m_ConfigData.AdvancedErrorReportingCapability.Header.CapabilityId = 0x0001;
-        m_ConfigData.AdvancedErrorReportingCapability.Header.CapabilityVersion = 0x1;
-        m_ConfigData.AdvancedErrorReportingCapability.Header.NextCapabilityPointer = 0x0;
-
-        m_ConfigData.AdvancedErrorReportingCapability.UncorrectableErrorStatusRegister = 0x00000000;
-        m_ConfigData.AdvancedErrorReportingCapability.UncorrectableErrorMaskRegister = 0x00000000;
-        m_ConfigData.AdvancedErrorReportingCapability.UncorrectableErrorSeverityRegister = 0x00062030;
-        m_ConfigData.AdvancedErrorReportingCapability.CorrectableErrorStatusRegister = 0x00000000;
-        m_ConfigData.AdvancedErrorReportingCapability.CorrectableErrorMaskRegister = 0x00002000;
-        m_ConfigData.AdvancedErrorReportingCapability.AdvancedCapabilitiesAndControlRegister = 0x00000000;
-        m_ConfigData.AdvancedErrorReportingCapability.HeaderLogRegister[0] = 0;
-        m_ConfigData.AdvancedErrorReportingCapability.HeaderLogRegister[1] = 0;
-        m_ConfigData.AdvancedErrorReportingCapability.HeaderLogRegister[2] = 0;
-        m_ConfigData.AdvancedErrorReportingCapability.HeaderLogRegister[3] = 0;
-    }
+    void InitAdvancedErrorReportingCapabilityStructure() noexcept;
 
     void ExecuteMemRead() noexcept;
     void ExecuteMemWrite() noexcept;
@@ -978,9 +795,9 @@ private:
     u32 m_PhyInputFifoEmpty : 1;
     u32 m_PhyInputReceivedDataThisCycle : 1;
     u32 m_PhyInputReceivingDataNextCycle : 1;
-    u32 m_PhyInputReadState : 3;
-    u32 m_PhyOutputWriteState : 3;
-    u32 m_Pad1 : 23;
+    EPciReadState m_PhyInputReadState : 3;
+    u32 m_PhyInputDataBlobIndex : 10;
+    u32 m_Pad1 : 16;
 
     u32 m_PhyInputData;
     pcie::TlpHeader m_PhyInputRequestHeader;
@@ -996,8 +813,15 @@ private:
         };
     };
 
-    riscv::fifo::DualClockFIFO<PciController, u32, 5> m_PhyInputFifo;
-    riscv::fifo::DualClockFIFO<PciController, u32, 2> m_PhyOutputFifo;
+    u32 m_PhyInputDataBlob[1024];
+
+    u32 m_PhyOutputWriteState : 11;
+    u32 m_PhyOutputWriteLength : 11;
+    u32 m_Pad2 : 10;
+
+    u32 m_PhyOutputBuffer[1024 + 4];
+
+    riscv::fifo::DualClockFIFO<PciController, u32, 11> m_PhyInputFifo;
 
     ::VirtualBoxPciPhy<PciController> m_PciPhy;
 
@@ -1046,131 +870,4 @@ public:
     static inline constexpr u16 PciExtendedConfigOffsetEnd = PciExtendedConfigOffsetBegin + sizeof(PciConfigData::PciExtendedConfig);
 };
 
-inline u32 PciController::ConfigRead(const u16 address, const u8 size) noexcept
-{
-    if(size != 1 && size != 2 && size != 4)
-    {
-        return 0;
-    }
-
-    if(address < PciConfigOffsets::ConfigHeaderEnd)
-    {
-        if(address > (PciConfigOffsets::ConfigHeaderEnd - 4) && size == 4)
-        {
-            return 0;
-        }
-
-        if(address > (PciConfigOffsets::ConfigHeaderEnd - 2) && size == 2)
-        {
-            return 0;
-        }
-
-        u32 ret;
-        (void) ::std::memcpy(&ret, reinterpret_cast<u8*>(&m_ConfigData.ConfigHeader) + address, size);
-        return ret;
-    }
-
-    if(address < PciConfigOffsets::PciCapabilityOffsetEnd)
-    {
-        if(address > (PciConfigOffsets::PciCapabilityOffsetEnd - 4) && size == 4)
-        {
-            return 0;
-        }
-
-        if(address > (PciConfigOffsets::PciCapabilityOffsetEnd - 2) && size == 2)
-        {
-            return 0;
-        }
-
-        u32 ret;
-        (void) ::std::memcpy(&ret, reinterpret_cast<u8*>(&m_ConfigData.PcieCapability) + (address - PciConfigOffsets::PciCapabilityOffsetBegin), size);
-        return ret;
-    }
-
-    if(address < PciConfigOffsets::PowerManagementCapabilityOffsetEnd)
-    {
-        if(address > (PciConfigOffsets::PowerManagementCapabilityOffsetEnd - 4) && size == 4)
-        {
-            return 0;
-        }
-
-        if(address > (PciConfigOffsets::PowerManagementCapabilityOffsetEnd - 2) && size == 2)
-        {
-            return 0;
-        }
-
-        u32 ret;
-        (void) ::std::memcpy(&ret, reinterpret_cast<u8*>(&m_ConfigData.PowerManagementCapability) + (address - PciConfigOffsets::PowerManagementCapabilityOffsetBegin), size);
-        return ret;
-    }
-
-    if(address < PciConfigOffsets::MessageSignalledInterruptsCapabilityOffsetEnd)
-    {
-        if(address > (PciConfigOffsets::MessageSignalledInterruptsCapabilityOffsetEnd - 4) && size == 4)
-        {
-            return 0;
-        }
-
-        if(address > (PciConfigOffsets::MessageSignalledInterruptsCapabilityOffsetEnd - 2) && size == 2)
-        {
-            return 0;
-        }
-
-        u32 ret;
-        (void) ::std::memcpy(&ret, reinterpret_cast<u8*>(&m_ConfigData.MessageSignalledInterruptCapability) + (address - PciConfigOffsets::MessageSignalledInterruptsCapabilityOffsetBegin), size);
-        return ret;
-    }
-
-    if(address < PciConfigOffsets::PciConfigOffsetEnd)
-    {
-        if(address > (PciConfigOffsets::PciConfigOffsetEnd - 4) && size == 4)
-        {
-            return 0;
-        }
-
-        if(address > (PciConfigOffsets::PciConfigOffsetEnd - 2) && size == 2)
-        {
-            return 0;
-        }
-
-        u32 ret;
-        (void) ::std::memcpy(&ret, &m_ConfigData.PciConfig[address - PciConfigOffsets::PciConfigOffsetBegin], size);
-        return ret;
-    }
-
-    if(address < PciConfigOffsets::AdvancedErrorReportingCapabilityOffsetEnd)
-    {
-        if(address > (PciConfigOffsets::AdvancedErrorReportingCapabilityOffsetEnd - 4) && size == 4)
-        {
-            return 0;
-        }
-
-        if(address > (PciConfigOffsets::AdvancedErrorReportingCapabilityOffsetEnd - 2) && size == 2)
-        {
-            return 0;
-        }
-
-        u32 ret;
-        (void) ::std::memcpy(&ret, reinterpret_cast<u8*>(&m_ConfigData.AdvancedErrorReportingCapability) + (address - PciConfigOffsets::AdvancedErrorReportingCapabilityOffsetBegin), size);
-        return ret;
-    }
-
-    if(address < PciConfigOffsets::PciExtendedConfigOffsetEnd)
-    {
-        if(address > (PciConfigOffsets::PciExtendedConfigOffsetEnd - 4) && size == 4)
-        {
-            return 0;
-        }
-
-        if(address > (PciConfigOffsets::PciExtendedConfigOffsetEnd - 2) && size == 2)
-        {
-            return 0;
-        }
-
-        u32 ret;
-        (void) ::std::memcpy(&ret, &m_ConfigData.PciExtendedConfig[address - PciConfigOffsets::PciExtendedConfigOffsetBegin], size);
-        return ret;
-    }
-
-    return 0;
-}
+#include "PCIController.inl"

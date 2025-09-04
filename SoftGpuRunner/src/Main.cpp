@@ -277,7 +277,7 @@ int main(int argCount, char* args[])
 
     {
         const int commandInit = InitCommandRegister();
-        if(commandInit && false)
+        if(commandInit)
         {
             return commandInit;
         }
@@ -848,7 +848,6 @@ static u8* GpuMemory = nullptr;
 
 static int InitCommandRegister() noexcept
 {
-
     if constexpr(false)
     {
         u16 commandRegister = static_cast<u16>(processor.PciConfigRead(0x04, 2));
