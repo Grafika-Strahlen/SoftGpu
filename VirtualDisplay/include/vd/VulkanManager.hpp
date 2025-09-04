@@ -39,7 +39,7 @@ public:
         const VkSurfaceCapabilitiesKHR& surfaceCapabilities,
         VkFence frameFence,
         VkSemaphore imageAvailableSemaphore,
-        VkSemaphore renderFinishedSemaphore
+        DynArray<VkSemaphore>&& renderFinishedSemaphores
     ) noexcept;
 
     ~VulkanManager() noexcept;
@@ -47,7 +47,7 @@ public:
     void TransitionSwapchain(Ref<VulkanCommandPools>& commandPools) noexcept;
 
     u32 WaitForFrame() noexcept;
-    void SubmitCommandBuffers(const u32 commandBufferCount, const VkCommandBuffer* const commandBuffers) noexcept;
+    void SubmitCommandBuffers(const u32 commandBufferCount, const VkCommandBuffer* const commandBuffers, const u32 frameIndex) noexcept;
     void Present(const u32 frameIndex) noexcept;
 
     void RebuildSwapchain() noexcept;
@@ -73,7 +73,7 @@ private:
     VkSurfaceCapabilitiesKHR m_SurfaceCapabilities;
     VkFence m_FrameFence;
     VkSemaphore m_ImageAvailableSemaphore;
-    VkSemaphore m_RenderFinishedSemaphore;
+    DynArray<VkSemaphore> m_RenderFinishedSemaphores;
 };
 
 }

@@ -47,7 +47,7 @@ VulkanManager::VulkanManager(
     const VkSurfaceCapabilitiesKHR& surfaceCapabilities,
     VkFence frameFence,
     VkSemaphore imageAvailableSemaphore,
-    VkSemaphore renderFinishedSemaphore
+    DynArray<VkSemaphore>&& renderFinishedSemaphores
 ) noexcept
     : m_Vulkan(::std::move(vulkan))
     , m_DebugMessenger(debugMessenger)
@@ -65,7 +65,7 @@ VulkanManager::VulkanManager(
     , m_SurfaceCapabilities(surfaceCapabilities)
     , m_FrameFence(frameFence)
     , m_ImageAvailableSemaphore(imageAvailableSemaphore)
-    , m_RenderFinishedSemaphore(renderFinishedSemaphore)
+    , m_RenderFinishedSemaphores(::std::move(renderFinishedSemaphores))
 { }
 
 VulkanManager::~VulkanManager() noexcept
@@ -75,7 +75,11 @@ VulkanManager::~VulkanManager() noexcept
         m_Device->VkDeviceWaitIdle(m_Device->Device());
     }
 
-    m_Device->DestroySemaphore(m_RenderFinishedSemaphore);
+    for(VkSemaphore semaphore : m_RenderFinishedSemaphores)
+    {
+        m_Device->DestroySemaphore(semaphore);
+    }
+
     m_Device->DestroySemaphore(m_ImageAvailableSemaphore);
     m_Device->DestroyFence(m_FrameFence);
 
@@ -188,7 +192,7 @@ u32 VulkanManager::WaitForFrame() noexcept
     VK_ERROR_HANDLER_N1();
 }
 
-void VulkanManager::SubmitCommandBuffers(const u32 commandBufferCount, const VkCommandBuffer* const commandBuffers) noexcept
+void VulkanManager::SubmitCommandBuffers(const u32 commandBufferCount, const VkCommandBuffer* const commandBuffers, const u32 frameIndex) noexcept
 {
     const VkSemaphore waitSemaphores[] = {
         m_ImageAvailableSemaphore
@@ -197,7 +201,7 @@ void VulkanManager::SubmitCommandBuffers(const u32 commandBufferCount, const VkC
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
     };
     const VkSemaphore signalSemaphores[] = {
-        m_RenderFinishedSemaphore
+        m_RenderFinishedSemaphores[frameIndex]
     };
 
     VkSubmitInfo submitInfo { };
@@ -219,7 +223,7 @@ void VulkanManager::SubmitCommandBuffers(const u32 commandBufferCount, const VkC
 void VulkanManager::Present(const u32 frameIndex) noexcept
 {
     const VkSemaphore waitSemaphores[] = {
-        m_RenderFinishedSemaphore
+        m_RenderFinishedSemaphores[frameIndex]
     };
 
     const VkSwapchainKHR swapchains[] = {
@@ -1240,9 +1244,18 @@ ReferenceCountingPointer<VulkanManager> VulkanManager::CreateVulkanManager(const
 
     VkFence frameFence = CreateFrameFence(vulkanDevice);
     VkSemaphore imageAvailableSemaphore = CreateSemaphore(vulkanDevice);
-    VkSemaphore renderFinishedSemaphore = CreateSemaphore(vulkanDevice);
 
-    if(!frameFence || !imageAvailableSemaphore || !renderFinishedSemaphore)
+    DynArray<VkSemaphore> renderFinishedSemaphores(swapchainImages.Length());
+    for(uSys i = 0; i < renderFinishedSemaphores.Length(); i++)
+    {
+        renderFinishedSemaphores[i] = CreateSemaphore(vulkanDevice);
+        if(!renderFinishedSemaphores[i])
+        {
+            return nullptr;
+        }
+    }
+
+    if(!frameFence || !imageAvailableSemaphore)
     {
         return nullptr;
     }
@@ -1264,6 +1277,6 @@ ReferenceCountingPointer<VulkanManager> VulkanManager::CreateVulkanManager(const
         physicalDevice.SurfaceCapabilities,
         frameFence,
         imageAvailableSemaphore,
-        renderFinishedSemaphore
+        ::std::move(renderFinishedSemaphores)
     );
 }

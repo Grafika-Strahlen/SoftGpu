@@ -412,7 +412,7 @@ void VulkanThreadFunc(SoftGpuDeviceFunction* pciFunction) noexcept
 
             const u32 frameIndex = pciFunction->VulkanManager->WaitForFrame();
             VkCommandBuffer commandBuffer = pciFunction->FramebufferRenderer->Record(frameIndex, displayActive);
-            pciFunction->VulkanManager->SubmitCommandBuffers(1, &commandBuffer);
+            pciFunction->VulkanManager->SubmitCommandBuffers(1, &commandBuffer, frameIndex);
             pciFunction->VulkanManager->Present(frameIndex);
 
             pciFunction->Processor.GetDisplayManager().SetDisplayVSyncEvent(0);
