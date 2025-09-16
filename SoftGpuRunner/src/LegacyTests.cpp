@@ -512,56 +512,56 @@ void TestMul2FReplicatedDualDispatch() noexcept
 
 static int InitMmu() noexcept
 {
-    const u64 gpuMemoryAddress = reinterpret_cast<u64>(GpuMemory);
-
-    // Four blocks, 1 block for the Page Directory, 1 block for the Page Table, 1 block of usable memory, 1 block of executable memory.
-    if(!PageAllocator::CommitPages(GpuMemory, GpuPageSize * 4))
-    {
-        ConPrinter::PrintLn("Failed to commit virtual pages.");
-        return -202;
-    }
-
-    PageDirectory = reinterpret_cast<PageEntry*>(GpuMemory);
-    PageTable0 = reinterpret_cast<PageEntry*>(GpuMemory + GpuPageSize);
-    RawBuffer = reinterpret_cast<PageEntry*>(GpuMemory + GpuPageSize * 2);
-    ExecutableBuffer = reinterpret_cast<PageEntry*>(GpuMemory + GpuPageSize * 3);
-
-    (void) ::std::memset(GpuMemory, 0, sizeof(GpuPageSize) * 4);
-
-    PageTable0[0].Present = true;
-    PageTable0[0].ReadWrite = true;
-    PageTable0[0].Execute = false;
-    PageTable0[0].WriteThrough = false;
-    PageTable0[0].CacheDisable = false;
-    PageTable0[0].Accessed = false;
-    PageTable0[0].Dirty = false;
-    PageTable0[0].External = false;
-    PageTable0[0].PhysicalAddress = (gpuMemoryAddress >> 16) + 2;
-    PageTable0[0].Reserved1 = 0;
-
-    PageTable0[1].Present = true;
-    PageTable0[1].ReadWrite = false;
-    PageTable0[1].Execute = true;
-    PageTable0[1].WriteThrough = false;
-    PageTable0[1].CacheDisable = false;
-    PageTable0[1].Accessed = false;
-    PageTable0[1].Dirty = false;
-    PageTable0[1].External = false;
-    PageTable0[1].PhysicalAddress = (gpuMemoryAddress >> 16) + 3;
-    PageTable0[1].Reserved1 = 0;
-
-    PageDirectory[0].Present = true;
-    PageDirectory[0].ReadWrite = true;
-    PageDirectory[0].Execute = false;
-    PageDirectory[0].WriteThrough = false;
-    PageDirectory[0].CacheDisable = false;
-    PageDirectory[0].Accessed = false;
-    PageDirectory[0].Dirty = false;
-    PageDirectory[0].External = false;
-    PageDirectory[0].PhysicalAddress = (gpuMemoryAddress >> 16) + 1;
-    PageDirectory[0].Reserved1 = 0;
-
-    return 0;
+    // const u64 gpuMemoryAddress = reinterpret_cast<u64>(GpuMemory);
+    //
+    // // Four blocks, 1 block for the Page Directory, 1 block for the Page Table, 1 block of usable memory, 1 block of executable memory.
+    // if(!PageAllocator::CommitPages(GpuMemory, GpuPageSize * 4))
+    // {
+    //     ConPrinter::PrintLn("Failed to commit virtual pages.");
+    //     return -202;
+    // }
+    //
+    // PageDirectory = reinterpret_cast<PageEntry*>(GpuMemory);
+    // PageTable0 = reinterpret_cast<PageEntry*>(GpuMemory + GpuPageSize);
+    // RawBuffer = reinterpret_cast<PageEntry*>(GpuMemory + GpuPageSize * 2);
+    // ExecutableBuffer = reinterpret_cast<PageEntry*>(GpuMemory + GpuPageSize * 3);
+    //
+    // (void) ::std::memset(GpuMemory, 0, sizeof(GpuPageSize) * 4);
+    //
+    // PageTable0[0].Present = true;
+    // PageTable0[0].ReadWrite = true;
+    // PageTable0[0].Execute = false;
+    // PageTable0[0].WriteThrough = false;
+    // PageTable0[0].CacheDisable = false;
+    // PageTable0[0].Accessed = false;
+    // PageTable0[0].Dirty = false;
+    // PageTable0[0].External = false;
+    // PageTable0[0].PhysicalAddress = (gpuMemoryAddress >> 16) + 2;
+    // PageTable0[0].Reserved1 = 0;
+    //
+    // PageTable0[1].Present = true;
+    // PageTable0[1].ReadWrite = false;
+    // PageTable0[1].Execute = true;
+    // PageTable0[1].WriteThrough = false;
+    // PageTable0[1].CacheDisable = false;
+    // PageTable0[1].Accessed = false;
+    // PageTable0[1].Dirty = false;
+    // PageTable0[1].External = false;
+    // PageTable0[1].PhysicalAddress = (gpuMemoryAddress >> 16) + 3;
+    // PageTable0[1].Reserved1 = 0;
+    //
+    // PageDirectory[0].Present = true;
+    // PageDirectory[0].ReadWrite = true;
+    // PageDirectory[0].Execute = false;
+    // PageDirectory[0].WriteThrough = false;
+    // PageDirectory[0].CacheDisable = false;
+    // PageDirectory[0].Accessed = false;
+    // PageDirectory[0].Dirty = false;
+    // PageDirectory[0].External = false;
+    // PageDirectory[0].PhysicalAddress = (gpuMemoryAddress >> 16) + 1;
+    // PageDirectory[0].Reserved1 = 0;
+    //
+    // return 0;
 }
 
 static void ReleaseMmu() noexcept
