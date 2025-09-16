@@ -195,6 +195,19 @@ public:
     {
         (void) ::std::memcpy(m_Bits, raw, sizeof(m_Bits));
     }
+
+    bool Contains(const T value) const noexcept
+    {
+        for(uSys i = 0; i < ElementCountT; ++i)
+        {
+            if(At(i) == value)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 private:
     uSys m_Bits[WORD_COUNT];
 };
