@@ -11,6 +11,8 @@
 #include <BitSet.hpp>
 #include <cassert>
 
+#include "BitVector.hpp"
+
 #if (defined(_M_X64) && _M_X64 == 100) || defined(__x86_64__)
     #define HAS_X86_INTRINSICS (1)
 #else
@@ -84,6 +86,22 @@ static constexpr StdLogic ResolutionTable[static_cast<u32>(StdLogic::MAX_PRIME)]
 [[nodiscard]] static StdLogic ResolveStdLogic(const StdLogic a, const StdLogic b) noexcept
 {
     return vhdl::internal::ResolutionTable[static_cast<u32>(a)][static_cast<u32>(b)];
+}
+
+template<uSys ElementCountT, uSys TBitCountT = 4>
+[[nodiscard]] static TBitVector<ElementCountT, TBitCountT, StdLogic> ResolveStdLogic(
+    const TBitVector<ElementCountT, TBitCountT, StdLogic>& a,
+    const TBitVector<ElementCountT, TBitCountT, StdLogic>& b
+) noexcept
+{
+    TBitVector<ElementCountT, TBitCountT, StdLogic> res;
+
+    for(uSys i = 0; i < ElementCountT; ++i)
+    {
+        res[i] = ResolveStdLogic(a[i], b[i]);
+    }
+
+    return res;
 }
 
 [[nodiscard]] static bool LOGIC_TO_BOOL(const StdLogic b) noexcept
