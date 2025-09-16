@@ -85,9 +85,13 @@ Supports Advanced Error Reporting Extended Capability. The structure is at 0x100
    |     \--| L0 Cache 0..3 |
    |        *---------------*
    |
-   |  .----------------.
-   +--| PCI Controller |
-   |  *----------------*
+   |  .-----------------.
+   +--| PCIe Controller |
+   |  *--+--------------*
+   |     |
+   |     |  .----------.         .-------------------.
+   |     \--| PCIe PHY | <=====> | VirtualBox Device |
+   |        *----------*         *-------------------*
    |
    |  .----------------.
    +--| ROM Controller |
