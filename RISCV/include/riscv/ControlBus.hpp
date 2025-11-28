@@ -76,6 +76,15 @@ public:
     static constexpr u32 Function3_ALU_ShiftRight        = 0b101;
     static constexpr u32 Function3_ALU_OR                = 0b110;
     static constexpr u32 Function3_ALU_AND               = 0b111;
+
+    static constexpr u32 ALU_Operation_Zero        = 0b000;
+    static constexpr u32 ALU_Operation_Add         = 0b001;
+    static constexpr u32 ALU_Operation_CoProcessor = 0b010;
+    static constexpr u32 ALU_Operation_LessThan    = 0b011;
+    static constexpr u32 ALU_Operation_MoveB       = 0b100;
+    static constexpr u32 ALU_Operation_XOR         = 0b101;
+    static constexpr u32 ALU_Operation_OR          = 0b110;
+    static constexpr u32 ALU_Operation_AND         = 0b111;
 };
 
 }
