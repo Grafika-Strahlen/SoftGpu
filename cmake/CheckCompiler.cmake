@@ -1,0 +1,17 @@
+function(CheckCompiler)
+    set(IS_CLANG FALSE PARENT_SCOPE)
+    set(IS_GCC FALSE PARENT_SCOPE)
+    set(IS_ICC FALSE PARENT_SCOPE)
+
+    if(CMAKE_C_COMPILER_ID MATCHES "Clang|IntelLLVM")
+        set(IS_CLANG TRUE PARENT_SCOPE)
+
+        if(MSVC)
+            set(MSVC_CLANG TRUE PARENT_SCOPE)
+        endif()
+    elseif(CMAKE_COMPILER_IS_GNUCC)
+        set(IS_GCC TRUE PARENT_SCOPE)
+    elseif(CMAKE_C_COMPILER_ID MATCHES "^Intel$")
+        set(IS_ICC TRUE PARENT_SCOPE)
+    endif()
+endfunction()

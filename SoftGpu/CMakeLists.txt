@@ -4,6 +4,13 @@ project(SoftGpu VERSION 1.0.0 LANGUAGES CXX C)
 # This is a helper utility for generating the folder layout in VS.
 include(GenVsFilters)
 include(SetCompileFlags)
+include(CheckCompiler)
+include(CheckCPU)
+
+CheckCompiler()
+CheckTargetArch(GS_ARCHS)
+
+message("Clang: ")
 
 file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.c" "src/*.rc")
 file(GLOB_RECURSE HEADERS "include/*.hpp" "include/*.h" "include/*.inl")
@@ -15,7 +22,7 @@ GenVsFilters(SOURCES)
 GenVsFilters(HEADERS)
 
 target_sources(${PROJECT_NAME} PRIVATE ${SOURCES})
-target_sources(${PROJECT_NAME} PUBLIC FILE_SET HEADERS BASE_DIRS "include" FILES ${HEADERS})
+target_sources(${PROJECT_NAME} PUBLIC FILE_SET "HEADERS" BASE_DIRS "include" FILES ${HEADERS})
 
 # Set the include directory.
 target_include_directories(${PROJECT_NAME} PUBLIC include)

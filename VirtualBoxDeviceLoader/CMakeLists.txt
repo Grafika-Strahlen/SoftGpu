@@ -4,6 +4,11 @@ project(VirtualBoxDeviceLoader VERSION 1.0.0 LANGUAGES CXX C)
 # This is a helper utility for generating the folder layout in VS.
 include(GenVsFilters)
 include(SetCompileFlags)
+include(CheckCompiler)
+include(CheckCPU)
+
+CheckCompiler()
+CheckTargetArch(GS_ARCHS)
 
 file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.c" "src/*.rc")
 #file(GLOB_RECURSE HEADERS "include/*.hpp" "include/*.h" "include/*.inl")
