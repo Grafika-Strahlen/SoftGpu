@@ -24,8 +24,12 @@ public:
     u32 Source : 1; // Data Access = 0, Instruction Fetch = 1
     u32 Atomic : 1;
     u32 AtomicOperation : 4;
+    u32 Burst : 1;
+    u32 Lock : 1;
+    u32 Privileged : 1;
+    u32 Debug : 1;
     u32 Fence : 1;
-    u32 Pad0 : 19;
+    u32 Pad0 : 15;
 };
 
 struct MemoryBusResponse final

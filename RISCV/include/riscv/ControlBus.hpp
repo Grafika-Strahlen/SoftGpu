@@ -47,8 +47,15 @@ public:
     u32 LSU_ReadWrite : 1;
     u32 LSU_Atomic : 1;
     u32 LSU_Enable : 1;
+    u32 LSU_Privileged : 1;
     u32 LSU_Fence : 1;
-    u32 Pad3 : 27;
+    u32 Pad3 : 26;
+
+    u32 CSR_WriteEnable : 1;
+    u32 CSR_ReadEnable : 1;
+    u32 CSR_Address : 12;
+    u32 Pad4 : 18;
+    u32 CSR_WriteData;
 
     u32 IR_Function3 : 3;
     u32 IR_Function12 : 12;
@@ -56,9 +63,10 @@ public:
     u32 Pad5 : 11;
 
     u32 CPU_Sleep : 1;
+    u32 CPU_Privileged : 1;
     u32 CPU_Trap : 1;
     u32 CPU_Debug : 1;
-    u32 Pad6 : 29;
+    u32 Pad6 : 28;
 public:
     static constexpr u32 Function3_ALU_AddSubtract       = 0b000;
     static constexpr u32 Function3_ALU_ShiftLeft         = 0b001;
