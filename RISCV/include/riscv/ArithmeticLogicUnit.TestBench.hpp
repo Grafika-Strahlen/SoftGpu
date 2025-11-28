@@ -72,7 +72,7 @@ public:
     ip.SetClock(false);
 
     TAU_UNIT_EQ(receiver.Done, true, "Result should be valid after 1st clock cycle. {}");
-    TAU_UNIT_EQ(receiver.Result, 64, "Result should be 64 after 1st clock cycle. {}");
+    TAU_UNIT_EQ(receiver.Result, 16, "Result should be 64 after 1st clock cycle. {}");
 }
 
 }

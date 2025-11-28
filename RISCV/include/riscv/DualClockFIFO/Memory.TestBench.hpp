@@ -63,7 +63,7 @@ struct MemoryReceiver
     }
 };
 
-static void MemorySimpleSet()
+[[maybe_unused]] static void MemorySimpleSet()
 {
     TAU_UNIT_TEST();
 
@@ -127,7 +127,7 @@ static void MemorySimpleSet()
     TAU_UNIT_EQ(data, 0xA1B2, "Expected data at address 0 to be returned. {}");
 }
 
-static void MemoryFullSet()
+[[maybe_unused]] static void MemoryFullSet()
 {
     TAU_UNIT_TEST();
 
@@ -193,7 +193,7 @@ static void MemoryFullSet()
     TAU_UNIT_EQ(data, 0, "Expected data at address 0 to be unchanged when full. {}");
 }
 
-static void MemoryWrapSet()
+[[maybe_unused]] static void MemoryWrapSet()
 {
     TAU_UNIT_TEST();
 
@@ -242,7 +242,7 @@ static void MemoryWrapSet()
     TAU_UNIT_EQ(data, 0xA1B2, "Expected data at address 31 to be returned. {}");
 }
 
-static void MemoryLargeSet()
+[[maybe_unused]] static void MemoryLargeSet()
 {
     TAU_UNIT_TEST();
 

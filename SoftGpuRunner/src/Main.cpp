@@ -280,7 +280,7 @@ int main(int argCount, char* args[])
         }
     }
 
-    u32 resetRead;
+    [[maybe_unused]] u32 resetRead;
     // processor.PciMemRead(BAR0 + PciControlRegisters::REGISTER_RESET, 4, &resetRead);
 
     while(!window->ShouldClose() && !tau::vd::ShouldClose())

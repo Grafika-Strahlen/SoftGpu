@@ -40,7 +40,7 @@ struct ClockGateReceiver
     }
 };
 
-static void CheckDefaultClock(bool log = false) noexcept
+[[maybe_unused]] static void CheckDefaultClock(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -53,7 +53,7 @@ static void CheckDefaultClock(bool log = false) noexcept
     TAU_UNIT_EQ(receiver.Clock, false, "Clock state changed without input.");
 }
 
-static void CheckLowResetClock(bool log = false) noexcept
+[[maybe_unused]] static void CheckLowResetClock(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -81,7 +81,7 @@ static void CheckLowResetClock(bool log = false) noexcept
     TAU_UNIT_EQ(receiver.Clock, true, "Clock was active after setting clock high after setting Reset_n low.");
 }
 
-static void CheckActiveClock(bool log = false) noexcept
+[[maybe_unused]] static void CheckActiveClock(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -109,7 +109,7 @@ static void CheckActiveClock(bool log = false) noexcept
     TAU_UNIT_EQ(receiver.Clock, true, "Clock was not active after setting clock high.");
 }
 
-static void CheckActiveClockReset(bool log = false) noexcept
+[[maybe_unused]] static void CheckActiveClockReset(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -147,7 +147,7 @@ static void CheckActiveClockReset(bool log = false) noexcept
     TAU_UNIT_EQ(receiver.Clock, true, "Clock was not active after setting clock high after setting Reset_n low.");
 }
 
-static void CheckActiveClockHalt(bool log = false) noexcept
+[[maybe_unused]] static void CheckActiveClockHalt(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -189,7 +189,7 @@ static void CheckActiveClockHalt(bool log = false) noexcept
     TAU_UNIT_EQ(receiver.Clock, true, "Clock was not active after setting clock high during halt & reset.");
 }
 
-static void ClockGateTestBench(bool log = false) noexcept
+[[maybe_unused]] static void ClockGateTestBench(bool log = false) noexcept
 {
     CheckDefaultClock(log);
     CheckLowResetClock(log);

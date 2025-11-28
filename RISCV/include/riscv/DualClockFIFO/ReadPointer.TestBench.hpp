@@ -64,7 +64,7 @@ struct ReadPointerReceiver
     }
 };
 
-static void ReadPointerResetTest(const bool log = false)
+[[maybe_unused]] static void ReadPointerResetTest(const bool log = false)
 {
     TAU_UNIT_TEST();
 
@@ -110,7 +110,7 @@ static void ReadPointerResetTest(const bool log = false)
     }
 }
 
-static void ReadPointer1BitEmptyTest(const bool log = false)
+[[maybe_unused]] static void ReadPointer1BitEmptyTest(const bool log = false)
 {
     TAU_UNIT_TEST();
 
@@ -156,7 +156,7 @@ static void ReadPointer1BitEmptyTest(const bool log = false)
     }
 }
 
-static void ReadPointer1BitTest(const bool log = false)
+[[maybe_unused]] static void ReadPointer1BitTest(const bool log = false)
 {
     TAU_UNIT_TEST();
 
@@ -205,7 +205,7 @@ static void ReadPointer1BitTest(const bool log = false)
     }
 }
 
-static void ReadPointer2BitEmptyTest(const bool log = false)
+[[maybe_unused]] static void ReadPointer2BitEmptyTest(const bool log = false)
 {
     TAU_UNIT_TEST();
 
@@ -251,7 +251,7 @@ static void ReadPointer2BitEmptyTest(const bool log = false)
     }
 }
 
-static void ReadPointer2BitTest(const bool log = false)
+[[maybe_unused]] static void ReadPointer2BitTest(const bool log = false)
 {
     TAU_UNIT_TEST();
 

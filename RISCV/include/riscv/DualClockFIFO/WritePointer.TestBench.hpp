@@ -64,7 +64,7 @@ struct WritePointerReceiver
     }
 };
 
-static void WritePointerResetTest(const bool log = false)
+[[maybe_unused]] static void WritePointerResetTest(const bool log = false)
 {
     TAU_UNIT_TEST();
 
@@ -110,7 +110,7 @@ static void WritePointerResetTest(const bool log = false)
     }
 }
 
-static void WritePointer1BitFullTest(const bool log = false)
+[[maybe_unused]] static void WritePointer1BitFullTest(const bool log = false)
 {
     TAU_UNIT_TEST();
 
@@ -157,7 +157,7 @@ static void WritePointer1BitFullTest(const bool log = false)
     }
 }
 
-static void WritePointer1BitTest(const bool log = false)
+[[maybe_unused]] static void WritePointer1BitTest(const bool log = false)
 {
     TAU_UNIT_TEST();
 
@@ -206,7 +206,7 @@ static void WritePointer1BitTest(const bool log = false)
     }
 }
 
-static void WritePointer2BitFullTest(const bool log = false)
+[[maybe_unused]] static void WritePointer2BitFullTest(const bool log = false)
 {
     TAU_UNIT_TEST();
 
@@ -253,7 +253,7 @@ static void WritePointer2BitFullTest(const bool log = false)
     }
 }
 
-static void WritePointer2BitTest(const bool log = false)
+[[maybe_unused]] static void WritePointer2BitTest(const bool log = false)
 {
     TAU_UNIT_TEST();
 

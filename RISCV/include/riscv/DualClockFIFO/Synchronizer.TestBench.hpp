@@ -40,7 +40,7 @@ struct SynchronizerReceiver
     }
 };
 
-static void SynchronizerResetTest()
+[[maybe_unused]] static void SynchronizerResetTest()
 {
     TAU_UNIT_TEST();
 
@@ -59,7 +59,7 @@ static void SynchronizerResetTest()
 
     receiver.ResetReceive();
 
-    for(uSys i = 0; i < 4; ++i)
+    for(int i = 0; i < 4; ++i)
     {
         sync.SetClock(true);
 
@@ -73,7 +73,7 @@ static void SynchronizerResetTest()
     }
 }
 
-static void SynchronizerSingleTest()
+[[maybe_unused]] static void SynchronizerSingleTest()
 {
     TAU_UNIT_TEST();
 
@@ -132,7 +132,7 @@ static void SynchronizerSingleTest()
     TAU_UNIT_EQ(receiver.ReceivedCount, 0, "Should not have received pointer update after clock lower. {}");
 }
 
-static void SynchronizerIncrementSingleBitTest()
+[[maybe_unused]] static void SynchronizerIncrementSingleBitTest()
 {
     TAU_UNIT_TEST();
 
@@ -179,7 +179,7 @@ static void SynchronizerIncrementSingleBitTest()
     }
 }
 
-static void SynchronizerIncrementDualBitTest()
+[[maybe_unused]] static void SynchronizerIncrementDualBitTest()
 {
     TAU_UNIT_TEST();
 
@@ -226,7 +226,7 @@ static void SynchronizerIncrementDualBitTest()
     }
 }
 
-static void SynchronizerIncrement6BitTest()
+[[maybe_unused]] static void SynchronizerIncrement6BitTest()
 {
     TAU_UNIT_TEST();
 

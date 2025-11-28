@@ -84,7 +84,7 @@ static u32 TargetDataSet[]
 };
 
 template<u32 WriterDelay, u32 ReaderDelay, u32 BitCount>
-static void FifoTestRunner()
+[[maybe_unused]] static void FifoTestRunner()
 {
     using DataType = u32;
     using RecType = FifoReceiver<DataType>;
@@ -183,7 +183,7 @@ static void FifoTestRunner()
 
                     if(receivedValues.size() > 2)
                     {
-                        int x = 0;
+                        [[maybe_unused]] int x = 0;
                         // break;
                     }
                 }
@@ -210,70 +210,70 @@ static void FifoTestRunner()
     }
 }
 
-static void FifoTestFastRead1Bit()
+[[maybe_unused]] static void FifoTestFastRead1Bit()
 {
     TAU_UNIT_TEST();
 
     FifoTestRunner<31, 7, 1>();
 }
 
-static void FifoTestFastWrite1Bit()
+[[maybe_unused]] static void FifoTestFastWrite1Bit()
 {
     TAU_UNIT_TEST();
 
     FifoTestRunner<7, 31, 1>();
 }
 
-static void FifoTestFastRead2Bit()
+[[maybe_unused]] static void FifoTestFastRead2Bit()
 {
     TAU_UNIT_TEST();
 
     FifoTestRunner<31, 7, 2>();
 }
 
-static void FifoTestFastWrite2Bit()
+[[maybe_unused]] static void FifoTestFastWrite2Bit()
 {
     TAU_UNIT_TEST();
 
     FifoTestRunner<7, 31, 2>();
 }
 
-static void FifoTestFastRead3Bit()
+[[maybe_unused]] static void FifoTestFastRead3Bit()
 {
     TAU_UNIT_TEST();
 
     FifoTestRunner<31, 7, 3>();
 }
 
-static void FifoTestFastWrite3Bit()
+[[maybe_unused]] static void FifoTestFastWrite3Bit()
 {
     TAU_UNIT_TEST();
 
     FifoTestRunner<7, 31, 3>();
 }
 
-static void FifoTestFastRead4Bit()
+[[maybe_unused]] static void FifoTestFastRead4Bit()
 {
     TAU_UNIT_TEST();
 
     FifoTestRunner<31, 7, 3>();
 }
 
-static void FifoTestFastWrite4Bit()
+[[maybe_unused]] static void FifoTestFastWrite4Bit()
 {
     TAU_UNIT_TEST();
 
     FifoTestRunner<7, 31, 3>();
 }
 
-static void FifoTestFastRead5Bit()
+[[maybe_unused]] static void FifoTestFastRead5Bit()
 {
     TAU_UNIT_TEST();
 
     FifoTestRunner<31, 7, 5>();
 }
 
-static void FifoTestFastWrite5Bit()
+[[maybe_unused]] static void FifoTestFastWrite5Bit()
 {
     TAU_UNIT_TEST();
 
