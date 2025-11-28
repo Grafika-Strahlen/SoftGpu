@@ -12,8 +12,9 @@
 
 namespace riscv::coprocessor::test {
 
-struct ShifterReceiver
+class ShifterReceiver
 {
+public:
     bool Log = true;
 
     bool Valid = false;
@@ -41,7 +42,7 @@ struct ShifterReceiver
 };
 
 template<bool EnableFastShift>
-static void ShifterCheckResetResult(bool log = false) noexcept
+[[maybe_unused]] static void ShifterCheckResetResult(bool log = false) noexcept
 {
     ShifterReceiver receiver;
     Shifter<ShifterReceiver, EnableFastShift> ip(&receiver);
@@ -55,21 +56,21 @@ static void ShifterCheckResetResult(bool log = false) noexcept
 }
 
 
-static void ShifterSerialCheckResetResult(bool log = false) noexcept
+[[maybe_unused]] static void ShifterSerialCheckResetResult(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
     ShifterCheckResetResult<false>(log);
 }
 
-static void ShifterBarrelCheckResetResult(bool log = false) noexcept
+[[maybe_unused]] static void ShifterBarrelCheckResetResult(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
     ShifterCheckResetResult<true>(log);
 }
 
-static void ShifterSerialCheck1S0Right(bool log = false) noexcept
+[[maybe_unused]] static void ShifterSerialCheck1S0Right(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -118,7 +119,7 @@ static void ShifterSerialCheck1S0Right(bool log = false) noexcept
     TAU_UNIT_EQ(receiver.Result, 1, "Result should be 1 after 4th clock cycle. {}");
 }
 
-static void ShifterBarrelCheck1S0Right(bool log = false) noexcept
+[[maybe_unused]] static void ShifterBarrelCheck1S0Right(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -167,7 +168,7 @@ static void ShifterBarrelCheck1S0Right(bool log = false) noexcept
     TAU_UNIT_EQ(receiver.Result, 1, "Result should be 1 after 4th clock cycle. {}");
 }
 
-static void ShifterSerialCheck2S1Right(bool log = false) noexcept
+[[maybe_unused]] static void ShifterSerialCheck2S1Right(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -229,7 +230,7 @@ static void ShifterSerialCheck2S1Right(bool log = false) noexcept
 
 }
 
-static void ShifterBarrelCheck2S1Right(bool log = false) noexcept
+[[maybe_unused]] static void ShifterBarrelCheck2S1Right(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -291,7 +292,7 @@ static void ShifterBarrelCheck2S1Right(bool log = false) noexcept
 
 }
 
-static void ShifterSerialCheck4S2Right(bool log = false) noexcept
+[[maybe_unused]] static void ShifterSerialCheck4S2Right(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -352,7 +353,7 @@ static void ShifterSerialCheck4S2Right(bool log = false) noexcept
     TAU_UNIT_EQ(receiver.Result, 1, "Result should be 1 after 6th clock cycle. {}");
 }
 
-static void ShifterBarrelCheck4S2Right(bool log = false) noexcept
+[[maybe_unused]] static void ShifterBarrelCheck4S2Right(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -413,7 +414,7 @@ static void ShifterBarrelCheck4S2Right(bool log = false) noexcept
     TAU_UNIT_EQ(receiver.Result, 1, "Result should be 1 after 6th clock cycle. {}");
 }
 
-static void ShifterSerialCheck31S3Right(bool log = false) noexcept
+[[maybe_unused]] static void ShifterSerialCheck31S3Right(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -480,7 +481,7 @@ static void ShifterSerialCheck31S3Right(bool log = false) noexcept
     TAU_UNIT_EQ(receiver.Result, 3, "Result should be 3 after 7th clock cycle. {}");
 }
 
-static void ShifterBarrelCheck31S3Right(bool log = false) noexcept
+[[maybe_unused]] static void ShifterBarrelCheck31S3Right(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -547,7 +548,7 @@ static void ShifterBarrelCheck31S3Right(bool log = false) noexcept
     TAU_UNIT_EQ(receiver.Result, 3, "Result should be 3 after 7th clock cycle. {}");
 }
 
-static void ShifterSerialCheckMaxS31Right(bool log = false) noexcept
+[[maybe_unused]] static void ShifterSerialCheckMaxS31Right(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -605,7 +606,7 @@ static void ShifterSerialCheckMaxS31Right(bool log = false) noexcept
     TAU_UNIT_EQ(receiver.Result, 1, "Result should be 1 after 34th clock cycle. {}");
 }
 
-static void ShifterBarrelCheckMaxS31Right(bool log = false) noexcept
+[[maybe_unused]] static void ShifterBarrelCheckMaxS31Right(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -654,7 +655,7 @@ static void ShifterBarrelCheckMaxS31Right(bool log = false) noexcept
     TAU_UNIT_EQ(receiver.Result, 1, "Result should be 1 after 4th clock cycle. {}");
 }
 
-static void ShifterSerialCheckMaxS32Right(bool log = false) noexcept
+[[maybe_unused]] static void ShifterSerialCheckMaxS32Right(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -712,7 +713,7 @@ static void ShifterSerialCheckMaxS32Right(bool log = false) noexcept
     TAU_UNIT_EQ(receiver.Result, 0, "Result should be 0 after 35th clock cycle. {}");
 }
 
-static void ShifterBarrelCheckMaxS32Right(bool log = false) noexcept
+[[maybe_unused]] static void ShifterBarrelCheckMaxS32Right(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -762,7 +763,7 @@ static void ShifterBarrelCheckMaxS32Right(bool log = false) noexcept
 }
 
 template<bool EnableFastShift>
-static void ShifterCheckFuzzRight(bool log = false) noexcept
+[[maybe_unused]] static void ShifterCheckFuzzRight(bool log = false) noexcept
 {
     ShifterReceiver receiver;
     Shifter<ShifterReceiver, false> ip(&receiver);
@@ -852,14 +853,14 @@ static void ShifterCheckFuzzRight(bool log = false) noexcept
     }
 }
 
-static void ShifterSerialCheckFuzzRight(bool log = false) noexcept
+[[maybe_unused]] static void ShifterSerialCheckFuzzRight(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
     ShifterCheckFuzzRight<false>(log);
 }
 
-static void ShifterBarrelCheckFuzzRight(bool log = false) noexcept
+[[maybe_unused]] static void ShifterBarrelCheckFuzzRight(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -868,7 +869,7 @@ static void ShifterBarrelCheckFuzzRight(bool log = false) noexcept
 
 
 
-static void ShifterSerialCheck31S3Left(bool log = false) noexcept
+[[maybe_unused]] static void ShifterSerialCheck31S3Left(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -935,7 +936,7 @@ static void ShifterSerialCheck31S3Left(bool log = false) noexcept
     TAU_UNIT_EQ(receiver.Result, 248, "Result should be 248 after 7th clock cycle. {}");
 }
 
-static void ShifterBarrelCheck31S3Left(bool log = false) noexcept
+[[maybe_unused]] static void ShifterBarrelCheck31S3Left(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -1002,7 +1003,7 @@ static void ShifterBarrelCheck31S3Left(bool log = false) noexcept
     TAU_UNIT_EQ(receiver.Result, 248, "Result should be 248 after 7th clock cycle. {}");
 }
 
-static void ShifterSerialCheckMaxS31Left(bool log = false) noexcept
+[[maybe_unused]] static void ShifterSerialCheckMaxS31Left(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -1060,7 +1061,7 @@ static void ShifterSerialCheckMaxS31Left(bool log = false) noexcept
     TAU_UNIT_EQ(receiver.Result, 0x8000'0000, "Result should be 1 after 34th clock cycle. {}");
 }
 
-static void ShifterBarrelCheckMaxS31Left(bool log = false) noexcept
+[[maybe_unused]] static void ShifterBarrelCheckMaxS31Left(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -1109,7 +1110,7 @@ static void ShifterBarrelCheckMaxS31Left(bool log = false) noexcept
     TAU_UNIT_EQ(receiver.Result, 0x8000'0000, "Result should be 1 after 4th clock cycle. {}");
 }
 
-static void ShifterSerialCheckMaxS32Left(bool log = false) noexcept
+[[maybe_unused]] static void ShifterSerialCheckMaxS32Left(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
@@ -1167,7 +1168,7 @@ static void ShifterSerialCheckMaxS32Left(bool log = false) noexcept
     TAU_UNIT_EQ(receiver.Result, 0, "Result should be 0 after 35th clock cycle. {}");
 }
 
-static void ShifterBarrelCheckMaxS32Left(bool log = false) noexcept
+[[maybe_unused]] static void ShifterBarrelCheckMaxS32Left(bool log = false) noexcept
 {
     TAU_UNIT_TEST();
 
