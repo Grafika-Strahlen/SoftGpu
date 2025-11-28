@@ -57,6 +57,7 @@ public:
     template<typename T>
     void WriteRawStepping(const T& data) noexcept
     {
+        (void) data;
 #ifdef _WIN32
         if(m_SteppingPipe == INVALID_HANDLE_VALUE)
         {
@@ -69,6 +70,8 @@ public:
 
     void WriteRawStepping(const void* data, const u32 dataSize) noexcept
     {
+        (void) data;
+        (void) dataSize;
 #ifdef _WIN32
         if(m_SteppingPipe == INVALID_HANDLE_VALUE)
         {
@@ -82,6 +85,8 @@ public:
     template<typename T>
     void WriteStepping(const u32 dataCode, const T& data) noexcept
     {
+        (void) dataCode;
+        (void) data;
 #ifdef _WIN32
         if(m_SteppingPipe == INVALID_HANDLE_VALUE)
         {
@@ -98,6 +103,9 @@ public:
 
     void WriteStepping(const u32 dataCode, const void* data, const u32 dataSize) noexcept
     {
+        (void) dataCode;
+        (void) data;
+        (void) dataSize;
 #ifdef _WIN32
         if(m_SteppingPipe == INVALID_HANDLE_VALUE)
         {
@@ -112,6 +120,7 @@ public:
 
     void WriteStepping(const u32 dataCode) noexcept
     {
+        (void) dataCode;
 #ifdef _WIN32
         if(m_SteppingPipe == INVALID_HANDLE_VALUE)
         {
@@ -146,6 +155,8 @@ public:
 
     i32 ReadStepping(void* const buffer, const u32 dataSize) noexcept
     {
+        (void) buffer;
+        (void) dataSize;
 #ifdef _WIN32
         if(m_SteppingPipe == INVALID_HANDLE_VALUE)
         {
@@ -167,6 +178,7 @@ public:
     template<typename T>
     void WriteRawInfo(const T& data) noexcept
     {
+        (void) data;
 #ifdef _WIN32
         if(m_InfoPipe == INVALID_HANDLE_VALUE)
         {
@@ -179,6 +191,8 @@ public:
 
     void WriteRawInfo(const void* data, const u32 dataSize) noexcept
     {
+        (void) data;
+        (void) dataSize;
 #ifdef _WIN32
         if(m_InfoPipe == INVALID_HANDLE_VALUE)
         {
@@ -192,6 +206,8 @@ public:
     template<typename T>
     void WriteInfo(const u32 dataCode, const T& data) noexcept
     {
+        (void) dataCode;
+        (void) data;
 #ifdef _WIN32
         if(m_InfoPipe == INVALID_HANDLE_VALUE)
         {
@@ -208,6 +224,9 @@ public:
 
     void WriteInfo(const u32 dataCode, const void* data, const u32 dataSize) noexcept
     {
+        (void) dataCode;
+        (void) data;
+        (void) dataSize;
 #ifdef _WIN32
         if(m_InfoPipe == INVALID_HANDLE_VALUE)
         {
@@ -222,6 +241,7 @@ public:
 
     void WriteInfo(const u32 dataCode) noexcept
     {
+        (void) dataCode;
 #ifdef _WIN32
         if(m_InfoPipe == INVALID_HANDLE_VALUE)
         {
@@ -256,6 +276,8 @@ public:
 
     i32 ReadInfo(void* const buffer, const u32 dataSize) noexcept
     {
+        (void) buffer;
+        (void) dataSize;
 #ifdef _WIN32
         if(m_InfoPipe == INVALID_HANDLE_VALUE)
         {
@@ -282,6 +304,10 @@ public:
     template<typename CharT>
     static HRESULT Create(DebugManager* const manager, const DynStringT<CharT>& steppingPipeServer, const DynStringT<CharT>& infoPipeServer, const bool disableStepping) noexcept
     {
+        (void) manager;
+        (void) steppingPipeServer;
+        (void) infoPipeServer;
+        (void) disableStepping;
 #ifdef _WIN32
         // Check that the manager is valid.
         if(!manager)

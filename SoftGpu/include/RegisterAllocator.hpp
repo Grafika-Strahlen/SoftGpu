@@ -362,6 +362,7 @@ private:
             .Parts = {
                 .SubBlock = static_cast<u8>(registerBase >> 8),
                 .Block2048 = 0,
+                .Valid = false,
                 .Pad = 0
             }
         };

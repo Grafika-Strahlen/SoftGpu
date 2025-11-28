@@ -312,33 +312,43 @@ void DispatchUnit::NextInstruction(u64& localInstructionPointer, u32& wordIndex,
 
 bool DispatchUnit::CanReadRegister(const u32 registerIndex, const u32 replicationIndex) noexcept
 {
-            // TODO: FIX
+    (void) registerIndex;
+    (void) replicationIndex;
+    // TODO: FIX
     // return m_SM->CanReadRegister(m_BaseRegisters[replicationIndex] + registerIndex);
     return false;
 }
 
 bool DispatchUnit::CanWriteRegister(const u32 registerIndex, const u32 replicationIndex) noexcept
 {
-            // TODO: FIX
+    (void) registerIndex;
+    (void) replicationIndex;
+    // TODO: FIX
     // return m_SM->CanWriteRegister(m_BaseRegisters[replicationIndex] + registerIndex);
     return false;
 }
 
 void DispatchUnit::ReleaseRegisterContestation(const u32 registerIndex, const u32 replicationIndex) noexcept
 {
-            // TODO: FIX
+    (void) registerIndex;
+    (void) replicationIndex;
+    // TODO: FIX
     // m_SM->ReleaseRegisterContestation(m_BaseRegisters[replicationIndex] + registerIndex);
 }
 
 void DispatchUnit::LockRegisterRead(const u32 registerIndex, const u32 replicationIndex) noexcept
 {
-            // TODO: FIX
+    (void) registerIndex;
+    (void) replicationIndex;
+    // TODO: FIX
     // m_SM->LockRegisterRead(m_BaseRegisters[replicationIndex] + registerIndex);
 }
 
 void DispatchUnit::LockRegisterWrite(const u32 registerIndex, const u32 replicationIndex) noexcept
 {
-            // TODO: FIX
+    (void) registerIndex;
+    (void) replicationIndex;
+    // TODO: FIX
     // m_SM->LockRegisterWrite(m_BaseRegisters[replicationIndex] + registerIndex);
 }
 

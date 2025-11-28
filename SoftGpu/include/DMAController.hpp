@@ -165,7 +165,7 @@ private:
     u32 p_Reset_n : 1;
     u32 p_Clock : 1;
     u32 p_out_Finished : 1;
-    u32 p_Pad0 : 29;
+    [[maybe_unused]] u32 p_Pad0 : 29;
 
     u64 p_CPUPhysicalAddress;
     u64 p_GPUVirtualAddress;
@@ -173,14 +173,14 @@ private:
     u32 p_ReadWrite : 1; // If 1 then read from the CPU, if 0 write to the CPU.
     u32 p_Atomic : 1;
     u32 p_Active : 1;
-    u32 p_Pad1 : 29;
+    [[maybe_unused]] u32 p_Pad1 : 29;
     u32 p_inout_RequestNumber;
 
     Processor* m_Processor;
     u16 m_DmaIndex;
     u64 m_WordsTransferred;
     u16 m_WordsInTransferBlock : 10;
-    u16 m_Pad0 : 6;
+    [[maybe_unused]] u16 m_Pad0 : 6;
 
     u32 m_TransferBlock[1024];
 };
@@ -404,7 +404,7 @@ private:
     u32 p_Reset_n : 1;
     u32 p_Clock : 1;
     BusState p_out_BusState : 2;
-    u32 p_Pad0 : 29;
+    [[maybe_unused]] u32 p_Pad0 : 29;
 
     u64 p_inout_CPUPhysicalAddress;
     u64 p_GPUVirtualAddress;
@@ -412,12 +412,12 @@ private:
     u32 p_ReadWrite : 1; // If 1 then read from the CPU, if 0 write to the CPU.
     u32 p_Atomic : 1;
     u32 p_Active : 1;
-    u32 p_Pad1 : 29;
+    [[maybe_unused]] u32 p_Pad1 : 29;
 
     Processor* m_Processor;
     BusArbiter<6> m_BusArbiter;
     DMAChannel m_Channels[DMA_CHANNEL_COUNT];
     u32 m_CurrentRequestNumber;
     u32 m_AssignmentFinished : 1;
-    u32 m_Pad0 : 31;
+    [[maybe_unused]] u32 m_Pad0 : 31;
 };

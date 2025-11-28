@@ -423,11 +423,13 @@ public:
 
     void ReceiveDisplayManager_Data(const u32 data) noexcept
     {
+        (void) data;
 
     }
 
     void ReceiveDisplayManager_VSyncEvent(const bool event) noexcept
     {
+        (void) event;
 
     }
 
@@ -559,10 +561,10 @@ private:
 private:
     u32 p_Reset_n : 1;
     u32 p_Clock : 1;
-    u32 m_Pad0 : 30;
+    [[maybe_unused]] u32 m_Pad0 : 30;
 
     StdLogic m_TriggerReset_n : 3;
-    u32 m_Pad1 : 29;
+    [[maybe_unused]] u32 m_Pad1 : 29;
 
     PciController m_PciController;
     RomController m_RomController;

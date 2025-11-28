@@ -32,7 +32,8 @@ public:
 
     void StoreIAWord(const u32 word, const u32 address) noexcept
     {
-        
+        (void) word;
+        (void) address;
     }
 
     [[nodiscard]] u32 Read(u64 address) noexcept;

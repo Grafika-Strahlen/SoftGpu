@@ -126,8 +126,8 @@ public:
     explicit PciController(Receiver* const parent) noexcept
         : m_ConfigData{ }
         , m_Parent(parent)
-        , p_Clock(0)
         , p_Reset_n(0)
+        , p_Clock(0)
         , p_Pad0{}
         , p_RxClock(0)
         , p_Pad1{}
@@ -406,8 +406,8 @@ public:
         }
     }
 
-    void ReceiveDualClockFIFO_WriteAddress(const u32 index, const u64 writeAddress) noexcept { }
-    void ReceiveDualClockFIFO_ReadAddress(const u32 index, const u64 readAddress) noexcept { }
+    void ReceiveDualClockFIFO_WriteAddress([[maybe_unused]] const u32 index, [[maybe_unused]] const u64 writeAddress) noexcept { }
+    void ReceiveDualClockFIFO_ReadAddress([[maybe_unused]] const u32 index, [[maybe_unused]] const u64 readAddress) noexcept { }
 private:
     PROCESSES_DECL()
     {
@@ -511,6 +511,18 @@ private:
                                 m_PhyInputRequestHeader.Type == pcie::TlpHeader::TYPE_CONFIG_TYPE_0_REQUEST)
                         {
                             HandleConfigWrite();
+                            m_PhyInputReadState = EPciReadState::Reset;
+                        }
+                        else if((m_PhyInputRequestHeader.Fmt == pcie::TlpHeader::FORMAT_3_DW_HEADER_NO_DATA ||
+                                 m_PhyInputRequestHeader.Fmt == pcie::TlpHeader::FORMAT_4_DW_HEADER_NO_DATA) &&
+                                m_PhyInputRequestHeader.Type == pcie::TlpHeader::TYPE_MEMORY_REQUEST)
+                        {
+                            m_PhyInputReadState = EPciReadState::Reset;
+                        }
+                        else if((m_PhyInputRequestHeader.Fmt == pcie::TlpHeader::FORMAT_3_DW_HEADER_WITH_DATA ||
+                                 m_PhyInputRequestHeader.Fmt == pcie::TlpHeader::FORMAT_4_DW_HEADER_WITH_DATA) &&
+                                m_PhyInputRequestHeader.Type == pcie::TlpHeader::TYPE_MEMORY_REQUEST)
+                        {
                             m_PhyInputReadState = EPciReadState::Reset;
                         }
                         else
@@ -767,12 +779,12 @@ private:
 
     u32 p_Reset_n : 1;
     u32 p_Clock : 1;
-    u32 p_Pad0 : 30;
+    [[maybe_unused]] u32 p_Pad0 : 30;
 
     //   This needs to be a separate word since it's being accessed from
     // another thread.
     u32 p_RxClock : 1;
-    i32 p_Pad1 : 31;
+    [[maybe_unused]] i32 p_Pad1 : 31;
 
     bool m_ReadRequestActive;
     u64 m_ReadRequestAddress;
@@ -790,14 +802,14 @@ private:
     u32 m_ReadState : 1;
     u32 m_WriteState : 1;
     u32 m_InterruptSet : 1;
-    u32 m_Pad0 : 29; // NOLINT(clang-diagnostic-unused-private-field)
+    [[maybe_unused]] u32 m_Pad0 : 29;
 
     u32 m_PhyInputFifoEmpty : 1;
     u32 m_PhyInputReceivedDataThisCycle : 1;
     u32 m_PhyInputReceivingDataNextCycle : 1;
     EPciReadState m_PhyInputReadState : 3;
     u32 m_PhyInputDataBlobIndex : 10;
-    u32 m_Pad1 : 16;
+    [[maybe_unused]] u32 m_Pad1 : 16;
 
     u32 m_PhyInputData;
     pcie::TlpHeader m_PhyInputRequestHeader;

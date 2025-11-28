@@ -55,7 +55,7 @@ void PciController::ExecuteMemRead() noexcept
         return;
     }
 
-    const u64 addressOffset = GetBAROffset(m_ReadRequestAddress, bar);
+    [[maybe_unused]] const u64 addressOffset = GetBAROffset(m_ReadRequestAddress, bar);
 
     if(bar == 0)
     {
@@ -168,7 +168,7 @@ void PciController::ExecuteMemWrite() noexcept
         return;
     }
 
-    const u64 addressOffset = GetBAROffset(m_WriteRequestAddress, bar);
+    [[maybe_unused]] const u64 addressOffset = GetBAROffset(m_WriteRequestAddress, bar);
 
     if(bar == 0)
     {
