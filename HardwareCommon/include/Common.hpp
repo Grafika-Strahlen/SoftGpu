@@ -83,7 +83,7 @@ static constexpr StdLogic ResolutionTable[static_cast<u32>(StdLogic::MAX_PRIME)]
 
 }
 
-[[nodiscard]] static StdLogic ResolveStdLogic(const StdLogic a, const StdLogic b) noexcept
+[[maybe_unused]] [[nodiscard]] static StdLogic ResolveStdLogic(const StdLogic a, const StdLogic b) noexcept
 {
     return vhdl::internal::ResolutionTable[static_cast<u32>(a)][static_cast<u32>(b)];
 }
@@ -104,7 +104,7 @@ template<uSys ElementCountT, uSys TBitCountT = 4>
     return res;
 }
 
-[[nodiscard]] static bool LOGIC_TO_BOOL(const StdLogic b) noexcept
+[[maybe_unused]] [[nodiscard]] static bool LOGIC_TO_BOOL(const StdLogic b) noexcept
 {
     assert(b != StdLogic::X);
     assert(b != StdLogic::W);
@@ -124,29 +124,41 @@ template<uSys ElementCountT, uSys TBitCountT = 4>
     }
 }
 
-[[nodiscard]] static u32 LOGIC_TO_BIT(const StdLogic b) noexcept
+[[maybe_unused]] [[nodiscard]] static u32 LOGIC_TO_BIT(const StdLogic b) noexcept
 {
     return BOOL_TO_BIT(LOGIC_TO_BOOL(b));
 }
 
-[[nodiscard]] static StdLogic BOOL_TO_LOGIC(const bool b) noexcept
+[[maybe_unused]] [[nodiscard]] static StdLogic BOOL_TO_LOGIC(const bool b) noexcept
 {
     return b ? StdLogic::One : StdLogic::Zero;
 }
 
-[[nodiscard]] static StdLogic BOOL_TO_LOGIC_WEAK(const bool b) noexcept
+[[maybe_unused]] [[nodiscard]] static StdLogic BOOL_TO_LOGIC_WEAK(const bool b) noexcept
 {
     return b ? StdLogic::WeakHigh : StdLogic::WeakLow;
 }
 
-[[nodiscard]] static StdLogic BIT_TO_LOGIC(const u32 b) noexcept
+[[maybe_unused]] [[nodiscard]] static StdLogic BIT_TO_LOGIC(const u32 b) noexcept
 {
     return BOOL_TO_LOGIC(BIT_TO_BOOL(b));
 }
 
-[[nodiscard]] static StdLogic BIT_TO_LOGIC_WEAK(const u32 b) noexcept
+[[maybe_unused]] [[nodiscard]] static StdLogic BIT_TO_LOGIC_WEAK(const u32 b) noexcept
 {
     return BOOL_TO_LOGIC_WEAK(BIT_TO_BOOL(b));
+}
+
+template<typename T, typename TBit>
+static T GetBit(const T data, const TBit bit) noexcept
+{
+    return (data >> bit) & 0b1;
+}
+
+template<typename T, typename TBit>
+static bool GetBitBool(const T data, const TBit bit) noexcept
+{
+    return BIT_TO_BOOL(GetBit(data, bit));
 }
 
 template<typename T, typename TBit>
@@ -175,19 +187,20 @@ template<typename Sensitivity, Sensitivity TargetSense>
 }
 
 template<typename Sensitivity, Sensitivity TargetSense>
-[[nodiscard]] bool FallingEdgeVHDL(const u32 bit, const Sensitivity sensitivity) noexcept
+[[maybe_unused]] [[nodiscard]] bool FallingEdgeVHDL(const u32 bit, const Sensitivity sensitivity) noexcept
 {
     return !bit && EventVHDL<Sensitivity, TargetSense>(sensitivity);
 }
 
 template<typename Sensitivity>
-[[nodiscard]] bool ProcessVHDL(const Sensitivity trigger) noexcept
+[[maybe_unused]] [[nodiscard]] bool ProcessVHDL(const Sensitivity trigger) noexcept
 {
+    (void) trigger;
     return false;
 }
 
 template<typename Sensitivity, Sensitivity TargetSense, Sensitivity... RemainingSenses>
-[[nodiscard]] bool ProcessVHDL(const Sensitivity trigger) noexcept
+[[maybe_unused]] [[nodiscard]] bool ProcessVHDL(const Sensitivity trigger) noexcept
 {
     if(trigger == TargetSense)
     {
@@ -197,7 +210,19 @@ template<typename Sensitivity, Sensitivity TargetSense, Sensitivity... Remaining
     return ProcessVHDL<Sensitivity, RemainingSenses...>(trigger);
 }
 
+template<u32 Count, typename T>
+[[maybe_unused]] [[nodiscard]] T ReplicateToVector(const bool value) noexcept
+{
+    T ret = 0;
+    for(T i = 0; i < Count; ++i)
+    {
+        ret |= BOOL_TO_BIT(value) << i;
+    }
+    return ret;
+}
+
 // Lots of stuff needs the main processor, so we'll just keep it defined here.
+// TODO: Remove
 class Processor;
 
 #define SENSITIVITY_DECL(...) \
@@ -237,10 +262,10 @@ class Processor;
     }
 
 #define PROCESSES_DECL() \
-    void Processes(const Sensitivity trigger) noexcept
+    void Processes([[maybe_unused]] const Sensitivity trigger) noexcept
 
 #define PROCESS_DECL(Name) \
-    void Name(const Sensitivity trigger) noexcept
+    void Name([[maybe_unused]] const Sensitivity trigger) noexcept
 
 #define TRIGGER_SENSITIVITY(Sense) \
     Processes(Sensitivity::Sense)
