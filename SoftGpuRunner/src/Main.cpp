@@ -13,6 +13,7 @@
 #include <riscv/DualClockFIFO/DualClockFIFO.TestBench.hpp>
 #include <riscv/CoProcessor/Shifter.TestBench.hpp>
 #include <riscv/ClockGate.TestBench.hpp>
+#include <riscv/ArithmeticLogicUnit.TestBench.hpp>
 #include "Processor.hpp"
 #include <ConPrinter.hpp>
 #include "DebugManager.hpp"
@@ -186,6 +187,14 @@ int main(int argCount, char* args[])
         // riscv::fifo::test::FifoTestFastWrite4Bit();
         // riscv::fifo::test::FifoTestFastRead5Bit();
         // riscv::fifo::test::FifoTestFastWrite5Bit();
+        tau::TestContainer::Instance().PrintTotals();
+        return 0;
+    }
+
+    if constexpr(true)
+    {
+        riscv::test::ALUTestShifter();
+
         tau::TestContainer::Instance().PrintTotals();
         return 0;
     }
