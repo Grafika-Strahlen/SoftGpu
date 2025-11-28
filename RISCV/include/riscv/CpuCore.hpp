@@ -83,7 +83,7 @@ public:
         , m_ClockGate(this, 0)
         , m_InstructionFetch(this, 0)
         , m_RegisterFile(this, 0)
-        , m_ArithmeticLogicUnit(nullptr, 0)
+        , m_ArithmeticLogicUnit(this, 0)
         , m_LoadStoreUnit(this, 0)
         , m_PhysicalMemoryProtectionUnit(this, 0)
     { }
@@ -228,7 +228,7 @@ private:
     ClockGate<CPUCore> m_ClockGate;
     InstructionFetch<CPUCore> m_InstructionFetch;
     RegisterFile<CPUCore, EnableISA_E, EnableRS3> m_RegisterFile;
-    ArithmeticLogicUnit m_ArithmeticLogicUnit;
+    ArithmeticLogicUnit<CPUCore> m_ArithmeticLogicUnit;
     LoadStoreUnit<CPUCore> m_LoadStoreUnit;
     PhysicalMemoryProtectionUnit<CPUCore> m_PhysicalMemoryProtectionUnit;
 };
