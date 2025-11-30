@@ -10,6 +10,7 @@
 #include "ControlBus.hpp"
 #include "ClockGate.hpp"
 #include "InstructionFetch.hpp"
+#include "Controller.hpp"
 #include "ArithmeticLogicUnit.hpp"
 #include "RegisterFile.hpp"
 #include "LoadStoreUnit.hpp"
@@ -79,9 +80,15 @@ public:
         , p_MemSync(0)
         , m_ClockGated(0)
         , m_Pad0(0)
+        , m_CSR_ALU(0)
+        , m_CSR_PMP(0)
+        , m_ALUResult(0)
+        , m_LSUReadData(0)
+        , m_CSRReadData(0)
         , m_ControlBus{ }
         , m_ClockGate(this, 0)
         , m_InstructionFetch(this, 0)
+        , m_Controller(nullptr, 0)
         , m_RegisterFile(this, 0)
         , m_ArithmeticLogicUnit(this, 0)
         , m_LoadStoreUnit(this, 0)
@@ -94,6 +101,7 @@ public:
 
         m_ClockGate.SetResetN(reset_n);
         m_InstructionFetch.SetResetN(reset_n);
+        m_Controller.SetResetN(reset_n);
         m_ArithmeticLogicUnit.SetResetN(reset_n);
         m_RegisterFile.SetResetN(reset_n);
         m_LoadStoreUnit.SetResetN(reset_n);
@@ -107,6 +115,7 @@ public:
         m_ClockGate.SetClock(clock);
 
         m_InstructionFetch.SetClock(ClockGated());
+        m_Controller.SetClock(ClockGated());
         m_ArithmeticLogicUnit.SetClock(ClockGated());
         m_RegisterFile.SetClock(ClockGated());
         m_LoadStoreUnit.SetClock(ClockGated());
@@ -128,7 +137,7 @@ public:
     void ReceiveInstructionFetch_Bus(const u32 index, const InstructionFetchBus& bus) noexcept
     {
         (void) index;
-        (void) bus;
+        m_Controller.SetInstructionFetchBus(bus);
     }
 
     void ReceiveInstructionFetch_MemoryRequest(const u32 index, const MemoryBusRequest& bus) noexcept
@@ -137,9 +146,29 @@ public:
         m_Parent->ReceiveCPUCore_MemoryRequest(m_Index, bus);
     }
 
+    void ReceiveController_ControlBus([[maybe_unused]] const u32 index, [[maybe_unused]] const ControlBus& controlBus) noexcept
+    {
+        (void) index;
+        m_ControlBus = controlBus;
+
+        m_InstructionFetch.SetControlBus(controlBus);
+        m_RegisterFile.SetControlBus(controlBus);
+        m_ArithmeticLogicUnit.SetControlBus(controlBus);
+        m_LoadStoreUnit.SetControlBus(controlBus);
+        m_PhysicalMemoryProtectionUnit.SetControlBus(controlBus);
+    }
+
+    void ReceiveController_CSRReadData([[maybe_unused]] const u32 index, [[maybe_unused]] const u32 data) noexcept
+    {
+        (void) index;
+        m_CSRReadData = data;
+        UpdateRegisterFileWriteData();
+    }
+
     void ReceiveRegisterFile_RS1(const u32 index, const u32 rs1) noexcept
     {
         (void) index;
+        m_Controller.SetRS1(rs1);
         m_ArithmeticLogicUnit.SetRS1(rs1);
     }
 
@@ -156,39 +185,82 @@ public:
         m_ArithmeticLogicUnit.SetRS1(rs3);
     }
 
-    void ReceiveArithmeticLogicUnit_ComparatorStatus([[maybe_unused]] const u32 index, [[maybe_unused]] const u8 status) noexcept { }
-    void ReceiveArithmeticLogicUnit_Result([[maybe_unused]] const u32 index, [[maybe_unused]] const u32 result) noexcept { }
+    void ReceiveArithmeticLogicUnit_ComparatorStatus([[maybe_unused]] const u32 index, [[maybe_unused]] const u8 status) noexcept
+    {
+        (void) index;
+        m_Controller.SetALUCompareStatus(status);
+    }
+
+    void ReceiveArithmeticLogicUnit_Result([[maybe_unused]] const u32 index, [[maybe_unused]] const u32 result) noexcept
+    {
+        (void) index;
+        m_ALUResult = result;
+        UpdateRegisterFileWriteData();
+    }
 
     void ReceiveArithmeticLogicUnit_Address([[maybe_unused]] const u32 index, [[maybe_unused]] const u32 address) noexcept
     {
         (void) index;
+        m_Controller.SetALUAddressResult(address);
         m_LoadStoreUnit.SetAddress(address);
         m_PhysicalMemoryProtectionUnit.SetAddress(address);
     }
 
-    void ReceiveArithmeticLogicUnit_CSR([[maybe_unused]] const u32 index, [[maybe_unused]] const u32 csr) noexcept { }
-    void ReceiveArithmeticLogicUnit_Done([[maybe_unused]] const u32 index, [[maybe_unused]] const bool done) noexcept { }
+    void ReceiveArithmeticLogicUnit_CSR([[maybe_unused]] const u32 index, [[maybe_unused]] const u32 csr) noexcept
+    {
+        (void) index;
+        m_CSR_ALU = csr;
+        UpdateExternalCSRResult();
+    }
+
+    void ReceiveArithmeticLogicUnit_Done([[maybe_unused]] const u32 index, [[maybe_unused]] const bool done) noexcept
+    {
+        (void) index;
+        m_Controller.SetALUCoProcessorDone(done);
+    }
 
     void ReceiveLoadStoreUnit_ReadData([[maybe_unused]] const u32 index, const u32 readData) noexcept
     {
         (void) index;
-        m_RegisterFile.SetRD(readData);
+        m_LSUReadData = readData;
+        UpdateRegisterFileWriteData();
     }
 
-    void ReceiveLoadStoreUnit_MemoryAddress([[maybe_unused]] const u32 index, [[maybe_unused]] const u32 memoryAddress) noexcept { }
-    void ReceiveLoadStoreUnit_Wait([[maybe_unused]] const u32 index, [[maybe_unused]] const bool wait) noexcept { }
-    void ReceiveLoadStoreUnit_Error([[maybe_unused]] const u32 index, [[maybe_unused]] const u32 error) noexcept { }
+    void ReceiveLoadStoreUnit_MemoryAddress([[maybe_unused]] const u32 index, [[maybe_unused]] const u32 memoryAddress) noexcept
+    {
+        (void) index;
+        m_Controller.SetLSUMemoryAddressRegister(memoryAddress);
+    }
+
+    void ReceiveLoadStoreUnit_Wait([[maybe_unused]] const u32 index, [[maybe_unused]] const bool wait) noexcept
+    {
+        (void) index;
+        m_Controller.SetLSUWait(wait);
+    }
+
+    void ReceiveLoadStoreUnit_Error([[maybe_unused]] const u32 index, [[maybe_unused]] const u32 error) noexcept
+    {
+        (void) index;
+        m_Controller.SetLSUError(static_cast<u8>(error));
+    }
 
     void ReceiveLoadStoreUnit_MemoryRequest([[maybe_unused]] const u32 index, [[maybe_unused]] const MemoryBusRequest& memoryRequest) noexcept
     {
+        (void) index;
         m_Parent->ReceiveCPUCore_MemoryRequest(m_Index, memoryRequest);
     }
 
-    void ReceivePhysicalMemoryProtectionUnit_CSR([[maybe_unused]] const u32 index, [[maybe_unused]] const u32 csr) noexcept { }
+    void ReceivePhysicalMemoryProtectionUnit_CSR([[maybe_unused]] const u32 index, [[maybe_unused]] const u32 csr) noexcept
+    {
+        (void) index;
+        m_CSR_PMP = csr;
+        UpdateExternalCSRResult();
+    }
 
     void ReceivePhysicalMemoryProtectionUnit_Fault([[maybe_unused]] const u32 index, [[maybe_unused]] const bool fault) noexcept
     {
         (void) index;
+        m_Controller.SetPMPFault(fault);
         m_LoadStoreUnit.SetPMPFault(fault);
     }
 private:
@@ -204,6 +276,26 @@ private:
         {
             return p_Clock;
         }
+    }
+
+    [[nodiscard]] u32 ExternalCSRResult() const noexcept
+    {
+        return m_CSR_ALU | m_CSR_PMP;
+    }
+
+    void UpdateExternalCSRResult() noexcept
+    {
+        m_Controller.SetXCSRReadData(ExternalCSRResult());
+    }
+
+    [[nodiscard]] u32 RegisterFileWriteData() const noexcept
+    {
+        return m_ALUResult | m_LSUReadData | m_CSRReadData | m_ControlBus.PC_Return;
+    }
+
+    void UpdateRegisterFileWriteData() noexcept
+    {
+        m_RegisterFile.SetRD(RegisterFileWriteData());
     }
 private:
     Receiver* m_Parent;
@@ -224,9 +316,17 @@ private:
     u32 m_ClockGated : 1;
     [[maybe_unused]] u32 m_Pad0 : 8;
 
+    u32 m_CSR_ALU;
+    u32 m_CSR_PMP;
+
+    u32 m_ALUResult;
+    u32 m_LSUReadData;
+    u32 m_CSRReadData;
+
     ControlBus m_ControlBus;
     ClockGate<CPUCore> m_ClockGate;
     InstructionFetch<CPUCore> m_InstructionFetch;
+    Controller m_Controller;
     RegisterFile<CPUCore, EnableISA_E, EnableRS3> m_RegisterFile;
     ArithmeticLogicUnit<CPUCore> m_ArithmeticLogicUnit;
     LoadStoreUnit<CPUCore> m_LoadStoreUnit;
