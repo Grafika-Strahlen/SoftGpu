@@ -60,6 +60,7 @@ public:
     constexpr static inline bool EnableISA_Zmmul  = false; // Multiply only M sub-extension
     constexpr static inline bool EnableISA_Zxcfu  = false; // Custom functions unit
     constexpr static inline bool EnableISA_Sdext  = false; // External debug mode
+    constexpr static inline bool EnableISA_Sdtrig = false; // Trigger module
     constexpr static inline bool EnableISA_Smpmp  = false; // Physical memory protection
 
     constexpr static inline bool EnableClockGating = false;

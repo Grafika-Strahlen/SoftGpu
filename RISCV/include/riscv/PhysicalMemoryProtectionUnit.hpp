@@ -10,6 +10,7 @@
 #include <BitVector.hpp>
 #include <algorithm>
 #include "ControlBus.hpp"
+#include "RISCVCommon.hpp"
 
 namespace riscv {
 
@@ -38,31 +39,6 @@ public:
     constexpr static inline u32 RegionCount = ::std::clamp<u32>(TRegionCount, 0, MaxRegionCount);
     constexpr static inline u32 Granularity = TGranularity < 4 ? 4 : 1 << log2i(TGranularity);
     constexpr static inline u32 GranularityIndex = log2i(Granularity);
-
-    constexpr static inline bool PrivilegeModeMachine = true;
-    constexpr static inline bool PrivilegeModeUser = true;
-
-    constexpr static inline u32 Config0 = 0x3A0;
-    constexpr static inline u32 Config1 = 0x3A1;
-    constexpr static inline u32 Config2 = 0x3A2;
-    constexpr static inline u32 Config3 = 0x3A3;
-
-    constexpr static inline u32 Address0  = 0x3B0;
-    constexpr static inline u32 Address1  = 0x3B1;
-    constexpr static inline u32 Address2  = 0x3B2;
-    constexpr static inline u32 Address3  = 0x3B3;
-    constexpr static inline u32 Address4  = 0x3B4;
-    constexpr static inline u32 Address5  = 0x3B5;
-    constexpr static inline u32 Address6  = 0x3B6;
-    constexpr static inline u32 Address7  = 0x3B7;
-    constexpr static inline u32 Address8  = 0x3B8;
-    constexpr static inline u32 Address9  = 0x3B9;
-    constexpr static inline u32 Address10 = 0x3BA;
-    constexpr static inline u32 Address11 = 0x3BB;
-    constexpr static inline u32 Address12 = 0x3BC;
-    constexpr static inline u32 Address13 = 0x3BD;
-    constexpr static inline u32 Address14 = 0x3BE;
-    constexpr static inline u32 Address15 = 0x3BF;
 
     enum Mode : u8
     {
@@ -141,7 +117,7 @@ private:
     {
         m_ConfigWriteEnable = 0;
 
-        if(p_ControlBus.CSR_Address >> 2 == Config0 >> 2 && BIT_TO_BOOL(p_ControlBus.CSR_WriteEnable))
+        if(p_ControlBus.CSR_Address >> 2 == CSRPMPConfig0 >> 2 && BIT_TO_BOOL(p_ControlBus.CSR_WriteEnable))
         {
             m_ConfigWriteEnable = 1 << (p_ControlBus.CSR_Address & 0b11);
         }
@@ -151,7 +127,7 @@ private:
     {
         m_AddressWriteEnable = 0;
 
-        if(p_ControlBus.CSR_Address >> 4 == Address0 >> 4 && BIT_TO_BOOL(p_ControlBus.CSR_WriteEnable))
+        if(p_ControlBus.CSR_Address >> 4 == CSRPMPAddress0 >> 4 && BIT_TO_BOOL(p_ControlBus.CSR_WriteEnable))
         {
             m_AddressWriteEnable = 1 << (p_ControlBus.CSR_Address & 0b1111);
         }
@@ -159,7 +135,7 @@ private:
 
     void UpdateReadAccess() const noexcept
     {
-        if(((p_ControlBus.CSR_Address >> 5) & 0b111'1111) == ((Config0 >> 5) & 0b111'1111))
+        if(((p_ControlBus.CSR_Address >> 5) & 0b111'1111) == ((CSRPMPConfig0 >> 5) & 0b111'1111))
         {
             // PMP Configuration CSR
             if(!BIT_TO_BOOL((p_ControlBus.CSR_Address >> 4) & 0x1))
@@ -255,7 +231,7 @@ private:
         }
     }
 
-    [[nodiscard]] bool AccessPrivilege() const noexcept
+    [[nodiscard]] u32 AccessPrivilege() const noexcept
     {
         if(BIT_TO_BOOL(p_ControlBus.LSU_Enable))
         {

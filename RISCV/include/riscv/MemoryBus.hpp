@@ -16,7 +16,7 @@ struct MemoryBusRequest final
     DEFAULT_DESTRUCT(MemoryBusRequest);
     DEFAULT_CM_PU(MemoryBusRequest);
 public:
-    u32 Address;
+    WordType Address;
     u32 WriteData;
     u32 ByteEnable : 4;
     u32 ReadWrite : 1; // Read = 0, Write = 1

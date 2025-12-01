@@ -10,6 +10,7 @@
 #include <NumTypes.hpp>
 #include <BitSet.hpp>
 #include <cassert>
+#include <climits>
 
 #include "BitVector.hpp"
 
@@ -19,8 +20,10 @@
     #define HAS_X86_INTRINSICS (0)
 #endif
 
-
 #define SET_HI_Z(X)
+
+using WordType = u32;
+static inline constexpr WordType WordBitCount = sizeof(WordType) * CHAR_BIT;
 
 enum class EReadWrite : u32
 {
@@ -152,7 +155,8 @@ template<uSys ElementCountT, uSys TBitCountT = 4>
 template<typename T, typename TBit>
 static T GetBit(const T data, const TBit bit) noexcept
 {
-    return (data >> bit) & 0b1;
+    const T bitT = static_cast<T>(bit);
+    return (data >> bitT) & 0b1;
 }
 
 template<typename T, typename TBit>
@@ -164,13 +168,14 @@ static bool GetBitBool(const T data, const TBit bit) noexcept
 template<typename T, typename TBit>
 static T SetBit(const T data, const TBit bit, const bool set) noexcept
 {
+    const T bitT = static_cast<T>(bit);
     if(set)
     {
-        return data | (1 << bit);
+        return data | (1 << bitT);
     }
     else
     {
-        return data & ~(1 << bit);
+        return data & ~(1 << bitT);
     }
 }
 

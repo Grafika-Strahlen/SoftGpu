@@ -10,6 +10,7 @@
 #include "ControlBus.hpp"
 #include "MemoryBus.hpp"
 #include "FIFO.hpp"
+#include "RISCVCommon.hpp"
 
 namespace riscv {
 
@@ -185,7 +186,7 @@ private:
 
     void SetRestart(const bool restart) noexcept
     {
-        m_Restart = restart;
+        m_Restart = BOOL_TO_BIT(restart);
 
         m_PrefetchFifo[0].SetClear(restart);
         m_PrefetchFifo[1].SetClear(restart);
@@ -194,6 +195,13 @@ private:
     void SetProgramCounter(const u32 programCounter) noexcept
     {
         m_ProgramCounter = programCounter;
+
+        UpdateMemoryRequest();
+    }
+
+    void SetPrivileged(const u32 privileged) noexcept
+    {
+        m_Privileged = privileged;
 
         UpdateMemoryRequest();
     }
@@ -208,7 +216,9 @@ private:
         p_out_MemoryRequest.Source = 1; // Instruction Fetch
         p_out_MemoryRequest.Atomic = 0; // Not Atomic
         p_out_MemoryRequest.AtomicOperation = 0; // Not Atomic
-        p_out_MemoryRequest.Fence = p_ControlBus.IF_Fence; // Not Atomic
+        p_out_MemoryRequest.Privileged = m_Privileged;
+        p_out_MemoryRequest.Debug = p_ControlBus.CPU_Debug;
+        p_out_MemoryRequest.Fence = p_ControlBus.IF_Fence;
 
         m_Parent->ReceiveInstructionFetch_MemoryRequest(m_Index, p_out_MemoryRequest);
     }
@@ -320,6 +330,7 @@ private:
             SetFetchState(FetchState::Restart);
             SetRestart(true);
             SetProgramCounter(0);
+            SetPrivileged(PrivilegeModeMachine);
         }
         else if(RISING_EDGE(p_Clock))
         {
@@ -357,6 +368,7 @@ private:
                 default:
                     SetRestart(false);
                     SetProgramCounter(p_ControlBus.PC_Next);
+                    SetPrivileged(BIT_TO_BOOL(p_ControlBus.CPU_Privileged));
                     SetFetchState(FetchState::Request);
                     break;
             }
@@ -368,7 +380,7 @@ private:
 
     u32 p_Reset_n : 1;
     u32 p_Clock : 1;
-    u32 m_Pad0 : 30;  // NOLINT(clang-diagnostic-unused-private-field)
+    [[maybe_unused]] u32 m_Pad0 : 30;  // NOLINT(clang-diagnostic-unused-private-field)
 
     ControlBus p_ControlBus;
 
@@ -379,7 +391,8 @@ private:
 
     FetchState m_FetchState : 2;
     u32 m_Restart : 1;
-    u32 m_Pad1 : 29;  // NOLINT(clang-diagnostic-unused-private-field)
+    u32 m_Privileged : 1;
+    [[maybe_unused]] u32 m_Pad1 : 28;
 
     u32 m_ProgramCounter;
 
